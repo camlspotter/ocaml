@@ -65,3 +65,9 @@ Limitations
 
 P4 does not understand these constructs yet.
 (P4 is the biggest show-stopper for compiler modification.)
+
+
+Related
+=======================================
+
+Use variantslib (https://github.com/janestreet/variantslib) if you seriously require variants as functions in your OCaml projects. variantslib requires P4 but need no compiler modification.
