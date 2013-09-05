@@ -13,13 +13,13 @@ type t = Foo of int * float
 
 Then
 
-```
+```ocaml
 (Foo)          (* Parens are mandatory *)
 ```
 
 is equal to `fun (x,y) -> Foo (x,y)`. And,
 
-```
+```ocaml
 (Foo ..)       (* Parens are mandatory *)
 ```
 
