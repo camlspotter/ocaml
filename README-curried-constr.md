@@ -64,3 +64,4 @@ Limitations
 ======================================
 
 P4 does not understand these constructs yet.
+(P4 is the biggest show-stopper for compiler modification.)
