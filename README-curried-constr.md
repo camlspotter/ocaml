@@ -2,6 +2,9 @@
 Variant constructors as functions
 ==================================
 
+This is a small OCaml compiler modification where you can use variant constructors as
+functions without writing their arguments explicitly.
+
 Suppose we have:
 
 ```ocaml
