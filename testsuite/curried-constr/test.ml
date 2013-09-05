@@ -1,0 +1,11 @@
+let x = (Some) 1
+let x = (Some..) 1
+let x = (None)
+let x = (None..)
+type t = Foo of int * float
+let x = (Foo) (1,1.0)
+let x = (Foo..) 1 1.0
+let x = Foo[@curried]
+let x = Foo[@uncurried]
+let x = (.contents)
+let x = (#m)

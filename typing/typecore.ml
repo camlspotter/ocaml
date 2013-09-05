@@ -67,6 +67,7 @@ type error =
   | Invalid_for_loop_index
   | No_value_clauses
   | Exception_pattern_below_toplevel
+  | Other of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -1958,6 +1959,8 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+  | Pexp_construct(lid, None) ->   (* (Some) and (Constr..) support *)
+      type_construct' ?in_function env loc lid ty_expected sexp.pexp_attributes
   | Pexp_construct(lid, sarg) ->
       type_construct env loc lid sarg ty_expected sexp.pexp_attributes
   | Pexp_variant(l, sarg) ->
@@ -3384,6 +3387,95 @@ and type_construct env loc lid sarg ty_expected attrs =
   { texp with
     exp_desc = Texp_construct(lid, constr, args) }
 
+and type_construct' ?in_function env loc lid ty_expected attrs =
+  (* (Some) and (Constr..) support *)
+  let hits, attrs = List.partition (function 
+    | ({txt=("curried"|"uncurried")}, _) -> true 
+    | _ -> false) attrs
+  in
+  match hits with
+  | [] -> type_construct env loc lid None ty_expected attrs
+  | _::_::_ -> raise(Error(loc, env, Other "Only one curried or uncurried attribute allowed."))
+  | [({txt}, _)] -> 
+      let kind = match txt with
+        | "curried" -> `Curried
+        | "uncurried" -> `Uncurried
+        | _ -> assert false
+      in
+      let opath =
+        try
+          let (p0, p,_) = extract_concrete_variant env ty_expected in
+          Some(p0, p, ty_expected.level = generic_level || not !Clflags.principal)
+        with Not_found -> None
+      in
+      let constrs = Typetexp.find_all_constructors env lid.loc lid.txt in
+      let constr =
+        wrap_disambiguate "This variant expression is expected to have" ty_expected
+          (Constructor.disambiguate lid env opath) constrs in
+      Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
+      if constr.cstr_arity = 0 then
+        (* It is 0-ary constructor. No magical thing required. *)
+        (* CR jfuruse: this performs some of duped jobs *)
+        (* CR jfuruse: (None) is np but (None ..) can be rejected. *)
+        type_construct env loc lid None ty_expected attrs
+      else begin
+        let mkexp_attrs desc attrs = { pexp_desc = desc; pexp_loc = Location.none; pexp_attributes = attrs } in
+        let mkexp desc = mkexp_attrs desc [] in
+        let mkpat desc = { ppat_desc = desc; ppat_loc = Location.none; ppat_attributes = [] } in
+        let mkname n = "x" ^ string_of_int n in
+        let mkpatident n = 
+          let name = mkname n in
+          let mkpatvar n = 
+            mkpat (Ppat_var { Asttypes.txt = name; loc = Location.none })
+          in
+          let mkident n = 
+            mkexp (Pexp_ident { Asttypes.txt = Longident.Lident name; loc = Location.none })
+          in
+          mkpatvar n, mkident n
+        in
+        let one_to_n = 
+          let rec one_to_n st = function 
+            | 0 -> List.rev st
+            | n -> one_to_n (n::st) (n-1)
+          in
+          one_to_n []
+        in
+        let patidents = List.map mkpatident (one_to_n constr.cstr_arity) in
+        let pats = List.map fst patidents in
+        let body =
+          let exps = List.map snd patidents in
+          let arg = match exps with
+            | [] -> assert false
+            | [e] -> e
+            | _ -> mkexp (Pexp_tuple exps)
+          in
+          { pexp_desc = Pexp_construct (lid, Some arg);
+            pexp_loc = loc;
+            pexp_attributes = [] }
+        in
+        let unsugared =
+          match kind with
+          | `Uncurried -> (* (A) ==> fun (x,y,z) -> A(x,y,z) *)
+              let pat = match pats with
+                | [] -> assert false
+                | [p] -> p
+                | _ -> mkpat (Ppat_tuple pats)
+              in
+              mkexp_attrs (Pexp_function [ { pc_lhs = pat; 
+                                             pc_guard = None;
+                                             pc_rhs = body } ])
+                attrs
+          | `Curried -> (* (A) ==> fun x y z -> A(x,y,z) *)
+              List.fold_right (fun p st ->
+                mkexp_attrs (Pexp_function [ { pc_lhs = p;
+                                               pc_guard = None;
+                                               pc_rhs = st } ])
+                  attrs
+              ) pats body
+        in
+        type_expect_ ?in_function env unsugared ty_expected
+      end
+
 (* Typing of statements (expressions whose values are discarded) *)
 
 and type_statement env sexp =
@@ -3975,6 +4067,9 @@ let report_error env ppf = function
   | Exception_pattern_below_toplevel ->
       fprintf ppf
         "@[Exception patterns must be at the top level of a match case.@]"
+  | Other s ->
+      fprintf ppf
+        "@[%s@]" s
 
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)

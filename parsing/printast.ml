@@ -271,7 +271,7 @@ and expression i ppf x =
       list i expression ppf l;
   | Pexp_construct (li, eo) ->
       line i ppf "Pexp_construct %a\n" fmt_longident_loc li;
-      option i expression ppf eo;
+      option i expression ppf eo
   | Pexp_variant (l, eo) ->
       line i ppf "Pexp_variant \"%s\"\n" l;
       option i expression ppf eo;
