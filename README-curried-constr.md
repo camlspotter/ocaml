@@ -14,13 +14,13 @@ type t = Foo of int * float
 Then
 
 ```
-(Foo) 
+(Foo)          (* Parens are mandatory *)
 ```
 
 is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 ```
-(Foo ..)
+(Foo ..)       (* Parens are mandatory *)
 ```
 
 is equal to `fun x y -> Foo (x,y)`. So, for example,
