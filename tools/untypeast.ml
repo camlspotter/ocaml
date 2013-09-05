@@ -231,7 +231,7 @@ and untype_expression exp =
           | args -> Some
             { pexp_desc = Pexp_tuple (List.map untype_expression args);
               pexp_loc = exp.exp_loc; }
-          ), explicit_arity)
+          ), explicit_arity, None)
     | Texp_variant (label, expo) ->
         Pexp_variant (label, match expo with
             None -> None

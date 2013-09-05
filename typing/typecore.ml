@@ -127,7 +127,7 @@ let iter_expression f e =
     | Pexp_try (e, pel) -> expr e; List.iter (fun (_, e) -> expr e) pel
     | Pexp_array el
     | Pexp_tuple el -> List.iter expr el
-    | Pexp_construct (_, eo, _)
+    | Pexp_construct (_, eo, _, _)
     | Pexp_variant (_, eo) -> may expr eo
     | Pexp_record (iel, eo) ->
         may expr eo; List.iter (fun (_, e) -> expr e) iel
@@ -2053,8 +2053,11 @@ and type_expect_ ?in_function env sexp ty_expected =
         (* Keep sharing *)
         exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
         exp_env = env }
-  | Pexp_construct(lid, sarg, explicit_arity) ->
+  | Pexp_construct(lid, sarg, explicit_arity, None) ->
       type_construct env loc lid sarg explicit_arity ty_expected
+  | Pexp_construct(_, Some _, _, Some _) -> assert false (* impos *)
+  | Pexp_construct(lid, None, explicit_arity, Some sw) ->
+      type_construct' ?in_function env loc lid explicit_arity ty_expected sw
   | Pexp_variant(l, sarg) ->
       (* Keep sharing *)
       let ty_expected0 = instance env ty_expected in
@@ -3094,6 +3097,71 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
     raise(Error(loc, env, Private_type ty_res));
   { texp with
     exp_desc = Texp_construct(lid, constr, args, explicit_arity) }
+
+and type_construct' ?in_function env loc lid explicit_arity ty_expected sw =
+  let opath =
+    try
+      let (p0, p,_) = extract_concrete_variant env ty_expected in
+      Some(p0, p, ty_expected.level = generic_level || not !Clflags.principal)
+    with Not_found -> None
+  in
+  let constrs = Typetexp.find_all_constructors env lid.loc lid.txt in
+  let constr = Constructor.disambiguate lid env opath constrs in
+  Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
+  if constr.cstr_arity = 0 then
+    (* It is 0-ary constructor. No magical thing required. *)
+    (* CR jfuruse: this performs some of duped jobs *)
+    (* CR jfuruse: (None) is np but (None ..) can be rejected. *)
+    type_construct env loc lid None explicit_arity ty_expected
+  else begin
+    let mkexp desc = { pexp_desc = desc; pexp_loc = Location.none } in
+    let mkpat desc = { ppat_desc = desc; ppat_loc = Location.none } in
+    let mkname n = "x" ^ string_of_int n in
+    let mkpatident n = 
+      let name = mkname n in
+      let mkpatvar n = 
+        mkpat (Ppat_var { Asttypes.txt = name; loc = Location.none })
+      in
+      let mkident n = 
+        mkexp (Pexp_ident { Asttypes.txt = Longident.Lident name; loc = Location.none })
+      in
+      mkpatvar n, mkident n
+    in
+    let one_to_n = 
+      let rec one_to_n st = function 
+        | 0 -> List.rev st
+        | n -> one_to_n (n::st) (n-1)
+      in
+      one_to_n []
+    in
+    let patidents = List.map mkpatident (one_to_n constr.cstr_arity) in
+    let pats = List.map fst patidents in
+    let body =
+      let exps = List.map snd patidents in
+      let arg = match exps with
+        | [] -> assert false
+        | [e] -> e
+        | _ -> mkexp (Pexp_tuple exps)
+      in
+      { pexp_desc = Pexp_construct (lid, Some arg, false, None);
+        pexp_loc = loc }
+    in
+    let unsugared =
+      match sw with
+      | `Uncurried -> (* (A) ==> fun (x,y,z) -> A(x,y,z) *)
+          let pat = match pats with
+            | [] -> assert false
+            | [p] -> p
+            | _ -> mkpat (Ppat_tuple pats)
+          in
+          mkexp (Pexp_function ("", None, [pat, body]))
+      | `Curried -> (* (A) ==> fun x y z -> A(x,y,z) *)
+          List.fold_right (fun p st ->
+            mkexp (Pexp_function ("", None, [p, st])))
+            pats body
+    in
+    type_expect_ ?in_function env unsugared ty_expected
+  end
 
 (* Typing of statements (expressions whose values are discarded) *)
 

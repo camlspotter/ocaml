@@ -294,7 +294,7 @@ module E = struct
   let match_ ?loc a b = mk ?loc (Pexp_match (a, b))
   let try_ ?loc a b = mk ?loc (Pexp_try (a, b))
   let tuple ?loc a = mk ?loc (Pexp_tuple a)
-  let construct ?loc a b c = mk ?loc (Pexp_construct (a, b, c))
+  let construct ?loc a b c sw = mk ?loc (Pexp_construct (a, b, c, sw))
   let variant ?loc a b = mk ?loc (Pexp_variant (a, b))
   let record ?loc a b = mk ?loc (Pexp_record (a, b))
   let field ?loc a b = mk ?loc (Pexp_field (a, b))
@@ -335,7 +335,7 @@ module E = struct
     | Pexp_match (e, l) -> match_ ~loc (sub # expr e) (List.map (map_tuple (sub # pat) (sub # expr)) l)
     | Pexp_try (e, l) -> try_ ~loc (sub # expr e) (List.map (map_tuple (sub # pat) (sub # expr)) l)
     | Pexp_tuple el -> tuple ~loc (List.map (sub # expr) el)
-    | Pexp_construct (lid, arg, b) -> construct ~loc (map_loc sub lid) (map_opt (sub # expr) arg) b
+    | Pexp_construct (lid, arg, b, sw) -> construct ~loc (map_loc sub lid) (map_opt (sub # expr) arg) b sw
     | Pexp_variant (lab, eo) -> variant ~loc lab (map_opt (sub # expr) eo)
     | Pexp_record (l, eo) -> record ~loc (List.map (map_tuple (map_loc sub) (sub # expr)) l) (map_opt (sub # expr) eo)
     | Pexp_field (e, lid) -> field ~loc (sub # expr e) (map_loc sub lid)

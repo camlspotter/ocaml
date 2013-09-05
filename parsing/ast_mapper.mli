@@ -218,7 +218,7 @@ module E:
     val match_: ?loc:Location.t -> expression -> (pattern * expression) list -> expression
     val try_: ?loc:Location.t -> expression -> (pattern * expression) list -> expression
     val tuple: ?loc:Location.t -> expression list -> expression
-    val construct: ?loc:Location.t -> Longident.t loc -> expression option -> bool -> expression
+    val construct: ?loc:Location.t -> Longident.t loc -> expression option -> bool -> [`Curried | `Uncurried] option -> expression
     val variant: ?loc:Location.t -> label -> expression option -> expression
     val record: ?loc:Location.t -> (Longident.t loc * expression) list -> expression option -> expression
     val field: ?loc:Location.t -> expression -> Longident.t loc -> expression

@@ -199,8 +199,10 @@ and rw_exp iflag sexp =
   | Pexp_tuple sexpl ->
     rewrite_exp_list iflag sexpl
 
-  | Pexp_construct(_, None, _) -> ()
-  | Pexp_construct(_, Some sarg, _) ->
+  | Pexp_construct(_, None, _, Some _) -> assert false (* CR jfuruse: todo *)
+  | Pexp_construct(_, Some _, _, Some _) -> assert false (* impos *)
+  | Pexp_construct(_, None, _, None) -> ()
+  | Pexp_construct(_, Some sarg, _, None) ->
     rewrite_exp iflag sarg
 
   | Pexp_variant(_, None) -> ()

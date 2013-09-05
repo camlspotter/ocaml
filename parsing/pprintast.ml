@@ -79,22 +79,24 @@ type construct =
 
 let view_expr x =
   match x.pexp_desc with
-  | Pexp_construct ( {txt= Lident "()"; _},_,_) -> `tuple
-  | Pexp_construct ( {txt= Lident "[]";_},_,_) -> `nil
-  | Pexp_construct ( {txt= Lident"::";_},Some _,_) ->
+  | Pexp_construct ( _, _, _, Some _) -> assert false (* CR jfuruse: todo *)
+  | Pexp_construct ( {txt= Lident "()"; _},_,_,None) -> `tuple
+  | Pexp_construct ( {txt= Lident "[]";_},_,_,None) -> `nil
+  | Pexp_construct ( {txt= Lident"::";_},Some _,_,None) ->
       let rec loop exp acc = match exp with
-          | {pexp_desc=Pexp_construct ({txt=Lident "[]";_},_,_);_} ->
+          | {pexp_desc=Pexp_construct (_,_,_,Some _);_} -> assert false (* CR jfuruse: todo *)
+          | {pexp_desc=Pexp_construct ({txt=Lident "[]";_},_,_,None);_} ->
               (List.rev acc,true)
           | {pexp_desc=
              Pexp_construct ({txt=Lident "::";_},
-                             Some ({pexp_desc= Pexp_tuple([e1;e2]);_}),_);_} ->
+                             Some ({pexp_desc= Pexp_tuple([e1;e2]);_}),_,None);_} ->
               loop e2 (e1::acc)
           | e -> (List.rev (e::acc),false) in
       let (ls,b) = loop x []  in
       if b then
         `list ls
       else `cons ls
-  | Pexp_construct (x,None,_) -> `simple (x.txt)
+  | Pexp_construct (x,None,_,None) -> `simple (x.txt)
   | _ -> `normal
 
 let is_simple_construct :construct -> bool = function
@@ -581,7 +583,8 @@ class printer  ()= object(self:'self)
                (*reset here only because [function,match,try,sequence] are lower priority*)
             end (e,l))
 
-    | Pexp_construct (li, Some eo, _)
+    | Pexp_construct (_, _, _, Some _) -> assert false (* CR jfuruse: todo *)
+    | Pexp_construct (li, Some eo, _, None)
       when not (is_simple_construct (view_expr x))-> (* Not efficient FIXME*)
         (match view_expr x with
         | `cons ls -> self#list self#simple_expr f ls ~sep:"@;::@;"

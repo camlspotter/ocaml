@@ -82,7 +82,7 @@ let ghloc d = { txt = d; loc = symbol_gloc () };;
 
 let mkassert e =
   match e with
-  | {pexp_desc = Pexp_construct ({ txt = Lident "false" }, None , false);
+  | {pexp_desc = Pexp_construct ({ txt = Lident "false" }, None , false, None);
      pexp_loc = _ } ->
          mkexp (Pexp_assertfalse)
   | _ -> mkexp (Pexp_assert (e))
@@ -123,7 +123,7 @@ let mkuplus name arg =
       mkexp(Pexp_apply(mkoperator ("~" ^ name) 1, ["", arg]))
 
 let mkexp_cons consloc args loc =
-  {pexp_desc = Pexp_construct(mkloc (Lident "::") consloc, Some args, false);
+  {pexp_desc = Pexp_construct(mkloc (Lident "::") consloc, Some args, false, None);
    pexp_loc = loc}
 
 let mkpat_cons consloc args loc =
@@ -134,7 +134,7 @@ let rec mktailexp nilloc = function
     [] ->
       let loc = { nilloc with loc_ghost = true } in
       let nil = { txt = Lident "[]"; loc = loc } in
-      { pexp_desc = Pexp_construct (nil, None, false); pexp_loc = loc }
+      { pexp_desc = Pexp_construct (nil, None, false, None); pexp_loc = loc }
   | e1 :: el ->
       let exp_el = mktailexp nilloc el in
       let l = {loc_start = e1.pexp_loc.loc_start;
@@ -987,7 +987,7 @@ expr:
   | expr_comma_list %prec below_COMMA
       { mkexp(Pexp_tuple(List.rev $1)) }
   | constr_longident simple_expr %prec below_SHARP
-      { mkexp(Pexp_construct(mkrhs $1 1, Some $2, false)) }
+      { mkexp(Pexp_construct(mkrhs $1 1, Some $2, false, None)) }
   | name_tag simple_expr %prec below_SHARP
       { mkexp(Pexp_variant($1, Some $2)) }
   | IF seq_expr THEN expr ELSE expr
@@ -1000,8 +1000,10 @@ expr:
       { mkexp(Pexp_for(mkrhs $2 2, $4, $6, $5, $8)) }
   | expr COLONCOLON expr
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$1;$3])) (symbol_rloc()) }
+/*
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
+*/
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
@@ -1069,18 +1071,24 @@ simple_expr:
   | constant
       { mkexp(Pexp_constant $1) }
   | constr_longident %prec prec_constant_constructor
-      { mkexp(Pexp_construct(mkrhs $1 1, None, false)) }
+      { mkexp(Pexp_construct(mkrhs $1 1, None, false, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
+  | LPAREN constr_longident DOTDOT RPAREN /* (Some ..) for fun x -> Some x */
+      { mkexp(Pexp_construct(mkrhs $2 1, None, false, Some `Curried)) }
   | LPAREN seq_expr RPAREN
-      { reloc_exp $2 }
+      { match reloc_exp $2 with
+        | ({ pexp_desc = Pexp_construct (loc, None, b, None) } as e) ->
+            { e with pexp_desc = Pexp_construct (loc, None, b, Some `Uncurried) }
+        | e -> e
+      }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
   | BEGIN seq_expr END
       { reloc_exp $2 }
   | BEGIN END
       { mkexp (Pexp_construct (mkloc (Lident "()") (symbol_rloc ()),
-                               None, false)) }
+                               None, false, None)) }
   | BEGIN seq_expr error
       { unclosed "begin" 1 "end" 3 }
   | LPAREN seq_expr type_constraint RPAREN
@@ -1140,6 +1148,10 @@ simple_expr:
                                 Some (ghtyp (Ptyp_package $5)), None)) }
   | LPAREN MODULE module_expr COLON error
       { unclosed "(" 1 ")" 5 }
+  | LPAREN COLONCOLON RPAREN
+      { mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None, false, Some `Uncurried)) }
+  | LPAREN COLONCOLON DOTDOT RPAREN
+      { mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None, false, Some `Curried)) }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr

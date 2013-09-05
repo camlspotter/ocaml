@@ -249,10 +249,13 @@ and expression i ppf x =
   | Pexp_tuple (l) ->
       line i ppf "Pexp_tuple\n";
       list i expression ppf l;
-  | Pexp_construct (li, eo, b) ->
+  | Pexp_construct (li, eo, b, sw) ->
       line i ppf "Pexp_construct %a\n" fmt_longident_loc li;
       option i expression ppf eo;
       bool i ppf b;
+      option i (fun i ppf -> function
+        | `Uncurried -> line i ppf "`Uncurried"
+        | `Curried -> line i ppf "`Curried") ppf sw;
   | Pexp_variant (l, eo) ->
       line i ppf "Pexp_variant \"%s\"\n" l;
       option i expression ppf eo;

@@ -93,7 +93,7 @@ and expression_desc =
   | Pexp_match of expression * (pattern * expression) list
   | Pexp_try of expression * (pattern * expression) list
   | Pexp_tuple of expression list
-  | Pexp_construct of Longident.t loc * expression option * bool
+  | Pexp_construct of Longident.t loc * expression option * bool * [`Uncurried | `Curried] option (* maybe curried *)
   | Pexp_variant of label * expression option
   | Pexp_record of (Longident.t loc * expression) list * expression option
   | Pexp_field of expression * Longident.t loc
