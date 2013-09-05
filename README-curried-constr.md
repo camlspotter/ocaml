@@ -22,7 +22,7 @@ is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 is equal to `fun x y -> Foo (x,y)`.
 
-It works for list cons operator too:
+It works for the list cons operator too:
 
 ```
 (::) : ('a * 'a list) -> 'a list
@@ -49,7 +49,7 @@ $ ./runocaml
 Quality
 ======================================
 
-Not very tested well.
+Not very well tested, but this is trivial source conversion slightly depending on type info.
 
 Limitations
 ======================================
