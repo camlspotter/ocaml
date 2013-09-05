@@ -20,7 +20,13 @@ is equal to `fun (x,y) -> Foo (x,y)`. And,
 (Foo ..)
 ```
 
-is equal to `fun x y -> Foo (x,y)`.
+is equal to `fun x y -> Foo (x,y)`. So, for example,
+
+```ocaml
+let () =
+  assert (List.map (Foo) [(1,2.0); (3,4.0)] = [Foo (1,2.0); Foo (3,4.0)]);
+  assert (List.map (fun f -> f 3.0) (List.map (Foo..) [1;2]) = [Foo (1,3.0); Foo (2,3.0)])
+```
 
 It works for the list cons operator too:
 
