@@ -131,7 +131,7 @@ let iter_expression f e =
     | Pexp_variant (_, eo) -> may expr eo
     | Pexp_record (iel, eo) ->
         may expr eo; List.iter (fun (_, e) -> expr e) iel
-    | Pexp_open (_, _, e)
+    | Pexp_open (_, _, _, e)
     | Pexp_newtype (_, e)
     | Pexp_poly (e, _)
     | Pexp_lazy e
@@ -2702,11 +2702,11 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = newty (Tpackage (p, nl, tl'));
         exp_env = env }
-  | Pexp_open (ovf, lid, e) ->
-      let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
+  | Pexp_open (ovf, lid, hidings, e) ->
+      let (path, newenv) = !type_open ovf env sexp.pexp_loc lid hidings in
       let exp = type_expect newenv e ty_expected in
       { exp with
-        exp_extra = (Texp_open (ovf, path, lid, newenv), loc) ::
+        exp_extra = (Texp_open (ovf, path, lid, hidings, newenv), loc) ::
                       exp.exp_extra;
       }
 
@@ -2789,7 +2789,7 @@ and type_argument env sarg ty_expected' ty_expected =
   let rec is_inferred sexp =
     match sexp.pexp_desc with
       Pexp_ident _ | Pexp_apply _ | Pexp_send _ | Pexp_field _ -> true
-    | Pexp_open (_, _, e) -> is_inferred e
+    | Pexp_open (_, _, _, e) -> is_inferred e
     | _ -> false
   in
   match expand_head env ty_expected' with

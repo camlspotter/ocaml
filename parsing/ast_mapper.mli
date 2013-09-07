@@ -46,6 +46,8 @@ class mapper:
     method type_kind: type_kind -> type_kind
     method value_description: value_description -> value_description
     method with_constraint: with_constraint -> with_constraint
+
+    method open_hiding : open_hiding -> open_hiding
   end
 
 class type main_entry_points =
@@ -172,7 +174,7 @@ module MT:
     val modtype:
           ?loc:Location.t -> string loc -> modtype_declaration -> signature_item
     val open_:
-          ?loc:Location.t -> override_flag -> Longident.t loc -> signature_item
+          ?loc:Location.t -> override_flag -> Longident.t loc -> open_hiding list -> signature_item
     val include_: ?loc:Location.t -> module_type -> signature_item
     val class_: ?loc:Location.t -> class_description list -> signature_item
     val class_type:
@@ -200,7 +202,7 @@ module M:
     val module_: ?loc:Location.t -> string loc -> module_expr -> structure_item
     val rec_module: ?loc:Location.t -> (string loc * module_type * module_expr)      list -> structure_item
     val modtype: ?loc:Location.t -> string loc -> module_type -> structure_item
-    val open_: ?loc:Location.t -> override_flag -> Longident.t loc -> structure_item
+    val open_: ?loc:Location.t -> override_flag -> Longident.t loc -> open_hiding list -> structure_item
     val class_: ?loc:Location.t -> class_declaration list -> structure_item
     val class_type: ?loc:Location.t -> class_type_declaration list -> structure_item
     val include_: ?loc:Location.t -> module_expr -> structure_item
@@ -242,7 +244,7 @@ module E:
     val object_: ?loc:Location.t -> class_structure -> expression
     val newtype: ?loc:Location.t -> string -> expression -> expression
     val pack: ?loc:Location.t -> module_expr -> expression
-    val open_: ?loc:Location.t -> override_flag -> Longident.t loc -> expression -> expression
+    val open_: ?loc:Location.t -> override_flag -> Longident.t loc -> open_hiding list -> expression -> expression
     val lid: ?loc:Location.t -> string -> expression
     val apply_nolabs: ?loc:Location.t -> expression -> expression list -> expression
     val strconst: ?loc:Location.t -> string -> expression

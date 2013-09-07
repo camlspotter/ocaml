@@ -177,7 +177,7 @@ let rec add_expr bv exp =
       let bv = add_pattern bv pat in List.iter (add_class_field bv) fieldl
   | Pexp_newtype (_, e) -> add_expr bv e
   | Pexp_pack m -> add_module bv m
-  | Pexp_open (_ovf, m, e) -> addmodule bv m; add_expr bv e
+  | Pexp_open (_ovf, m, _hidings, e) -> addmodule bv m; add_expr bv e
 
 and add_pat_expr_list bv pel =
   List.iter (fun (p, e) -> let bv = add_pattern bv p in add_expr bv e) pel
@@ -230,7 +230,7 @@ and add_sig_item bv item =
       | Pmodtype_manifest mty -> add_modtype bv mty
       end;
       bv
-  | Psig_open (_ovf, lid) ->
+  | Psig_open (_ovf, lid, _hidings) ->
       addmodule bv lid; bv
   | Psig_include mty ->
       add_modtype bv mty; bv
@@ -282,7 +282,7 @@ and add_struct_item bv item =
       bv'
   | Pstr_modtype(id, mty) ->
       add_modtype bv mty; bv
-  | Pstr_open (_ovf, l) ->
+  | Pstr_open (_ovf, l, _hidings) ->
       addmodule bv l; bv
   | Pstr_class cdl ->
       List.iter (add_class_declaration bv) cdl; bv

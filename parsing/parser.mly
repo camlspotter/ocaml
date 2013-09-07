@@ -595,7 +595,10 @@ structure_item:
   | MODULE TYPE ident EQUAL module_type
       { mkstr(Pstr_modtype(mkrhs $3 3, $5)) }
   | OPEN override_flag mod_longident
-      { mkstr(Pstr_open ($2, mkrhs $3 3)) }
+      { mkstr(Pstr_open ($2, mkrhs $3 3, [])) }
+  | OPEN override_flag open_spec
+      { let mlid, spec = $3 in
+        mkstr(Pstr_open ($2, mlid, spec)) }
   | CLASS class_declarations
       { mkstr(Pstr_class (List.rev $2)) }
   | CLASS TYPE class_type_declarations
@@ -665,7 +668,10 @@ signature_item:
   | MODULE TYPE ident EQUAL module_type
       { mksig(Psig_modtype(mkrhs $3 3, Pmodtype_manifest $5)) }
   | OPEN override_flag mod_longident
-      { mksig(Psig_open ($2, mkrhs $3 3)) }
+      { mksig(Psig_open ($2, mkrhs $3 3, [])) }
+  | OPEN override_flag open_spec
+      { let mlid, spec = $3 in
+        mksig(Psig_open ($2, mlid, spec)) }
   | INCLUDE module_type
       { mksig(Psig_include $2) }
   | CLASS class_descriptions
@@ -971,7 +977,10 @@ expr:
   | LET MODULE UIDENT module_binding IN seq_expr
       { mkexp(Pexp_letmodule(mkrhs $3 3, $4, $6)) }
   | LET OPEN override_flag mod_longident IN seq_expr
-      { mkexp(Pexp_open($3, mkrhs $4 4, $6)) }
+      { mkexp(Pexp_open($3, mkrhs $4 4, [], $6)) }
+  | LET OPEN override_flag open_spec IN seq_expr
+      { let mlid, spec = $4 in
+        mkexp(Pexp_open($3, mlid, spec, $6)) }
   | FUNCTION opt_bar match_cases
       { mkexp(Pexp_function("", None, List.rev $3)) }
   | FUN labeled_simple_pattern fun_def
@@ -1088,7 +1097,7 @@ simple_expr:
   | simple_expr DOT label_longident
       { mkexp(Pexp_field($1, mkrhs $3 3)) }
   | mod_longident DOT LPAREN seq_expr RPAREN
-      { mkexp(Pexp_open(Fresh, mkrhs $1 1, $4)) }
+      { mkexp(Pexp_open(Fresh, mkrhs $1 1, [], $4)) }
   | mod_longident DOT LPAREN seq_expr error
       { unclosed "(" 3 ")" 5 }
   | simple_expr DOT LPAREN seq_expr RPAREN
@@ -1836,4 +1845,22 @@ additive:
   | PLUS                                        { "+" }
   | PLUSDOT                                     { "+." }
 ;
+
+open_spec: 
+  | LBRACE mod_longident MINUS LBRACE open_hiding_list RBRACE RBRACE { mkrhs $2 2, $5 }
+;
+open_hiding_list:
+    open_hiding_list SEMI open_hiding           { $3 :: $1 }
+  | open_hiding                                 { [$1] }
+;
+open_hiding:
+    LIDENT                                      { Hiding_lident (mkrhs $1 1) }
+  | UIDENT                                      { Hiding_uident (mkrhs $1 1) }
+  | VAL LIDENT                                  { Hiding_val (mkrhs $2 2) }
+  | TYPE LIDENT                                 { Hiding_type (mkrhs $2 2) }
+  | EXCEPTION LIDENT                            { Hiding_exception (mkrhs $2 2) }
+  | CLASS LIDENT                                { Hiding_class (mkrhs $2 2) }
+  | CLASS TYPE LIDENT                           { Hiding_class_type (mkrhs $3 3) }
+  | MODULE UIDENT                               { Hiding_module (mkrhs $2 2) }
+  | MODULE TYPE UIDENT                          { Hiding_module_type (mkrhs $3 3) }
 %%

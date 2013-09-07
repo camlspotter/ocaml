@@ -51,8 +51,8 @@ let initial_env () =
     if !Clflags.nopervasives
     then Env.initial
     else
-      open_implicit_module "Pervasives" Env.initial
+      open_implicit_module "Pervasives" [] Env.initial
   in
   List.fold_left (fun env m ->
-    open_implicit_module m env
+    open_implicit_module m [] env
   ) env !implicit_modules

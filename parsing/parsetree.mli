@@ -58,6 +58,17 @@ type 'a class_infos =
     pci_variance: (bool * bool) list;
     pci_loc: Location.t }
 
+type open_hiding = 
+  | Hiding_lident      of string loc
+  | Hiding_uident      of string loc
+  | Hiding_val         of string loc
+  | Hiding_type        of string loc
+  | Hiding_exception   of string loc
+  | Hiding_class       of string loc
+  | Hiding_class_type  of string loc
+  | Hiding_module      of string loc
+  | Hiding_module_type of string loc
+
 (* Value expressions for the core language *)
 
 type pattern =
@@ -118,7 +129,7 @@ and expression_desc =
   | Pexp_object of class_structure
   | Pexp_newtype of string * expression
   | Pexp_pack of module_expr
-  | Pexp_open of override_flag * Longident.t loc * expression
+  | Pexp_open of override_flag * Longident.t loc * open_hiding list * expression
 
 (* Value descriptions *)
 
@@ -242,7 +253,7 @@ and signature_item_desc =
   | Psig_module of string loc * module_type
   | Psig_recmodule of (string loc * module_type) list
   | Psig_modtype of string loc * modtype_declaration
-  | Psig_open of override_flag * Longident.t loc
+  | Psig_open of override_flag * Longident.t loc * open_hiding list
   | Psig_include of module_type
   | Psig_class of class_description list
   | Psig_class_type of class_type_declaration list
@@ -287,7 +298,7 @@ and structure_item_desc =
   | Pstr_module of string loc * module_expr
   | Pstr_recmodule of (string loc * module_type * module_expr) list
   | Pstr_modtype of string loc * module_type
-  | Pstr_open of override_flag * Longident.t loc
+  | Pstr_open of override_flag * Longident.t loc * open_hiding list
   | Pstr_class of class_declaration list
   | Pstr_class_type of class_type_declaration list
   | Pstr_include of module_expr

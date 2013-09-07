@@ -627,8 +627,11 @@ class printer  ()= object(self:'self)
         pp f "@[<hov2>lazy@ %a@]" self#simple_expr e
     | Pexp_poly _ ->
         assert false
-    | Pexp_open (ovf, lid, e) ->
+    | Pexp_open (ovf, lid, [], e) ->
         pp f "@[<2>let open%s %a in@;%a@]" (override ovf) self#longident_loc lid
+          self#expression  e
+    | Pexp_open (ovf, lid, hidings, e) ->
+        pp f "@[<2>let open%s %a in@;%a@]" (override ovf) self#open_spec (lid, hidings)
           self#expression  e
     | Pexp_variant (l,Some eo) ->
         pp f "@[<2>`%s@;%a@]" l  self#simple_expr eo
@@ -896,8 +899,10 @@ class printer  ()= object(self:'self)
         pp f "@[<hov>module@ %s@ :@ %a@]"
           s.txt
           self#module_type  mt
-    | Psig_open (ovf, li) ->
+    | Psig_open (ovf, li, []) ->
         pp f "@[<hov2>open%s@ %a@]" (override ovf) self#longident_loc li
+    | Psig_open (ovf, li, hidings) ->
+        pp f "@[<hov2>open%s@ %a@]" (override ovf) self#open_spec (li, hidings)
     | Psig_include (mt) ->
         pp f "@[<hov2>include@ %a@]"
           self#module_type  mt
@@ -1032,8 +1037,10 @@ class printer  ()= object(self:'self)
             | _ ->
                 pp f " =@ %a"  self#module_expr  me
             )) me
-    | Pstr_open (ovf, li) ->
+    | Pstr_open (ovf, li, []) ->
         pp f "@[<2>open%s@;%a@]" (override ovf) self#longident_loc li;
+    | Pstr_open (ovf, li, hidings) ->
+        pp f "@[<2>open%s@;%a@]" (override ovf) self#open_spec (li, hidings);
     | Pstr_modtype (s, mt) ->
         pp f "@[<2>module type %s =@;%a@]" s.txt self#module_type mt
     | Pstr_class l ->
@@ -1203,6 +1210,23 @@ class printer  ()= object(self:'self)
         pp_close_box f ();
     | Ptop_dir (s, da) ->
         pp f "@[<hov2>#%s@ %a@]" s self#directive_argument da
+
+  method open_spec f (lid, hidings) =
+    pp f "{%a - %a@]}}"
+      self#longident_loc lid
+      (self#list ~first:"{@[" ~sep:";@," ~last:"@]}" self#open_hiding) hidings
+
+  method open_hiding f = function
+    | Hiding_lident      s 
+    | Hiding_uident      s -> pp f "%s" s.txt
+    | Hiding_val         s -> pp f "val %s" s.txt
+    | Hiding_type        s -> pp f "type %s" s.txt
+    | Hiding_exception   s -> pp f "exception %s" s.txt
+    | Hiding_class       s -> pp f "class %s" s.txt
+    | Hiding_class_type  s -> pp f "class type %s" s.txt
+    | Hiding_module      s -> pp f "module %s" s.txt
+    | Hiding_module_type s -> pp f "module type %s" s.txt
+
 end;;
 
 

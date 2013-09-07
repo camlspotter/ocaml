@@ -234,8 +234,9 @@ and expression_extra i ppf x =
       line i ppf "Pexp_constraint\n";
       option i core_type ppf cto1;
       option i core_type ppf cto2;
-  | Texp_open (ovf, m, _, _) ->
+  | Texp_open (ovf, m, _, [], _) ->
       line i ppf "Pexp_open %a \"%a\"\n" fmt_override_flag ovf fmt_path m;
+  | Texp_open (ovf, m, _, _hidings, _) -> assert false (* CR jfuruse: todo *)
   | Texp_poly cto ->
       line i ppf "Pexp_poly\n";
       option i core_type ppf cto;
@@ -579,8 +580,9 @@ and signature_item i ppf x =
   | Tsig_modtype (s, _, md) ->
       line i ppf "Psig_modtype \"%a\"\n" fmt_ident s;
       modtype_declaration i ppf md;
-  | Tsig_open (ovf, li,_) ->
+  | Tsig_open (ovf, li, _, []) ->
     line i ppf "Psig_open %a %a\n" fmt_override_flag ovf fmt_path li;
+  | Tsig_open (ovf, li, _, _hidings) -> assert false (* CR jfuruse: todo *)
   | Tsig_include (mt, _) ->
       line i ppf "Psig_include\n";
       module_type i ppf mt;
@@ -669,8 +671,9 @@ and structure_item i ppf x =
   | Tstr_modtype (s, _, mt) ->
       line i ppf "Pstr_modtype \"%a\"\n" fmt_ident s;
       module_type i ppf mt;
-  | Tstr_open (ovf, li, _) ->
+  | Tstr_open (ovf, li, _, []) ->
     line i ppf "Pstr_open %a %a\n" fmt_override_flag ovf fmt_path li;
+  | Tstr_open (ovf, li, _, _hidings) -> assert false (* CR jfuruse: todo *)
   | Tstr_class (l) ->
       line i ppf "Pstr_class\n";
       list i class_declaration ppf (List.map (fun (cl, _,_) -> cl) l);

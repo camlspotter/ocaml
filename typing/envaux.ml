@@ -61,7 +61,7 @@ let rec env_from_summary sum subst =
       | Env_cltype (s, id, desc) ->
           Env.add_cltype id (Subst.cltype_declaration subst desc)
                          (env_from_summary s subst)
-      | Env_open(s, path) ->
+      | Env_open(s, path, hidings) ->
           let env = env_from_summary s subst in
           let path' = Subst.module_path subst path in
           let mty =
@@ -70,7 +70,7 @@ let rec env_from_summary sum subst =
             with Not_found ->
               raise (Error (Module_not_found path'))
           in
-          Env.open_signature Asttypes.Override path' (extract_sig env mty) env
+          Env.open_signature Asttypes.Override path' (extract_sig env mty) hidings env
     in
       Hashtbl.add env_cache (sum, subst) env;
       env

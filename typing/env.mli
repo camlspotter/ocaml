@@ -23,7 +23,7 @@ type summary =
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
-  | Env_open of summary * Path.t
+  | Env_open of summary * Path.t * Parsetree.open_hiding list
 
 type t
 
@@ -108,8 +108,8 @@ val add_signature: signature -> t -> t
 
 val open_signature:
     ?loc:Location.t -> ?toplevel:bool -> Asttypes.override_flag -> Path.t ->
-      signature -> t -> t
-val open_pers_signature: string -> t -> t
+      signature -> Parsetree.open_hiding list -> t -> t
+val open_pers_signature: string -> Parsetree.open_hiding list -> t -> t
 
 (* Insertion by name *)
 

@@ -108,7 +108,7 @@ type summary =
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
   | Env_cltype of summary * Ident.t * class_type_declaration
-  | Env_open of summary * Path.t
+  | Env_open of summary * Path.t * Parsetree.open_hiding list
 
 module EnvTbl =
   struct
@@ -1341,34 +1341,62 @@ let rec add_signature sg env =
 
 (* Open a signature path *)
 
-let open_signature slot root sg env0 =
+let open_signature slot root sg hidings env0 =
   (* First build the paths and substitution *)
   let (pl, sub, sg) = prefix_idents_and_subst root Subst.identity sg in
   let sg = Lazy.force sg in
 
   (* Then enter the components in the environment after substitution *)
 
+  let filter item hiding =
+    match item, hiding with
+    | Sig_value (id, _), 
+        ( Parsetree.Hiding_lident { txt = s } 
+        | Parsetree.Hiding_val { txt = s }) -> Ident.name id = s
+    | Sig_type (id, _, _), 
+        ( Parsetree.Hiding_lident { txt = s } 
+        | Parsetree.Hiding_type { txt = s }) -> Ident.name id = s
+    | Sig_exception (id, _), 
+        ( Parsetree.Hiding_lident { txt = s } 
+        | Parsetree.Hiding_exception { txt = s }) -> Ident.name id = s
+    | Sig_module (id, _, _), 
+        ( Parsetree.Hiding_uident { txt = s } 
+        | Parsetree.Hiding_module { txt = s }) -> Ident.name id = s
+    | Sig_modtype (id, _), 
+        ( Parsetree.Hiding_uident { txt = s } 
+        | Parsetree.Hiding_module_type { txt = s }) -> Ident.name id = s
+    | Sig_class (id, _, _), 
+        ( Parsetree.Hiding_uident { txt = s } 
+        | Parsetree.Hiding_class { txt = s }) -> Ident.name id = s
+    | Sig_class_type (id, _, _), 
+        ( Parsetree.Hiding_uident { txt = s } 
+        | Parsetree.Hiding_class_type { txt = s }) -> Ident.name id = s
+    | _ -> false
+  in
+
   let newenv =
     List.fold_left2
       (fun env item p ->
-        match item with
-          Sig_value(id, decl) ->
-            store_value slot (Ident.hide id) p decl env env0
-        | Sig_type(id, decl, _) ->
-            store_type slot (Ident.hide id) p decl env env0
-        | Sig_exception(id, decl) ->
-            store_exception slot (Ident.hide id) p decl env env0
-        | Sig_module(id, mty, _) ->
-            store_module slot (Ident.hide id) p mty env env0
-        | Sig_modtype(id, decl) ->
-            store_modtype slot (Ident.hide id) p decl env env0
-        | Sig_class(id, decl, _) ->
-            store_class slot (Ident.hide id) p decl env env0
-        | Sig_class_type(id, decl, _) ->
-            store_cltype slot (Ident.hide id) p decl env env0
+        if List.exists (filter item) hidings then env
+        else
+          match item with
+            Sig_value(id, decl) ->
+              store_value slot (Ident.hide id) p decl env env0
+          | Sig_type(id, decl, _) ->
+              store_type slot (Ident.hide id) p decl env env0
+          | Sig_exception(id, decl) ->
+              store_exception slot (Ident.hide id) p decl env env0
+          | Sig_module(id, mty, _) ->
+              store_module slot (Ident.hide id) p mty env env0
+          | Sig_modtype(id, decl) ->
+              store_modtype slot (Ident.hide id) p decl env env0
+          | Sig_class(id, decl, _) ->
+              store_class slot (Ident.hide id) p decl env env0
+          | Sig_class_type(id, decl, _) ->
+              store_cltype slot (Ident.hide id) p decl env env0
       )
       env0 sg pl in
-  { newenv with summary = Env_open(env0.summary, root) }
+  { newenv with summary = Env_open(env0.summary, root, hidings) }
 
 (* Open a signature from a file *)
 

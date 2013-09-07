@@ -116,6 +116,11 @@ class printer :
     method value_description :
       Format.formatter -> Parsetree.value_description -> unit
     method virtual_flag : Format.formatter -> Asttypes.virtual_flag -> unit
+
+    method open_hiding : Format.formatter -> Parsetree.open_hiding -> unit
+    method open_spec :
+      Format.formatter ->
+        Longident.t Asttypes.loc * Parsetree.open_hiding list -> unit
   end
 val default : printer
 val toplevel_phrase : Format.formatter -> Parsetree.toplevel_phrase -> unit

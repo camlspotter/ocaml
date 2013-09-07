@@ -334,10 +334,30 @@ and expression i ppf x =
   | Pexp_pack me ->
       line i ppf "Pexp_pack\n";
       module_expr i ppf me
-  | Pexp_open (ovf, m, e) ->
+  | Pexp_open (ovf, m, [], e) ->
       line i ppf "Pexp_open %a \"%a\"\n" fmt_override_flag ovf
         fmt_longident_loc m;
       expression i ppf e
+  | Pexp_open (ovf, m, hidings, e) ->
+      line i ppf "Pexp_open %a \"%a\"\n" fmt_override_flag ovf
+        fmt_longident_loc m;
+      open_hiding_list (i+1) ppf hidings;
+      expression i ppf e
+
+and open_hiding_list i ppf hidings =
+  line i ppf "hiding\n";
+  list (i+1) open_hiding ppf hidings
+
+and open_hiding i ppf = function
+  | Hiding_lident      s -> line i ppf "%a" fmt_string_loc s
+  | Hiding_uident      s -> line i ppf "%a" fmt_string_loc s
+  | Hiding_val         s -> line i ppf "val %a" fmt_string_loc s
+  | Hiding_type        s -> line i ppf "type %a" fmt_string_loc s
+  | Hiding_exception   s -> line i ppf "exception %a" fmt_string_loc s
+  | Hiding_class       s -> line i ppf "class %a" fmt_string_loc s
+  | Hiding_class_type  s -> line i ppf "class type %a" fmt_string_loc s
+  | Hiding_module      s -> line i ppf "module %a" fmt_string_loc s
+  | Hiding_module_type s -> line i ppf "module type %a" fmt_string_loc s
 
 and value_description i ppf x =
   line i ppf "value_description %a\n" fmt_location x.pval_loc;
@@ -559,10 +579,11 @@ and signature_item i ppf x =
   | Psig_modtype (s, md) ->
       line i ppf "Psig_modtype %a\n" fmt_string_loc s;
       modtype_declaration i ppf md;
-  | Psig_open (ovf, li) ->
+  | Psig_open (ovf, li, hidings) ->
     line i ppf "Psig_open %a %a\n"
       fmt_override_flag ovf
       fmt_longident_loc li;
+      open_hiding_list (i+1) ppf hidings;
   | Psig_include (mt) ->
       line i ppf "Psig_include\n";
       module_type i ppf mt;
@@ -649,10 +670,11 @@ and structure_item i ppf x =
   | Pstr_modtype (s, mt) ->
       line i ppf "Pstr_modtype %a\n" fmt_string_loc s;
       module_type i ppf mt;
-  | Pstr_open (ovf, li) ->
+  | Pstr_open (ovf, li, hidings) ->
     line i ppf "Pstr_open %a %a\n"
       fmt_override_flag ovf
       fmt_longident_loc li;
+      open_hiding_list (i+1) ppf hidings;
   | Pstr_class (l) ->
       line i ppf "Pstr_class\n";
       list i class_declaration ppf l;
