@@ -2,7 +2,7 @@
 Exclusion of specific names from module open
 ================================================
 
-This is a small OCaml cmopiler modification which enables excluding
+This is a small OCaml compiler modification which enables excluding
 specified names of opening modules. 
 
 This may be useful if you get Warning 44: "this open statement shadows ... (which is later used)" of OCaml 4.01.0. To remove the warning you can explicitly retrict names opened by `open M`.
