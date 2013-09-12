@@ -50,7 +50,7 @@ val asppprofflags : string
 val profiling : string
 val dynlinkopts : string
 val otherlibraries : string
-val with_debugger : string
+val debugger : string
 val cc_profile : string
 val systhread_support : bool
 val syslib : string -> string
@@ -70,5 +70,3 @@ val ccomptype : string
 val extralibs : string
 val tk_defs : string
 val asm_cfi_supported : bool
-val target : string
-val host : string

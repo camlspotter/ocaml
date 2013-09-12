@@ -130,8 +130,8 @@ scanf.cmo : string.cmi printf.cmi pervasives.cmi obj.cmi list.cmi \
     hashtbl.cmi buffer.cmi array.cmi scanf.cmi
 scanf.cmx : string.cmx printf.cmx pervasives.cmx obj.cmx list.cmx \
     hashtbl.cmx buffer.cmx array.cmx scanf.cmi
-set.cmo : list.cmi set.cmi
-set.cmx : list.cmx set.cmi
+set.cmo : set.cmi
+set.cmx : set.cmi
 sort.cmo : array.cmi sort.cmi
 sort.cmx : array.cmx sort.cmi
 stack.cmo : list.cmi stack.cmi
@@ -240,8 +240,8 @@ scanf.cmo : string.cmi printf.cmi pervasives.cmi obj.cmi list.cmi \
     hashtbl.cmi buffer.cmi array.cmi scanf.cmi
 scanf.p.cmx : string.p.cmx printf.p.cmx pervasives.p.cmx obj.p.cmx list.p.cmx \
     hashtbl.p.cmx buffer.p.cmx array.p.cmx scanf.cmi
-set.cmo : list.cmi set.cmi
-set.p.cmx : list.p.cmx set.cmi
+set.cmo : set.cmi
+set.p.cmx : set.cmi
 sort.cmo : array.cmi sort.cmi
 sort.p.cmx : array.p.cmx sort.cmi
 stack.cmo : list.cmi stack.cmi

@@ -148,18 +148,10 @@ let final_rewrite add_function =
 ;;
 
 let rec rewrite_patexp_list iflag l =
-  rewrite_exp_list iflag (List.map (fun x -> x.pvb_expr) l)
+  rewrite_exp_list iflag (List.map snd l)
 
-and rewrite_cases iflag l =
-  List.iter
-    (fun pc ->
-      begin match pc.pc_guard with
-      | None -> ()
-      | Some g -> rewrite_exp iflag g
-      end;
-      rewrite_exp iflag pc.pc_rhs
-    )
-    l
+and rewrite_patlexp_list iflag l =
+  rewrite_exp_list iflag (List.map snd l)
 
 and rewrite_labelexp_list iflag l =
   rewrite_exp_list iflag (List.map snd l)
@@ -180,32 +172,25 @@ and rw_exp iflag sexp =
     rewrite_patexp_list iflag spat_sexp_list;
     rewrite_exp iflag sbody
 
-  | Pexp_function caselist ->
+  | Pexp_function (_, _, caselist) ->
     if !instr_fun then
       rewrite_function iflag caselist
     else
-      rewrite_cases iflag caselist
-
-  | Pexp_fun (_, _, p, e) ->
-      let l = [{pc_lhs=p; pc_guard=None; pc_rhs=e}] in
-      if !instr_fun then
-        rewrite_function iflag l
-      else
-        rewrite_cases iflag l
+      rewrite_patlexp_list iflag caselist
 
   | Pexp_match(sarg, caselist) ->
     rewrite_exp iflag sarg;
     if !instr_match && not sexp.pexp_loc.loc_ghost then
       rewrite_funmatching caselist
     else
-      rewrite_cases iflag caselist
+      rewrite_patlexp_list iflag caselist
 
   | Pexp_try(sbody, caselist) ->
     rewrite_exp iflag sbody;
     if !instr_try && not sexp.pexp_loc.loc_ghost then
       rewrite_trymatching caselist
     else
-      rewrite_cases iflag caselist
+      rewrite_patexp_list iflag caselist
 
   | Pexp_apply(sfunct, sargs) ->
     rewrite_exp iflag sfunct;
@@ -214,8 +199,8 @@ and rw_exp iflag sexp =
   | Pexp_tuple sexpl ->
     rewrite_exp_list iflag sexpl
 
-  | Pexp_construct(_, None) -> ()
-  | Pexp_construct(_, Some sarg) ->
+  | Pexp_construct(_, None, _) -> ()
+  | Pexp_construct(_, Some sarg, _) ->
     rewrite_exp iflag sarg
 
   | Pexp_variant(_, None) -> ()
@@ -263,8 +248,12 @@ and rw_exp iflag sexp =
     then insert_profile rw_exp sbody
     else rewrite_exp iflag sbody
 
-  | Pexp_constraint(sarg, _) | Pexp_coerce(sarg, _, _) ->
+  | Pexp_constraint(sarg, _, _) ->
     rewrite_exp iflag sarg
+
+  | Pexp_when(scond, sbody) ->
+    rewrite_exp iflag scond;
+    rewrite_exp iflag sbody
 
   | Pexp_send (sobj, _) ->
     rewrite_exp iflag sobj
@@ -282,6 +271,7 @@ and rw_exp iflag sexp =
       rewrite_exp iflag sexp
 
   | Pexp_assert (cond) -> rewrite_exp iflag cond
+  | Pexp_assertfalse -> ()
 
   | Pexp_lazy (expr) -> rewrite_exp iflag expr
 
@@ -293,7 +283,6 @@ and rw_exp iflag sexp =
   | Pexp_newtype (_, sexp) -> rewrite_exp iflag sexp
   | Pexp_open (_ovf, _, e) -> rewrite_exp iflag e
   | Pexp_pack (smod) -> rewrite_mod iflag smod
-  | Pexp_extension _ -> ()
 
 and rewrite_ifbody iflag ghost sifbody =
   if !instr_if && not ghost then
@@ -305,46 +294,39 @@ and rewrite_ifbody iflag ghost sifbody =
 and rewrite_annotate_exp_list l =
   List.iter
     (function
-     | {pc_guard=Some scond; pc_rhs=sbody} ->
-         insert_profile rw_exp scond;
-         insert_profile rw_exp sbody;
-     | {pc_rhs={pexp_desc = Pexp_constraint(sbody, _)}} (* let f x : t = e *)
+     | {pexp_desc = Pexp_when(scond, sbody)}
+        -> insert_profile rw_exp scond;
+           insert_profile rw_exp sbody;
+     | {pexp_desc = Pexp_constraint(sbody, _, _)} (* let f x : t = e *)
         -> insert_profile rw_exp sbody
-     | {pc_rhs=sexp} -> insert_profile rw_exp sexp)
+     | sexp -> insert_profile rw_exp sexp)
     l
 
 and rewrite_function iflag = function
-  | [{pc_lhs=spat; pc_guard=None;
-      pc_rhs={pexp_desc = (Pexp_function _|Pexp_fun _)} as sexp}] ->
-        rewrite_exp iflag sexp
+  | [spat, ({pexp_desc = Pexp_function _} as sexp)] -> rewrite_exp iflag sexp
   | l -> rewrite_funmatching l
 
 and rewrite_funmatching l =
-  rewrite_annotate_exp_list l
+  rewrite_annotate_exp_list (List.map snd l)
 
 and rewrite_trymatching l =
-  rewrite_annotate_exp_list l
+  rewrite_annotate_exp_list (List.map snd l)
 
 (* Rewrite a class definition *)
 
 and rewrite_class_field iflag cf =
   match cf.pcf_desc with
-    Pcf_inherit (_, cexpr, _)     -> rewrite_class_expr iflag cexpr
-  | Pcf_val (_, _, Cfk_concrete (_, sexp))  -> rewrite_exp iflag sexp
-  | Pcf_method (_, _,
-                Cfk_concrete (_, ({pexp_desc = (Pexp_function _|Pexp_fun _)}
-                                    as sexp))) ->
+    Pcf_inher (_, cexpr, _)     -> rewrite_class_expr iflag cexpr
+  | Pcf_val (_, _, _, sexp)  -> rewrite_exp iflag sexp
+  | Pcf_meth (_, _, _, ({pexp_desc = Pexp_function _} as sexp)) ->
       rewrite_exp iflag sexp
-  | Pcf_method (_, _, Cfk_concrete(_, sexp)) ->
+  | Pcf_meth (_, _, _, sexp) ->
       let loc = cf.pcf_loc in
       if !instr_fun && not loc.loc_ghost then insert_profile rw_exp sexp
       else rewrite_exp iflag sexp
-  | Pcf_initializer sexp ->
+  | Pcf_init sexp ->
       rewrite_exp iflag sexp
-  | Pcf_method (_, _, Cfk_virtual _)
-  | Pcf_val (_, _, Cfk_virtual _)
-  | Pcf_constraint _  -> ()
-  | Pcf_extension _ -> ()
+  | Pcf_valvirt _ | Pcf_virt _ | Pcf_constr _  -> ()
 
 and rewrite_class_expr iflag cexpr =
   match cexpr.pcl_desc with
@@ -361,7 +343,6 @@ and rewrite_class_expr iflag cexpr =
       rewrite_class_expr iflag cexpr
   | Pcl_constraint (cexpr, _) ->
       rewrite_class_expr iflag cexpr
-  | Pcl_extension _ -> ()
 
 and rewrite_class_declaration iflag cl =
   rewrite_class_expr iflag cl.pci_expr
@@ -376,15 +357,13 @@ and rewrite_mod iflag smod =
   | Pmod_apply(smod1, smod2) -> rewrite_mod iflag smod1; rewrite_mod iflag smod2
   | Pmod_constraint(smod, smty) -> rewrite_mod iflag smod
   | Pmod_unpack(sexp) -> rewrite_exp iflag sexp
-  | Pmod_extension _ -> ()
 
 and rewrite_str_item iflag item =
   match item.pstr_desc with
-    Pstr_eval (exp, _attrs) -> rewrite_exp iflag exp
+    Pstr_eval exp -> rewrite_exp iflag exp
   | Pstr_value(_, exps)
-     -> List.iter (fun x -> rewrite_exp iflag x.pvb_expr) exps
-  | Pstr_module x -> rewrite_mod iflag x.pmb_expr
-        (* todo: Pstr_recmodule?? *)
+     -> List.iter (function (_,exp) -> rewrite_exp iflag exp) exps
+  | Pstr_module(name, smod) -> rewrite_mod iflag smod
   | Pstr_class classes -> List.iter (rewrite_class_declaration iflag) classes
   | _ -> ()
 

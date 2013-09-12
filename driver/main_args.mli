@@ -82,7 +82,6 @@ module type Bytetop_options = sig
   val _labels : unit -> unit
   val _no_app_funct : unit -> unit
   val _noassert : unit -> unit
-  val _noinit : unit -> unit
   val _nolabels : unit -> unit
   val _noprompt : unit -> unit
   val _nopromptcont : unit -> unit
@@ -194,7 +193,6 @@ module type Opttop_options = sig
   val _labels : unit -> unit
   val _no_app_funct : unit -> unit
   val _noassert : unit -> unit
-  val _noinit : unit -> unit
   val _nolabels : unit -> unit
   val _noprompt : unit -> unit
   val _nopromptcont : unit -> unit

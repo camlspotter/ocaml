@@ -370,9 +370,9 @@ New syntax:\
     parser
     [ [: `((KEYWORD "(", _) as tok); xs :] ->
         match xs with parser
-        [ [: `(KEYWORD ("or"|"mod"|"land"|"lor"|"lxor"|"lsl"|"lsr"|"asr"|"*" as i)  , _loc);
-             `(KEYWORD ")" , _); xs :] ->
-               [: `(LIDENT i, _loc); infix_kwds_filter xs :]
+        [ [: `(KEYWORD ("or"|"mod"|"land"|"lor"|"lxor"|"lsl"|"lsr"|"asr" as i), _loc);
+             `(KEYWORD ")", _); xs :] ->
+                [: `(LIDENT i, _loc); infix_kwds_filter xs :]
         | [: xs :] ->
                 [: `tok; infix_kwds_filter xs :] ]
     | [: `x; xs :] -> [: `x; infix_kwds_filter xs :] ];
@@ -473,11 +473,7 @@ New syntax:\
             <:str_item< module rec $mb$ >>
         | "module"; "type"; i = a_ident; "="; mt = module_type ->
             <:str_item< module type $i$ = $mt$ >>
-        | "open"; "!"; i = module_longident -> Ast.StOpn _loc Ast.OvOverride i                 
-        | "open"; i = module_longident ->
-            Ast.StOpn _loc Ast.OvNil i 
-            (* <:str_item< open $i$ >> *)
-
+        | "open"; i = module_longident -> <:str_item< open $i$ >>
         | "type"; td = type_declaration ->
             <:str_item< type $td$ >>
         | value_let; r = opt_rec; bi = binding ->
@@ -555,8 +551,7 @@ New syntax:\
             <:sig_item< module type $i$ = $mt$ >>
         | "module"; "type"; i = a_ident ->
             <:sig_item< module type $i$ >>
-        | "open"; i = module_longident ->
-            <:sig_item< open $i$ >>
+        | "open"; i = module_longident -> <:sig_item< open $i$ >>
         | "type"; t = type_declaration ->
             <:sig_item< type $t$ >>
         | value_val; i = a_LIDENT; ":"; t = ctyp ->
@@ -606,9 +601,6 @@ New syntax:\
             <:expr< let $rec:r$ $bi$ in $x$ >>
         | "let"; "module"; m = a_UIDENT; mb = module_binding0; "in"; e = SELF ->
             <:expr< let module $m$ = $mb$ in $e$ >>
-
-        | "let"; "open"; "!"; i = module_longident; "in"; e = SELF ->
-            <:expr< let open! $id:i$ in $e$>>
         | "let"; "open"; i = module_longident; "in"; e = SELF ->
             <:expr< let open $id:i$ in $e$ >>
         | "fun"; "["; a = LIST0 match_case0 SEP "|"; "]" ->
@@ -627,10 +619,7 @@ New syntax:\
         | "while"; e = sequence; "do"; seq = do_sequence ->
             <:expr< while $mksequence' _loc e$ do { $seq$ } >>
         | "object"; csp = opt_class_self_patt; cst = class_structure; "end" ->
-            <:expr< object ($csp$) $cst$ end >>
-        | e = SELF; "[@"; s = a_LIDENT; str = str_items; "]" ->
-            Ast.ExAtt _loc s str e
-             ]
+            <:expr< object ($csp$) $cst$ end >> ]
       | "where"
         [ e = SELF; "where"; rf = opt_rec; lb = let_binding ->
             <:expr< let $rec:rf$ $lb$ in $e$ >> ]
@@ -707,7 +696,7 @@ New syntax:\
         | s = a_STRING -> <:expr< $str:s$ >>
         | s = a_CHAR -> <:expr< $chr:s$ >>
         | i = TRY module_longident_dot_lparen; e = sequence; ")" ->
-            <:expr< let open $i$ in $e$ >> 
+            <:expr< let open $i$ in $e$ >>
         | i = TRY val_longident -> <:expr< $id:i$ >>
         | "`"; s = a_ident -> <:expr< ` $s$ >>
         | "["; "]" -> <:expr< [] >>
@@ -780,9 +769,6 @@ New syntax:\
             k <:expr< let module $m$ = $mb$ in $e$ >>
         | "let"; "module"; m = a_UIDENT; mb = module_binding0; ";"; el = SELF ->
             <:expr< let module $m$ = $mb$ in $mksequence _loc el$ >>
-
-        | "let"; "open"; "!"; i = module_longident; "in"; e = SELF ->
-            <:expr< let open! $id:i$ in $e$ >>
         | "let"; "open"; i = module_longident; "in"; e = SELF ->
             <:expr< let open $id:i$ in $e$ >>
         | `ANTIQUOT ("list" as n) s -> <:expr< $anti:mk_anti ~c:"expr;" n s$ >>
@@ -881,10 +867,7 @@ New syntax:\
         | "->"; e = expr -> e ] ]
     ;
     patt:
-      [ "attribute"
-        [ e = SELF; "[@"; s = a_LIDENT; str = str_items; "]" ->
-            Ast.PaAtt _loc s str e ]
-      | "|" LEFTA
+      [ "|" LEFTA
         [ p1 = SELF; "|"; p2 = SELF -> <:patt< $p1$ | $p2$ >> ]
       | ".." NONA
         [ p1 = SELF; ".."; p2 = SELF -> <:patt< $p1$ .. $p2$ >> ]
@@ -1105,9 +1088,6 @@ New syntax:\
         [ t1 = SELF; "."; t2 = SELF ->
             try <:ctyp< $id:Ast.ident_of_ctyp t1$.$id:Ast.ident_of_ctyp t2$ >>
             with [ Invalid_argument s -> raise (Stream.Error s) ] ]
-      | "attribute"
-        [ e = SELF; "[@"; s = a_LIDENT; str = str_items; "]" ->
-            Ast.TyAtt _loc s str e ]
       | "simple"
         [ "'"; i = a_ident -> <:ctyp< '$i$ >>
         | "_" -> <:ctyp< _ >>

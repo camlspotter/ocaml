@@ -105,10 +105,9 @@ let if_mixed_dir dir =
   if mixed then ".."/dir else dir;;
 
 let unix_dir =
-  if Sys.os_type = "Win32" || C.system = "mingw" then
-    if_mixed_dir "otherlibs/win32unix"
-  else
-    if_mixed_dir "otherlibs/unix";;
+  match Sys.os_type with
+  | "Win32" -> if_mixed_dir "otherlibs/win32unix"
+  | _       -> if_mixed_dir "otherlibs/unix";;
 
 let threads_dir    = if_mixed_dir "otherlibs/threads";;
 let systhreads_dir = if_mixed_dir "otherlibs/systhreads";;
@@ -676,7 +675,6 @@ let camlp4_import_list =
      "parsing/longident.ml";
      "parsing/asttypes.mli";
      "parsing/parsetree.mli";
-     "parsing/ast_helper.ml";
      "typing/outcometree.mli";
      "typing/oprint.ml";
      "myocamlbuild_config.ml";

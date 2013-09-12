@@ -17,13 +17,16 @@ open Asttypes
 open Typedtree
 open Lambda
 
+val name_pattern: string -> (pattern * 'a) list -> Ident.t
+
 val transl_exp: expression -> lambda
 val transl_apply: lambda -> (label * expression option * optional) list
                   -> Location.t -> lambda
-val transl_let: rec_flag -> value_binding list -> lambda -> lambda
+val transl_let:
+      rec_flag -> (pattern * expression) list -> lambda -> lambda
 val transl_primitive: Location.t -> Primitive.description -> lambda
 val transl_exception:
-      Path.t option -> constructor_declaration -> lambda
+      Ident.t -> Path.t option -> exception_declaration -> lambda
 
 val check_recursive_lambda: Ident.t list -> lambda -> bool
 

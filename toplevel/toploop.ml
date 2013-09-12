@@ -20,7 +20,6 @@ open Parsetree
 open Types
 open Typedtree
 open Outcometree
-open Ast_helper
 
 type directive_fun =
    | Directive_none of (unit -> unit)
@@ -114,13 +113,11 @@ let parse_mod_use_file name lb =
          (!parse_use_file lb))
   in
   [ Ptop_def
-      [ Str.module_
-          (Mb.mk
-             (Location.mknoloc modname)
-             (Mod.structure items)
-          )
-       ]
-   ]
+      [ { pstr_desc =
+            Pstr_module ( Location.mknoloc modname ,
+                          { pmod_desc = Pmod_structure items;
+                            pmod_loc = Location.none } );
+          pstr_loc = Location.none } ] ]
 
 (* Hooks for initialization *)
 
@@ -253,7 +250,7 @@ let execute_phrase print_outcome ppf phr =
               if print_outcome then
                 Printtyp.wrap_printing_env oldenv (fun () ->
                   match str.str_items with
-                  | [ { str_desc = Tstr_eval (exp, _attrs) }] ->
+                  | [ { str_desc = Tstr_eval exp }] ->
                       let outv = outval_of_value newenv v exp.exp_type in
                       let ty = Printtyp.tree_of_type_scheme exp.exp_type in
                       Ophr_eval (outv, ty)
@@ -418,8 +415,7 @@ let _ =
     crc_intfs
 
 let load_ocamlinit ppf =
-  if !Clflags.noinit then ()
-  else match !Clflags.init_file with
+  match !Clflags.init_file with
   | Some f -> if Sys.file_exists f then ignore (use_silently ppf f)
               else fprintf ppf "Init file not found: \"%s\".@." f
   | None ->

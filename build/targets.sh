@@ -60,5 +60,3 @@ if [ -x boot/myocamlbuild.native ]; then
 else
   OCAMLBUILD="./boot/ocamlrun boot/myocamlbuild"
 fi
-
-OCAMLBUILD="$OCAMLBUILD -no-ocamlfind"

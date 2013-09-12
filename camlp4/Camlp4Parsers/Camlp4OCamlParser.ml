@@ -145,7 +145,6 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
   DELETE_RULE Gram meth_list: meth_decl; opt_dot_dot END;
   DELETE_RULE Gram expr: "let"; opt_rec; binding; "in"; SELF END;
   DELETE_RULE Gram expr: "let"; "module"; a_UIDENT; module_binding0; "in"; SELF END;
-  DELETE_RULE Gram expr: "let"; "open"; "!"; module_longident; "in"; SELF END;      
   DELETE_RULE Gram expr: "let"; "open"; module_longident; "in"; SELF END;
   DELETE_RULE Gram expr: "fun"; "["; LIST0 match_case0 SEP "|"; "]" END;
   DELETE_RULE Gram expr: "if"; SELF; "then"; SELF; "else"; SELF END;
@@ -255,8 +254,6 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
               | _ -> <:str_item< value $rec:r$ $bi$ >> ]
           | "let"; "module"; m = a_UIDENT; mb = module_binding0; "in"; e = expr ->
               <:str_item< let module $m$ = $mb$ in $e$ >>
-          | "let"; "open"; "!"; i = module_longident; "in"; e = expr ->
-              <:str_item< let open! $id:i$ in $e$ >>
           | "let"; "open"; i = module_longident; "in"; e = expr ->
               <:str_item< let open $id:i$ in $e$ >>
       ] ]
@@ -275,8 +272,6 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
         | "let"; "module"; m = a_UIDENT; mb = module_binding0; "in";
           e = expr LEVEL ";" ->
             <:expr< let module $m$ = $mb$ in $e$ >>
-        | "let"; "open"; "!"; i = module_longident; "in"; e = expr LEVEL ";" ->
-            <:expr< let open! $id:i$ in $e$ >>
         | "let"; "open"; i = module_longident; "in"; e = expr LEVEL ";" ->
             <:expr< let open $id:i$ in $e$ >>
         | "function"; a = match_case ->
@@ -339,10 +334,7 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
     ;
     (* Patterns *)
     patt:
-      [  "attribute"
-        [ e = SELF; "[@"; s = a_LIDENT; str = str_items; "]" ->
-            Ast.PaAtt _loc s str e  ]
-      | "as" LEFTA
+      [ "as" LEFTA
         [ p1 = SELF; "as"; i = a_LIDENT -> <:patt< ($p1$ as $lid:i$) >> ]
       | "|" LEFTA
         [ p1 = SELF; "|"; p2 = SELF -> <:patt< $p1$ | $p2$ >> ]
@@ -503,9 +495,6 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
             let t = <:ctyp< $t1$ $t2$ >> in
             try <:ctyp< $id:Ast.ident_of_ctyp t$ >>
             with [ Invalid_argument s -> raise (Stream.Error s) ] ]
-      | "attribute"
-        [ e = SELF; "[@"; s = a_LIDENT; str = str_items; "]" ->
-            Ast.TyAtt _loc s str e ]
       | "simple"
         [ "'"; i = a_ident -> <:ctyp< '$i$ >>
         | "_" -> <:ctyp< _ >>

@@ -68,9 +68,9 @@ INCLUDES_DEP=-I $(OCAMLSRCDIR)/parsing \
 INCLUDES_NODEP=	-I $(OCAMLSRCDIR)/stdlib \
 	-I $(OCAMLSRCDIR)/otherlibs/str \
 	-I $(OCAMLSRCDIR)/otherlibs/dynlink \
-	-I $(OCAMLSRCDIR)/otherlibs/$(UNIXLIB) \
+	-I $(OCAMLSRCDIR)/otherlibs/unix \
 	-I $(OCAMLSRCDIR)/otherlibs/num \
-	-I $(OCAMLSRCDIR)/otherlibs/$(GRAPHLIB)
+	-I $(OCAMLSRCDIR)/otherlibs/graph
 
 INCLUDES=$(INCLUDES_DEP) $(INCLUDES_NODEP)
 
@@ -150,7 +150,6 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/parsing/location.cmo\
 	$(OCAMLSRCDIR)/parsing/longident.cmo \
 	$(OCAMLSRCDIR)/parsing/syntaxerr.cmo \
-	$(OCAMLSRCDIR)/parsing/ast_helper.cmo \
 	$(OCAMLSRCDIR)/parsing/parser.cmo \
 	$(OCAMLSRCDIR)/parsing/lexer.cmo \
 	$(OCAMLSRCDIR)/parsing/parse.cmo \
@@ -167,8 +166,8 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/typing/oprint.cmo \
 	$(OCAMLSRCDIR)/typing/printtyp.cmo \
 	$(OCAMLSRCDIR)/typing/includecore.cmo \
-	$(OCAMLSRCDIR)/typing/typedtree.cmo \
 	$(OCAMLSRCDIR)/typing/typetexp.cmo \
+	$(OCAMLSRCDIR)/typing/typedtree.cmo \
 	$(OCAMLSRCDIR)/typing/parmatch.cmo \
 	$(OCAMLSRCDIR)/typing/stypes.cmo \
 	$(OCAMLSRCDIR)/typing/typedtreeMap.cmo \
@@ -194,16 +193,12 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 OCAMLCMXFILES=$(OCAMLCMOFILES:.cmo=.cmx)
 
 STDLIB_MLIS=../stdlib/*.mli \
-	../otherlibs/$(UNIXLIB)/unix.mli \
+	../otherlibs/unix/unix.mli \
 	../otherlibs/str/str.mli \
 	../otherlibs/bigarray/bigarray.mli \
 	../otherlibs/num/num.mli
 
-all:
-	$(MAKE) exe
-	$(MAKE) lib
-	$(MAKE) generators
-	$(MAKE) manpages
+all: exe lib generators manpages
 
 exe: $(OCAMLDOC)
 lib: $(OCAMLDOC_LIBCMA) $(OCAMLDOC_LIBCMI) $(ODOC_TEST)
@@ -312,14 +307,14 @@ test_stdlib: dummy
 	$(MKDIR) $@
 	$(OCAMLDOC_RUN) -html -colorize-code -sort -d $@ $(INCLUDES) -dump $@/stdlib.odoc -keep-code \
 	../stdlib/pervasives.ml ../stdlib/*.mli \
-	../otherlibs/$(UNIXLIB)/unix.mli \
+	../otherlibs/unix/unix.mli \
 	../otherlibs/str/str.mli
 
 test_stdlib_code: dummy
 	$(MKDIR) $@
 	$(OCAMLDOC_RUN) -html -colorize-code -sort -d $@ $(INCLUDES) -dump $@/stdlib.odoc -keep-code \
 	`ls ../stdlib/*.ml | grep -v Labels` \
-	../otherlibs/$(UNIXLIB)/unix.ml \
+	../otherlibs/unix/unix.ml \
 	../otherlibs/str/str.ml
 
 test_framed: dummy
@@ -336,7 +331,7 @@ test_latex_simple: dummy
 	-latextitle 6,subsection -latextitle 7,subsubection \
 	../stdlib/hashtbl.mli \
 	../stdlib/arg.mli \
-	../otherlibs/$(UNIXLIB)/unix.mli \
+	../otherlibs/unix/unix.mli \
 	../stdlib/map.mli
 
 test_man: dummy
@@ -358,7 +353,7 @@ autotest_stdlib: dummy
 	$(OCAMLDOC_RUN) -g autotest/odoc_test.cmo\
 	$(INCLUDES) -keep-code \
 	../stdlib/pervasives.ml ../stdlib/*.mli \
-	../otherlibs/$(UNIXLIB)/unix.mli \
+	../otherlibs/unix/unix.mli \
 	../otherlibs/str/str.mli
 
 # backup, clean and depend :

@@ -17,17 +17,18 @@ class printer :
     val pipe : bool
     val semi : bool
     method binding :
-      Format.formatter -> Parsetree.value_binding -> unit
+      Format.formatter -> Parsetree.pattern * Parsetree.expression -> unit
     method bindings:
         Format.formatter ->
-          Asttypes.rec_flag * Parsetree.value_binding list ->
+          Asttypes.rec_flag * (Parsetree.pattern * Parsetree.expression) list ->
             unit
     method case_list :
-      Format.formatter -> Parsetree.case list -> unit
+      Format.formatter ->
+      (Parsetree.pattern * Parsetree.expression) list -> unit
     method class_expr : Format.formatter -> Parsetree.class_expr -> unit
     method class_field : Format.formatter -> Parsetree.class_field -> unit
     method class_params_def :
-      Format.formatter -> (string Asttypes.loc * Asttypes.variance) list -> unit
+      Format.formatter -> (string Asttypes.loc * (bool * bool)) list -> unit
     method class_signature :
       Format.formatter -> Parsetree.class_signature -> unit
     method class_structure :
@@ -44,7 +45,7 @@ class printer :
     method directive_argument :
       Format.formatter -> Parsetree.directive_argument -> unit
     method exception_declaration :
-      Format.formatter -> Parsetree.constructor_declaration -> unit
+      Format.formatter -> string * Parsetree.exception_declaration -> unit
     method expression : Format.formatter -> Parsetree.expression -> unit
     method expression1 : Format.formatter -> Parsetree.expression -> unit
     method expression2 : Format.formatter -> Parsetree.expression -> unit
@@ -75,7 +76,6 @@ class printer :
           (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a -> unit
     method pattern : Format.formatter -> Parsetree.pattern -> unit
     method pattern1 : Format.formatter -> Parsetree.pattern -> unit
-    method payload : Format.formatter -> Parsetree.payload -> unit
     method private_flag : Format.formatter -> Asttypes.private_flag -> unit
     method rec_flag : Format.formatter -> Asttypes.rec_flag -> unit
 
@@ -101,9 +101,10 @@ class printer :
     method type_declaration :
       Format.formatter -> Parsetree.type_declaration -> unit
     method type_def_list :
-      Format.formatter -> Parsetree.type_declaration list -> unit
+      Format.formatter ->
+      (string Asttypes.loc * Parsetree.type_declaration) list -> unit
     method type_param :
-      Format.formatter -> string Asttypes.loc option * Asttypes.variance -> unit
+      Format.formatter -> (bool * bool) * string Asttypes.loc option -> unit
     method type_var_option :
       Format.formatter -> string Asttypes.loc option -> unit
     method type_with_label :
@@ -115,8 +116,6 @@ class printer :
     method value_description :
       Format.formatter -> Parsetree.value_description -> unit
     method virtual_flag : Format.formatter -> Asttypes.virtual_flag -> unit
-    method attribute : Format.formatter -> Parsetree.attribute -> unit
-    method attributes : Format.formatter -> Parsetree.attributes -> unit
   end
 val default : printer
 val toplevel_phrase : Format.formatter -> Parsetree.toplevel_phrase -> unit
