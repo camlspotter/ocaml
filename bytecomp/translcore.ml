@@ -528,6 +528,7 @@ let rec push_defaults loc bindings pat_expr_list partial =
             ({exp with exp_type = pat.pat_type; exp_desc =
               Texp_ident (Path.Pident param, mknoloc (Longident.Lident name),
                           {val_type = pat.pat_type; val_kind = Val_reg;
+                           val_attributes = [];
                            Types.val_loc = Location.none;
                           })},
              pat_expr_list, partial) }
@@ -1106,3 +1107,12 @@ let report_error ppf = function
         "Ancestor names can only be used to select inherited methods"
   | Unknown_builtin_primitive prim_name ->
     fprintf ppf  "Unknown builtin primitive \"%s\"" prim_name
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error (loc, err) ->
+          Some (Location.error_of_printer loc report_error err)
+      | _ ->
+        None
+    )

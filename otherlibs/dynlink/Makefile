@@ -15,10 +15,10 @@
 
 include ../../config/Makefile
 
-CAMLC=../../boot/ocamlrun ../../ocamlc
-CAMLOPT=../../ocamlcompopt.sh
+CAMLC=$(CAMLC_BIN) -nostdlib -I ../../stdlib
+CAMLOPT=$(CAMLOPT_BIN) -nostdlib -I ../../stdlib
 INCLUDES=-I ../../utils -I ../../typing -I ../../bytecomp -I ../../asmcomp
-COMPFLAGS=-w +33..39 -warn-error A -I ../../stdlib $(INCLUDES)
+COMPFLAGS=-w +33..39 -warn-error A $(INCLUDES)
 
 OBJS=dynlinkaux.cmo dynlink.cmo
 
@@ -28,6 +28,8 @@ COMPILEROBJS=\
   ../../utils/terminfo.cmo ../../utils/warnings.cmo \
   ../../parsing/asttypes.cmi \
   ../../parsing/location.cmo ../../parsing/longident.cmo \
+  ../../parsing/ast_helper.cmo \
+  ../../parsing/ast_mapper.cmo \
   ../../typing/ident.cmo ../../typing/path.cmo \
   ../../typing/primitive.cmo ../../typing/types.cmo \
   ../../typing/btype.cmo ../../typing/subst.cmo ../../typing/predef.cmo \

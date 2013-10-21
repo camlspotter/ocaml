@@ -90,6 +90,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _inline n = inline_threshold := n * 8
   let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
+  let _keep_locs = set keep_locs
   let _labels = clear classic
   let _linkall = set link_everything
   let _no_app_funct = clear applicative_functors
@@ -201,7 +202,7 @@ let main () =
     end;
     exit 0
   with x ->
-    Opterrors.report_error ppf x;
-    exit 2
+      Location.report_exception ppf x;
+      exit 2
 
 let _ = main ()

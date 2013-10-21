@@ -787,12 +787,12 @@ let rec tree_of_type_decl id decl =
   | Type_abstract -> ()
   | Type_variant cstrs ->
       List.iter
-        (fun (_, args,ret_type_opt) ->
-          List.iter mark_loops args;
-          may mark_loops ret_type_opt)
+        (fun c ->
+          List.iter mark_loops c.cd_args;
+          may mark_loops c.cd_res)
         cstrs
   | Type_record(l, rep) ->
-      List.iter (fun (_, _, ty) -> mark_loops ty) l
+      List.iter (fun l -> mark_loops l.ld_type) l
   end;
 
   let type_param =
@@ -809,7 +809,7 @@ let rec tree_of_type_decl id decl =
           decl.type_private = Private
       | Type_variant tll ->
           decl.type_private = Private ||
-          List.exists (fun (_,_,ret) -> ret <> None) tll
+          List.exists (fun cd -> cd.cd_res <> None) tll
     in
     let vari =
       List.map2
@@ -846,15 +846,17 @@ let rec tree_of_type_decl id decl =
   in
   (name, args, ty, priv, constraints)
 
-and tree_of_constructor (name, args, ret_type_opt) =
-  let name = Ident.name name in
-  if ret_type_opt = None then (name, tree_of_typlist false args, None) else
-  let nm = !names in
-  names := [];
-  let ret = may_map (tree_of_typexp false) ret_type_opt in
-  let args = tree_of_typlist false args in
-  names := nm;
-  (name, args, ret)
+and tree_of_constructor cd =
+  let name = Ident.name cd.cd_id in
+  match cd.cd_res with
+  | None -> (name, tree_of_typlist false cd.cd_args, None)
+  | Some res ->
+      let nm = !names in
+      names := [];
+      let ret = tree_of_typexp false res in
+      let args = tree_of_typlist false cd.cd_args in
+      names := nm;
+      (name, args, Some ret)
 
 
 and tree_of_constructor_ret =
@@ -862,8 +864,8 @@ and tree_of_constructor_ret =
     | None -> None
     | Some ret_type -> Some (tree_of_typexp false ret_type)
 
-and tree_of_label (name, mut, arg) =
-  (Ident.name name, mut = Mutable, tree_of_typexp false arg)
+and tree_of_label l =
+  (Ident.name l.ld_id, l.ld_mutable = Mutable, tree_of_typexp false l.ld_type)
 
 let tree_of_type_declaration id decl rs =
   Osig_type (tree_of_type_decl id decl, tree_of_rec rs)
@@ -928,17 +930,17 @@ let rec prepare_class_type params = function
       then prepare_class_type params cty
       else List.iter mark_loops tyl
   | Cty_signature sign ->
-      let sty = repr sign.cty_self in
+      let sty = repr sign.csig_self in
       (* Self may have a name *)
       let px = proxy sty in
       if List.memq px !visited_objects then add_alias sty
       else visited_objects := px :: !visited_objects;
       let (fields, _) =
-        Ctype.flatten_fields (Ctype.object_fields sign.cty_self)
+        Ctype.flatten_fields (Ctype.object_fields sign.csig_self)
       in
       List.iter (fun met -> mark_loops (fst (method_type met))) fields;
-      Vars.iter (fun _ (_, _, ty) -> mark_loops ty) sign.cty_vars
-  | Cty_fun (_, ty, cty) ->
+      Vars.iter (fun _ (_, _, ty) -> mark_loops ty) sign.csig_vars
+  | Cty_arrow (_, ty, cty) ->
       mark_loops ty;
       prepare_class_type params cty
 
@@ -953,14 +955,14 @@ let rec tree_of_class_type sch params =
       else
         Octy_constr (tree_of_path p', tree_of_typlist true tyl)
   | Cty_signature sign ->
-      let sty = repr sign.cty_self in
+      let sty = repr sign.csig_self in
       let self_ty =
         if is_aliased sty then
           Some (Otyp_var (false, name_of_type (proxy sty)))
         else None
       in
       let (fields, _) =
-        Ctype.flatten_fields (Ctype.object_fields sign.cty_self)
+        Ctype.flatten_fields (Ctype.object_fields sign.csig_self)
       in
       let csil = [] in
       let csil =
@@ -969,7 +971,7 @@ let rec tree_of_class_type sch params =
           csil (tree_of_constraints params)
       in
       let all_vars =
-        Vars.fold (fun l (m, v, t) all -> (l, m, v, t) :: all) sign.cty_vars []
+        Vars.fold (fun l (m, v, t) all -> (l, m, v, t) :: all) sign.csig_vars []
       in
       (* Consequence of PR#3607: order of Map.fold has changed! *)
       let all_vars = List.rev all_vars in
@@ -981,10 +983,10 @@ let rec tree_of_class_type sch params =
           csil all_vars
       in
       let csil =
-        List.fold_left (tree_of_metho sch sign.cty_concr) csil fields
+        List.fold_left (tree_of_metho sch sign.csig_concr) csil fields
       in
       Octy_signature (self_ty, List.rev csil)
-  | Cty_fun (l, ty, cty) ->
+  | Cty_arrow (l, ty, cty) ->
       let lab = if !print_labels && l <> "" || is_optional l then l else "" in
       let ty =
        if is_optional l then
@@ -993,7 +995,7 @@ let rec tree_of_class_type sch params =
          | _ -> newconstr (Path.Pident(Ident.create "<hidden>")) []
        else ty in
       let tr = tree_of_typexp sch ty in
-      Octy_fun (lab, tr, tree_of_class_type sch params cty)
+      Octy_arrow (lab, tr, tree_of_class_type sch params cty)
 
 let class_type ppf cty =
   reset ();
@@ -1051,12 +1053,12 @@ let tree_of_cltype_declaration id cl rs =
 
   let virt =
     let (fields, _) =
-      Ctype.flatten_fields (Ctype.object_fields sign.cty_self) in
+      Ctype.flatten_fields (Ctype.object_fields sign.csig_self) in
     List.exists
       (fun (lab, _, ty) ->
-         not (lab = dummy_method || Concr.mem lab sign.cty_concr))
+         not (lab = dummy_method || Concr.mem lab sign.csig_concr))
       fields
-    || Vars.fold (fun _ (_,vr,_) b -> vr = Virtual || b) sign.cty_vars false
+    || Vars.fold (fun _ (_,vr,_) b -> vr = Virtual || b) sign.csig_vars false
   in
 
   Osig_class_type
@@ -1089,7 +1091,9 @@ let filter_rem_sig item rem =
 let dummy =
   { type_params = []; type_arity = 0; type_kind = Type_abstract;
     type_private = Public; type_manifest = None; type_variance = [];
-    type_newtype_level = None; type_loc = Location.none; }
+    type_newtype_level = None; type_loc = Location.none;
+    type_attributes = [];
+  }
 
 let hide_rec_items = function
   | Sig_type(id, decl, rs) ::rem
@@ -1102,7 +1106,7 @@ let hide_rec_items = function
       let ids = id :: get_ids rem in
       set_printing_env
         (List.fold_right
-           (fun id -> Env.add_type (Ident.rename id) dummy)
+           (fun id -> Env.add_type ~check:false (Ident.rename id) dummy)
            ids !printing_env)
   | _ -> ()
 
@@ -1138,8 +1142,9 @@ and tree_of_signature_rec env' = function
             [Osig_type(tree_of_type_decl id decl, tree_of_rec rs)]
         | Sig_exception(id, decl) ->
             [tree_of_exception_declaration id decl]
-        | Sig_module(id, mty, rs) ->
-            [Osig_module (Ident.name id, tree_of_modtype mty, tree_of_rec rs)]
+        | Sig_module(id, md, rs) ->
+            [Osig_module (Ident.name id, tree_of_modtype md.md_type,
+                          tree_of_rec rs)]
         | Sig_modtype(id, decl) ->
             [tree_of_modtype_declaration id decl]
         | Sig_class(id, decl, rs) ->
@@ -1152,9 +1157,9 @@ and tree_of_signature_rec env' = function
 
 and tree_of_modtype_declaration id decl =
   let mty =
-    match decl with
-    | Modtype_abstract -> Omty_abstract
-    | Modtype_manifest mty -> tree_of_modtype mty
+    match decl.mtd_type with
+    | None -> Omty_abstract
+    | Some mty -> tree_of_modtype mty
   in
   Osig_modtype (Ident.name id, mty)
 

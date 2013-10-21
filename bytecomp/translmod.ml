@@ -135,12 +135,12 @@ let init_shape modl =
           | _ -> raise Not_found in
         init_v :: init_shape_struct env rem
     | Sig_type(id, tdecl, _) :: rem ->
-        init_shape_struct (Env.add_type id tdecl env) rem
+        init_shape_struct (Env.add_type ~check:false id tdecl env) rem
     | Sig_exception(id, edecl) :: rem ->
         raise Not_found
-    | Sig_module(id, mty, _) :: rem ->
-        init_shape_mod env mty ::
-        init_shape_struct (Env.add_module id mty env) rem
+    | Sig_module(id, md, _) :: rem ->
+        init_shape_mod env md.md_type ::
+        init_shape_struct (Env.add_module_declaration id md env) rem
     | Sig_modtype(id, minfo) :: rem ->
         init_shape_struct (Env.add_modtype id minfo env) rem
     | Sig_class(id, cdecl, _) :: rem ->
@@ -807,3 +807,12 @@ let report_error ppf = function
         "@[Cannot safely evaluate the definition@ \
          of the recursively-defined module %a@]"
         Printtyp.ident id
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error (loc, err) ->
+        Some (Location.error_of_printer loc report_error err)
+      | _ ->
+        None
+    )

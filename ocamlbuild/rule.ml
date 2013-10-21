@@ -29,10 +29,10 @@ type digest_command = { digest : string; command : Command.t }
 
 type 'a gen_rule =
   { name  : string;
-    tags  : Tags.t;
     deps  : Pathname.t list; (* These pathnames must be normalized *)
     prods : 'a list; (* Note that prods also contains stamp *)
     stamp : 'a option;
+    doc   : string option;
     code  : env -> builder -> digest_command }
 
 type rule = Pathname.t gen_rule
@@ -42,6 +42,7 @@ let name_of_rule r = r.name
 let deps_of_rule r = r.deps
 let prods_of_rule r = r.prods
 let stamp_of_rule r = r.stamp
+let doc_of_rule r = r.doc
 
 type 'a rule_printer = (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a gen_rule -> unit
 
@@ -52,12 +53,21 @@ let print_rule_name f r = pp_print_string f r.name
 let print_resource_list = List.print Resource.print
 
 let print_rule_contents ppelt f r =
-  fprintf f "@[<v2>{@ @[<2>name  =@ %S@];@ @[<2>tags  =@ %a@];@ @[<2>deps  =@ %a@];@ @[<2>prods = %a@];@ @[<2>code  = <fun>@]@]@ }"
-    r.name Tags.print r.tags print_resource_list r.deps (List.print ppelt) r.prods
+  fprintf f "@[<v2>{@ @[<2>name  =@ %S@];@ @[<2>deps  =@ %a@];@ @[<2>prods = %a@];@ @[<2>code  = <fun>@];@ @[<hov 2> doc = %s@]@]@ }"
+    r.name print_resource_list r.deps (List.print ppelt)
+    r.prods
+    (match r.doc with
+      | None -> "None"
+      | Some doc -> sprintf "Some %S" doc)
 
 let pretty_print ppelt f r =
-  fprintf f "@[<hv2>rule@ %S@ ~deps:%a@ ~prods:%a@ <fun>@]"
-    r.name print_resource_list r.deps (List.print ppelt) r.prods
+  fprintf f "@[<hv2>rule %S@ ~deps:%a@ ~prods:%a@ "
+    r.name print_resource_list r.deps (List.print ppelt) r.prods;
+  begin match r.doc with
+    | None -> ()
+    | Some doc -> fprintf f "~doc:\"@[<hov>%a@]\"@ " pp_print_text doc
+  end;
+  fprintf f "<fun>@]"  
 
 let print = print_rule_name
 
@@ -67,11 +77,14 @@ let subst env rule =
   let finder next_finder p = next_finder (Resource.subst_any env p) in
   let stamp = match rule.stamp with None -> None | Some x -> Some (Resource.subst_pattern env x) in
   let prods = subst_resource_patterns rule.prods in
-  { (rule) with name = sbprintf "%s (%a)" rule.name Resource.print_env env;
-                prods = prods;
-                deps = subst_resources rule.deps; (* The substition should preserve normalization of pathnames *)
-                stamp = stamp;
-                code = (fun env -> rule.code (finder env)) }
+  { name = sbprintf "%s (%a)" rule.name Resource.print_env env;
+    prods = prods;
+    deps =
+      (* The substition should preserve normalization of pathnames *)
+      subst_resources rule.deps; 
+    stamp = stamp;
+    doc = rule.doc;
+    code = (fun env -> rule.code (finder env)) }
 
 exception Can_produce of rule
 
@@ -83,8 +96,6 @@ let can_produce target rule =
       | None -> ()
     end rule.prods; None
   with Can_produce r -> Some r
-
-(* let tags_matches tags r = if Tags.does_match tags r.tags then Some r else None *)
 
 let digest_prods r =
   List.fold_right begin fun p acc ->
@@ -252,7 +263,15 @@ let (get_rules, add_rule, clear_rules) =
   end,
   (fun () -> rules := [])
 
-let rule name ?(tags=[]) ?(prods=[]) ?(deps=[]) ?prod ?dep ?stamp ?(insert = `bottom) code =
+let rule name ?tags ?(prods=[]) ?(deps=[]) ?prod ?dep ?stamp ?(insert = `bottom) ?doc code =
+  let () =
+    match tags with
+      | None -> ()
+      | Some _ ->
+        Log.eprintf "Warning: your ocamlbuild rule %S uses the ~tags parameter,
+                     which is deprecated and ignored."
+          name
+  in
   let res_add import xs xopt =
     let init =
       match xopt with
@@ -281,9 +300,9 @@ let rule name ?(tags=[]) ?(prods=[]) ?(deps=[]) ?prod ?dep ?stamp ?(insert = `bo
   in
   add_rule insert
   { name  = name;
-    tags  = List.fold_right Tags.add tags Tags.empty;
     deps  = res_add Resource.import (* should normalize *) deps dep;
     stamp = stamp;
+    doc = doc;
     prods = prods;
     code  = code }
 
@@ -307,3 +326,13 @@ let copy_rule name ?insert src dest =
       Shell.mkdir_p (Pathname.dirname dest);
       cp_p src dest
     end
+
+let show_documentation () =
+  let pp fmt = Log.raw_dprintf (-1) fmt in
+  let rules = get_rules () in
+  List.iter
+    (fun rule -> pp "%a@\n@\n" (pretty_print Resource.print_pattern) rule)
+    rules;
+  pp "@."
+   
+

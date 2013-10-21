@@ -59,7 +59,8 @@ let apply_rewriter magic fn_in ppx =
     Misc.remove_file fn_out;
     raise (Error (CannotRun comm));
   end;
-  if not (Sys.file_exists fn_out) then raise (Error (WrongMagic comm));
+  if not (Sys.file_exists fn_out) then
+    raise (Error (WrongMagic comm));
   (* check magic before passing to the next ppx *)
   let ic = open_in_bin fn_out in
   let buffer =
@@ -91,7 +92,9 @@ let apply_rewriters magic ast =
   | [] -> ast
   | ppxs ->
       let fn =
-        List.fold_left (apply_rewriter magic) (write_ast magic ast) ppxs in
+        List.fold_left (apply_rewriter magic) (write_ast magic ast)
+          (List.rev ppxs)
+      in
       read_ast magic fn
 
 (* Parse a file or get a dumped syntax tree from it *)
@@ -140,3 +143,27 @@ let report_error ppf = function
   | WrongMagic cmd ->
       fprintf ppf "External preprocessor does not produce a valid file@.\
                    Command line: %s@." cmd
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error err)
+      | _ -> None
+    )
+
+let parse_all parse_fun magic ppf sourcefile =
+  Location.input_name := sourcefile;
+  let inputfile = preprocess sourcefile in
+  let ast =
+    try file ppf inputfile parse_fun magic
+    with exn ->
+      remove_preprocessed inputfile;
+      raise exn
+  in
+  remove_preprocessed inputfile;
+  ast
+
+let parse_implementation ppf sourcefile =
+  parse_all Parse.implementation Config.ast_impl_magic_number ppf sourcefile
+let parse_interface ppf sourcefile =
+  parse_all Parse.interface Config.ast_intf_magic_number ppf sourcefile

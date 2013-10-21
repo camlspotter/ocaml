@@ -258,9 +258,9 @@ If the given directory starts with
 .BR + ,
 it is taken relative to the
 standard library directory. For instance,
-.B \-I\ +labltk
+.B \-I\ +camlp4
 adds the subdirectory
-.B labltk
+.B camlp4
 of the standard library to the search path.
 .TP
 .BI \-impl \ filename
@@ -295,6 +295,9 @@ as an interface file, even if its extension is not .mli.
 Recognize file names ending with
 .I string
 as interface files (instead of the default .mli).
+.TP
+.B \-keep-locs
+Keep locations in generated .cmi files.
 .TP
 .B \-labels
 Labels are not ignored in types, labels may be used in applications,
