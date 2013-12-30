@@ -226,7 +226,7 @@ and expression i ppf x =
   match x.pexp_desc with
   | Pexp_ident (li) -> line i ppf "Pexp_ident %a\n" fmt_longident_loc li;
   | Pexp_constant (c) -> line i ppf "Pexp_constant %a\n" fmt_constant c;
-  | Pexp_let (rf, l, e) ->
+  | Pexp_let (rf, l, e, _) ->
       line i ppf "Pexp_let %a\n" fmt_rec_flag rf;
       list i pattern_x_expression_def ppf l;
       expression i ppf e;

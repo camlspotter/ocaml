@@ -492,7 +492,7 @@ let format_float_lexeme =
    Don't do this at home, kids. *)
 let scan_format fmt args n pos cont_s cont_a cont_t cont_f cont_m =
 
-  let get_arg spec n =
+  let! get_arg spec n =
     Obj.magic (args.(Sformat.int_of_index (get_index spec n))) in
 
   let rec scan_positional n widths i =

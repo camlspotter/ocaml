@@ -123,7 +123,7 @@ type type_mismatch =
   | Record_representation of bool
 
 let report_type_mismatch0 first second decl ppf err =
-  let pr fmt = Format.fprintf ppf fmt in
+  let! pr fmt = Format.fprintf ppf fmt in
   match err with
     Arity -> pr "They have different arities"
   | Privacy -> pr "A private type would be revealed"

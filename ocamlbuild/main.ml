@@ -50,7 +50,7 @@ let show_tags () =
 let show_documentation () =
   let rules = Rule.get_rules () in
   let flags = Flags.get_flags () in
-  let pp fmt = Log.raw_dprintf (-1) fmt in
+  let! pp fmt = Log.raw_dprintf (-1) fmt in
   List.iter begin fun rule ->
     pp "%a@\n@\n" (Rule.pretty_print Resource.print_pattern) rule
   end rules;

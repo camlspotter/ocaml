@@ -807,7 +807,7 @@ value varify_constructors var_names =
     | ExLab loc _ _ -> error loc "labeled expression not allowed here"
     | ExLaz loc e -> mkexp loc (Pexp_lazy (expr e))
     | ExLet loc rf bi e ->
-        mkexp loc (Pexp_let (mkrf rf) (binding bi []) (expr e))
+        mkexp loc (Pexp_let (mkrf rf) (binding bi []) (expr e) True)
     | ExLmd loc i me e -> mkexp loc (Pexp_letmodule (with_loc i loc) (module_expr me) (expr e))
     | ExMat loc e a -> mkexp loc (Pexp_match (expr e) (match_case a []))
     | ExNew loc id -> mkexp loc (Pexp_new (long_type_ident id))

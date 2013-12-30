@@ -508,7 +508,7 @@ class virtual text =
       bs b "</table>\n"
 
     method html_of_Index_list b =
-      let index_if_not_empty l url m =
+      let! index_if_not_empty l url m =
         match l with
           [] -> ()
         | _ -> bp b "<li><a href=\"%s\">%s</a></li>\n" url m
@@ -977,7 +977,7 @@ class html =
     (** A function to build the header of pages. *)
     method prepare_header module_list =
       let f b ?(nav=None) ?(comments=[]) t  =
-        let link_if_not_empty l m url =
+        let! link_if_not_empty l m url =
           match l with
             [] -> ()
           | _ ->

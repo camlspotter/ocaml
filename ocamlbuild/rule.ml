@@ -253,7 +253,7 @@ let (get_rules, add_rule, clear_rules) =
   (fun () -> rules := [])
 
 let rule name ?(tags=[]) ?(prods=[]) ?(deps=[]) ?prod ?dep ?stamp ?(insert = `bottom) code =
-  let res_add import xs xopt =
+  let! res_add import xs xopt =
     let init =
       match xopt with
       | None -> []

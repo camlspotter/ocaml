@@ -201,7 +201,7 @@ and untype_expression exp =
         Pexp_let (rec_flag,
           List.map (fun (pat, exp) ->
               untype_pattern pat, untype_expression exp) list,
-          untype_expression exp)
+          untype_expression exp, true)
     | Texp_function (label, cases, _) ->
         Pexp_function (label, None,
           List.map (fun (pat, exp) ->

@@ -122,7 +122,7 @@ let iter_expression f e =
     | Pexp_function (_, eo, pel) ->
         may expr eo; List.iter (fun (_, e) -> expr e) pel
     | Pexp_apply (e, lel) -> expr e; List.iter (fun (_, e) -> expr e) lel
-    | Pexp_let (_, pel, e)
+    | Pexp_let (_, pel, e, _)
     | Pexp_match (e, pel)
     | Pexp_try (e, pel) -> expr e; List.iter (fun (_, e) -> expr e) pel
     | Pexp_array el
@@ -1268,7 +1268,7 @@ let snd3 (_, x, _) = x
 
 let rec final_subexpression sexp =
   match sexp.pexp_desc with
-    Pexp_let (_, _, e)
+    Pexp_let (_, _, e, _)
   | Pexp_sequence (_, e)
   | Pexp_try (e, _)
   | Pexp_ifthenelse (_, e, _)
@@ -1375,9 +1375,9 @@ let type_format loc fmt =
 
   let ty_arrow gty ty = newty (Tarrow ("", instance_def gty, ty, Cok)) in
 
-  let bad_conversion fmt i c =
+  let! bad_conversion fmt i c =
     raise (Error (loc, Env.empty, Bad_conversion (fmt, i, c))) in
-  let incomplete_format fmt =
+  let! incomplete_format fmt =
     raise (Error (loc, Env.empty, Incomplete_format fmt)) in
 
   let rec type_in_format fmt =
@@ -1587,7 +1587,7 @@ let rec approx_type env sty =
 
 let rec type_approx env sexp =
   match sexp.pexp_desc with
-    Pexp_let (_, _, e) -> type_approx env e
+    Pexp_let (_, _, e, _) -> type_approx env e
   | Pexp_function (p,_,(_,e)::_) when is_optional p ->
        newty (Tarrow(p, type_option (newvar ()), type_approx env e, Cok))
   | Pexp_function (p,_,(_,e)::_) ->
@@ -1879,11 +1879,11 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_loc = loc; exp_extra = [];
         exp_type = type_constant cst;
         exp_env = env }
-  | Pexp_let(Nonrecursive, [spat, sval], sbody) when contains_gadt env spat ->
+  | Pexp_let(Nonrecursive, [spat, sval], sbody, _) when contains_gadt env spat ->
       type_expect ?in_function env
         {sexp with pexp_desc = Pexp_match (sval, [spat, sbody])}
         ty_expected
-  | Pexp_let(rec_flag, spat_sexp_list, sbody) ->
+  | Pexp_let(rec_flag, spat_sexp_list, sbody, polymorphism) ->
       let scp =
         match rec_flag with
         | Recursive -> Some (Annot.Idef loc)
@@ -1891,7 +1891,7 @@ and type_expect_ ?in_function env sexp ty_expected =
         | Default -> None
       in
       let (pat_exp_list, new_env, unpacks) =
-        type_let env rec_flag spat_sexp_list scp true in
+        type_let ~polymorphism env rec_flag spat_sexp_list scp true in
       let body =
         type_expect new_env (wrap_unpacks sbody unpacks) ty_expected in
       re {
@@ -1935,7 +1935,7 @@ and type_expect_ ?in_function env sexp ty_expected =
            [ {ppat_loc = loc;
               ppat_desc = Ppat_var (mknoloc "*opt*")},
              {pexp_loc = loc;
-              pexp_desc = Pexp_let(Default, [spat, smatch], sbody);
+              pexp_desc = Pexp_let(Default, [spat, smatch], sbody, true);
              }
            ]
          )
@@ -3240,7 +3240,8 @@ and type_cases ?in_function env ty_arg ty_res partial_flag loc caselist =
 
 (* Typing of let bindings *)
 
-and type_let ?(check = fun s -> Warnings.Unused_var s)
+and type_let ?(polymorphism=true)
+             ?(check = fun s -> Warnings.Unused_var s)
              ?(check_strict = fun s -> Warnings.Unused_var_strict s)
     env rec_flag spat_sexp_list scope allow =
   begin_def();
@@ -3400,6 +3401,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
     (fun pat exp -> ignore(Parmatch.check_partial pat.pat_loc [pat, exp]))
     pat_list exp_list;
   end_def();
+  if polymorphism then begin
   List.iter2
     (fun pat exp ->
        if not (is_nonexpansive exp) then
@@ -3408,6 +3410,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
   List.iter
     (fun pat -> iter_pattern (fun pat -> generalize pat.pat_type) pat)
     pat_list;
+  end;
   (List.combine pat_list exp_list, new_env, unpacks)
 
 (* Typing of toplevel bindings *)

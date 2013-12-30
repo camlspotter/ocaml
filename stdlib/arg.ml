@@ -106,7 +106,7 @@ let parse_argv_dynamic ?(current=current) argv speclist anonfun errmsg =
   let l = Array.length argv in
   let b = Buffer.create 200 in
   let initpos = !current in
-  let stop error =
+  let! stop error =
     let progname = if initpos < l then argv.(initpos) else "(?)" in
     begin match error with
       | Unknown "-help" -> ()

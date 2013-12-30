@@ -15113,7 +15113,7 @@ module Struct =
                   error loc "labeled expression not allowed here"
               | ExLaz (loc, e) -> mkexp loc (Pexp_lazy (expr e))
               | ExLet (loc, rf, bi, e) ->
-                  mkexp loc (Pexp_let ((mkrf rf), (binding bi []), (expr e)))
+                  mkexp loc (Pexp_let ((mkrf rf), (binding bi []), (expr e), true))
               | ExLmd (loc, i, me, e) ->
                   mkexp loc
                     (Pexp_letmodule ((with_loc i loc), (module_expr me),
@@ -18022,7 +18022,7 @@ module Struct =
                 open Structure
                   
                 let raise_rule_not_found entry symbols =
-                  let to_string f x =
+                  let! to_string f x =
                     let buff = Buffer.create 128 in
                     let ppf = Format.formatter_of_buffer buff
                     in

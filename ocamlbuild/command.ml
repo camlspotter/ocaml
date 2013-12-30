@@ -359,7 +359,7 @@ let rec reduce x =
   | xs -> S xs
 
 let digest =
-  let list = List.fold_right in
+  let! list = List.fold_right in
   let text x acc = Digest.string x :: acc in
   let rec cmd =
     function

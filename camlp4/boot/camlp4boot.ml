@@ -930,7 +930,7 @@ New syntax:\
             and _ = (a_INT32 : 'a_INT32 Gram.Entry.t)
             and _ = (a_INT : 'a_INT Gram.Entry.t)
             and _ = (a_FLOAT : 'a_FLOAT Gram.Entry.t) in
-            let grammar_entry_create = Gram.Entry.mk in
+            let! grammar_entry_create = Gram.Entry.mk in
             let (* <:str_item< open $i$ >> *)
               (* Here it's LABEL and not tilde_label since ~a:b is different than ~a : b *)
               (* Same remark for ?a:b *) infixop5 : 'infixop5 Gram.Entry.t =
@@ -11107,7 +11107,7 @@ module Rp =
           and _ = (stream_end : 'stream_end Gram.Entry.t)
           and _ = (stream_begin : 'stream_begin Gram.Entry.t)
           and _ = (stream_expr : 'stream_expr Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let stream_patt : 'stream_patt Gram.Entry.t =
             grammar_entry_create "stream_patt"
           and stream_expr_comp : 'stream_expr_comp Gram.Entry.t =
@@ -12430,7 +12430,7 @@ module G =
         let _ =
           let _ = (expr : 'expr Gram.Entry.t)
           and _ = (symbol : 'symbol Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let extend_header : 'extend_header Gram.Entry.t =
             grammar_entry_create "extend_header"
           and semi_sep : 'semi_sep Gram.Entry.t =
@@ -13785,7 +13785,7 @@ module G =
           
         let _ =
           let _ = (symbol : 'symbol Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let simple_expr : 'simple_expr Gram.Entry.t =
             grammar_entry_create "simple_expr"
           in
@@ -14376,7 +14376,7 @@ Added statements:
           and _ = (sig_item : 'sig_item Gram.Entry.t)
           and _ = (str_item : 'str_item Gram.Entry.t)
           and _ = (patt : 'patt Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let macro_def : 'macro_def Gram.Entry.t =
             grammar_entry_create "macro_def"
           and uident : 'uident Gram.Entry.t = grammar_entry_create "uident"
@@ -15194,7 +15194,7 @@ module D =
           
         let _ =
           let _ = (expr : 'expr Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let end_or_in : 'end_or_in Gram.Entry.t =
             grammar_entry_create "end_or_in"
           and start_debug : 'start_debug Gram.Entry.t =
@@ -15497,7 +15497,7 @@ module L =
           and _ =
             (comprehension_or_sem_expr_for_list :
               'comprehension_or_sem_expr_for_list Gram.Entry.t) in
-          let grammar_entry_create = Gram.Entry.mk in
+          let! grammar_entry_create = Gram.Entry.mk in
           let item : 'item Gram.Entry.t = grammar_entry_create "item"
           in
             (Gram.extend (expr : 'expr Gram.Entry.t)

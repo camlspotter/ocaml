@@ -1326,8 +1326,8 @@ let scan_format ib ef fmt rv f =
 
   let return v = Obj.magic v () in
   let delay f x () = f x in
-  let stack f = delay (return f) in
-  let no_stack f _x = f in
+  let! stack f = delay (return f) in
+  let! no_stack f _x = f in
 
   let rec scan fmt =
 
@@ -1380,7 +1380,7 @@ let scan_format ib ef fmt rv f =
       scan_conversion skip width_opt prec_opt ir f i
 
     and scan_conversion skip width_opt prec_opt ir f i =
-      let stack = if skip then no_stack else stack in
+      let! stack = if skip then no_stack else stack in
       let width = int_of_width_opt width_opt in
       let prec = int_of_prec_opt prec_opt in
       match Sformat.get fmt i with

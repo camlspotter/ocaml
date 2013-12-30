@@ -207,7 +207,7 @@ let escape_arobas s =
 
 let info_string_of_info i =
   let b = Buffer.create 256 in
-  let p = Printf.bprintf in
+  let! p = Printf.bprintf in
   (
    match i.i_desc with
      None -> ()

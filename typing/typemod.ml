@@ -611,7 +611,7 @@ and transl_recmodule_modtypes loc env sdecls =
     List.fold_left
       (fun env (id, _, mty) -> Env.add_module id mty.mty_type env)
       env curr in
-  let transition env_c curr =
+  let! transition env_c curr =
     List.map2
       (fun (_,smty) (id,id_loc,mty) -> (id, id_loc, transl_modtype env_c smty))
       sdecls curr in

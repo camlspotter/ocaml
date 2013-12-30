@@ -967,7 +967,9 @@ expr:
   | simple_expr simple_labeled_expr_list
       { mkexp(Pexp_apply($1, List.rev $2)) }
   | LET rec_flag let_bindings IN seq_expr
-      { mkexp(Pexp_let($2, List.rev $3, $5)) }
+      { mkexp(Pexp_let($2, List.rev $3, $5, false)) }
+  | LET BANG rec_flag let_bindings IN seq_expr
+      { mkexp(Pexp_let($3, List.rev $4, $6, true)) }
   | LET MODULE UIDENT module_binding IN seq_expr
       { mkexp(Pexp_letmodule(mkrhs $3 3, $4, $6)) }
   | LET OPEN override_flag mod_longident IN seq_expr
