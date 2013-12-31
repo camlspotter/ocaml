@@ -356,7 +356,7 @@ let has_variants p =
   with Exit ->
     true
 
-let do_outsideinx = lazy (try ignore (Sys.getenv "OUTSIDEINX"); true with _ -> false)
+let do_outsideinx = lazy (try ignore (Sys.getenv "NOOUTSIDEINX"); false with _ -> true)
 
 (* pattern environment *)
 let pattern_variables = ref ([] :
