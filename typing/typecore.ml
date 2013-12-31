@@ -356,6 +356,7 @@ let has_variants p =
   with Exit ->
     true
 
+let do_outsideinx = lazy (try ignore (Sys.getenv "OUTSIDEINX"); true with _ -> false)
 
 (* pattern environment *)
 let pattern_variables = ref ([] :
@@ -3244,6 +3245,7 @@ and type_let ?(polymorphism=true)
              ?(check = fun s -> Warnings.Unused_var s)
              ?(check_strict = fun s -> Warnings.Unused_var_strict s)
     env rec_flag spat_sexp_list scope allow =
+  let polymorphism = if Lazy.force do_outsideinx then polymorphism else true in
   begin_def();
   if !Clflags.principal then begin_def ();
 
