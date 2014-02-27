@@ -542,6 +542,11 @@ and untype_row_field rf =
       Rtag (label, bool, List.map untype_core_type list)
   | Tinherit ct -> Rinherit (untype_core_type ct)
 
+and is_self_pat = function
+  | { pat_desc = Tpat_alias(_pat, id, _) } ->
+      string_is_prefix "self-" (Ident.name id)
+  | _ -> false
+
 and untype_class_field cf =
   let desc = match cf.cf_desc with
       Tcf_inher (ovf, cl, super, _vals, _meths) ->
@@ -559,21 +564,21 @@ and untype_class_field cf =
     | Tcf_meth (_lab, name, priv, Tcfk_concrete exp, override) ->
         Pcf_meth (name, priv,
           (if override then Override else Fresh),
-          let is_self_pat = function
-            | { pat_desc = Tpat_alias(_pat, id, _) } ->
-                string_is_prefix "self-" (Ident.name id)
-            | _ -> false
-          in
-          let remove_self_poly_Pcf_meth = function
+          let remove_fun_self_Pcf_meth = function
             | { exp_desc = Texp_function("", [(pat, expr)], _) } when is_self_pat pat -> expr
             | e -> e
           in
-          let exp = remove_self_poly_Pcf_meth exp in
+          let exp = remove_fun_self_Pcf_meth exp in
           untype_expression exp)
 (*    | Tcf_let (rec_flag, bindings, _) ->
         Pcf_let (rec_flag, List.map (fun (pat, exp) ->
               untype_pattern pat, untype_expression exp) bindings)
 *)
-  | Tcf_init exp -> Pcf_init (untype_expression exp)
+  | Tcf_init exp -> 
+      let remove_fun_self_Tcf_init = function
+        | { exp_desc = Texp_function("", [(pat, expr)], _) } when is_self_pat pat -> expr
+        | e -> e
+      in
+      Pcf_init (untype_expression (remove_fun_self_Tcf_init exp))
   in
   { pcf_desc = desc; pcf_loc = cf.cf_loc }
