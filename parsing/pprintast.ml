@@ -791,7 +791,9 @@ class printer  ()= object(self:'self)
           | Pexp_poly (e,None) ->
               self#binding f ({ppat_desc=Ppat_var s;ppat_loc=Location.none} ,e)
           | _ ->
-              self#expression f e ) e
+              pp f "%s =@;%a"
+                s.txt
+                self#expression e) e
     | Pcf_constr (ct1, ct2) ->
         pp f "@[<2>constraint %a =@;%a@]" self#core_type  ct1 self#core_type  ct2
     | Pcf_init (e) ->
