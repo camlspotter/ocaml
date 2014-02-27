@@ -64,6 +64,7 @@ let exception_declaration sub decl =
 
 let pattern sub pat =
   let extra = function
+    | Tpat_untypeast_mark
     | Tpat_type _
     | Tpat_unpack -> ()
     | Tpat_constraint ct -> sub # core_type ct

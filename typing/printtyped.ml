@@ -196,6 +196,9 @@ and pattern i ppf x =
     | (Tpat_type (id, _), _) :: rem ->
         line i ppf "Tpat_type %a\n" fmt_path id;
         pattern i ppf { x with pat_extra = rem }
+    | (Tpat_untypeast_mark, _) :: rem ->
+        line i ppf "Tpat_untypeast_mark\n";
+        pattern i ppf { x with pat_extra = rem }
     | [] ->
   match x.pat_desc with
   | Tpat_any -> line i ppf "Ppat_any\n";

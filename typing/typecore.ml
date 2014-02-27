@@ -1109,7 +1109,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
           Tpat_var (id,s) ->
             {p with pat_type = ty;
              pat_desc = Tpat_alias ({p with pat_desc = Tpat_any}, id,s);
-             pat_extra = [Tpat_constraint cty, loc];
+             pat_extra = [Tpat_constraint cty, loc; Tpat_untypeast_mark, loc];
             }
         | _ -> {p with pat_type = ty;
                 pat_extra = (Tpat_constraint cty,loc) :: p.pat_extra}
