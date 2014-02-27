@@ -14,6 +14,12 @@ open Asttypes
 open Typedtree
 open Parsetree
 
+let string_is_prefix ?(from=0) sub str =
+  let sublen = String.length sub in
+  try 
+    String.sub str from sublen = sub
+  with _ -> false
+
 (*
 Some notes:
 
@@ -135,6 +141,15 @@ and untype_pattern pat =
     | { pat_extra= (Tpat_constraint ct, _) :: rem; _ } ->
         Ppat_constraint (untype_pattern { pat with pat_extra=rem },
                          untype_core_type ct)
+    | { pat_extra; pat_desc = Tpat_alias ( { pat_desc = Tpat_any }, id, name ) } when List.exists (function (Tpat_untypeast_mark, _) -> true | _ -> false) pat_extra ->
+        (* CR jfuruse: remove Tpat_untypeast_mark? *)
+        begin
+          match (Ident.name id).[0] with
+            'A'..'Z' ->
+              Ppat_unpack name
+          | _ ->
+              Ppat_var name
+        end
     | _ ->
     match pat.pat_desc with
       Tpat_any -> Ppat_any
@@ -512,7 +527,12 @@ and untype_core_field_type cft =
     pfield_loc = cft.field_loc; }
 
 and untype_class_structure cs =
-  { pcstr_pat = untype_pattern cs.cstr_pat;
+  let rec remove_self_pcstr_pat = function
+    | { pat_desc = Tpat_alias (p, id, s) } when string_is_prefix "selfpat-" id.Ident.name ->
+        remove_self_pcstr_pat p
+    | p -> p
+  in
+  { pcstr_pat = untype_pattern (remove_self_pcstr_pat cs.cstr_pat);
     pcstr_fields = List.map untype_class_field cs.cstr_fields;
   }
 
@@ -539,6 +559,16 @@ and untype_class_field cf =
     | Tcf_meth (_lab, name, priv, Tcfk_concrete exp, override) ->
         Pcf_meth (name, priv,
           (if override then Override else Fresh),
+          let is_self_pat = function
+            | { pat_desc = Tpat_alias(_pat, id, _) } ->
+                string_is_prefix "self-" (Ident.name id)
+            | _ -> false
+          in
+          let remove_self_poly_Pcf_meth = function
+            | { exp_desc = Texp_function("", [(pat, expr)], _) } when is_self_pat pat -> expr
+            | e -> e
+          in
+          let exp = remove_self_poly_Pcf_meth exp in
           untype_expression exp)
 (*    | Tcf_let (rec_flag, bindings, _) ->
         Pcf_let (rec_flag, List.map (fun (pat, exp) ->

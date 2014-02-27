@@ -89,13 +89,41 @@ let implementation ppf sourcefile outputprefix =
   end else begin
     let objfile = outputprefix ^ ".cmo" in
     let oc = open_out_bin objfile in
+
+    let ml1file = outputprefix ^ ".ml1" in
+    let oc1 = open_out_bin ml1file in
+    let ml2file = outputprefix ^ ".ml2" in
+    let oc2 = open_out_bin ml2file in
     try
       Pparse.file ppf inputfile Parse.implementation ast_impl_magic_number
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
-      ++ print_if ppf Clflags.dump_source Pprintast.structure
+      (* ++ print_if ppf Clflags.dump_source Pprintast.structure *)
+      ++ (fun ptree -> 
+(*
+        Format.eprintf "%a@." Pprintast.structure ptree; 
+*)
+        let ppf = Format.formatter_of_out_channel oc1 in
+        Format.fprintf ppf "%a@." Pprintast.structure ptree; 
+        close_out oc1;
+        ptree
+      )
       ++ Typemod.type_implementation sourcefile outputprefix modulename env
       ++ print_if ppf Clflags.dump_typedtree
                   Printtyped.implementation_with_coercion
+
+      ++ (fun (str, _) -> 
+        let ptree =  Untypeast.untype_structure str in
+(*
+        Format.eprintf "%a@." Pprintast.structure ptree;
+*)
+        let ppf = Format.formatter_of_out_channel oc2 in
+        Format.fprintf ppf "%a@." Pprintast.structure ptree; 
+        close_out oc2;
+        Env.reset_cache ();
+        Env.set_unit_name modulename;
+        ptree)
+      ++ Typemod.type_implementation sourcefile outputprefix modulename env
+
       ++ Translmod.transl_implementation modulename
       ++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
       ++ Simplif.simplify_lambda

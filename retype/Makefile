@@ -86,3 +86,10 @@ clean::
 	rm -f *.cm* *.annot
 
 include .depend
+
+.PHONY: bootstrap
+
+bootstrap: retype
+	cp ../boot/ocamlc ../boot/ocamlc-retype-backup
+	cp retype ../boot/ocamlc
+	(cd ..; make core)
