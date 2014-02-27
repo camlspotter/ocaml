@@ -26,10 +26,13 @@ OCAMLBIN = $(BINDIR)
 # Compilation
 #############
 OCAMLSRCDIR=..
-INCLUDES_DEP=-I +compiler-libs
+
+INCLUDE_DIRS= parsing typing utils driver bytecomp
+
+INCLUDES_DEP= $(addprefix -I $(OCAMLSRCDIR)/, $(INCLUDE_DIRS)) 
 
 # Requires unix!
-COMPFLAGS= $(INCLUDES_DEP) -I +unix
+COMPFLAGS= $(INCLUDES_DEP)
 
 MODULES= untypeast my_compile main
 
@@ -37,27 +40,19 @@ OBJS=		$(addsuffix .cmo, $(MODULES))
 
 XOBJS=		$(addsuffix .cmx, $(MODULES))
 
-OCAMLSOURCE=..
-
-retype: $(OBJS) $(OCAMLSOURCE)/compilerlibs/ocamlcommon.cma $(OCAMLSOURCE)/compilerlibs/ocamlbytecomp.cma
-	ocamlc -o $@ -I $(OCAMLSOURCE)/compilerlibs ocamlcommon.cma ocamlbytecomp.cma $(OBJS)
+retype: $(OBJS) $(OCAMLSRCDIR)/compilerlibs/ocamlcommon.cma $(OCAMLSRCDIR)/compilerlibs/ocamlbytecomp.cma
+	ocamlc -o $@ -I $(OCAMLSRCDIR)/compilerlibs ocamlcommon.cma ocamlbytecomp.cma $(OBJS)
 
 clean::
 	rm -f retype
 
-main.ml: $(OCAMLSOURCE)/driver/main.ml
+main.ml: $(OCAMLSRCDIR)/driver/main.ml
 	sed -e 's/Compile\./My_compile./g' $< > $@
 
-untypeast.ml: $(OCAMLSOURCE)/tools/untypeast.ml
-	cp $< $@
-
-untypeast.mli: $(OCAMLSOURCE)/tools/untypeast.mli
-	cp $< $@
-
-beforedepend:: main.ml untypeast.ml untypeast.mli
+beforedepend:: main.ml
 
 clean::
-	rm -f main.ml untypeast.ml untypeast.mli
+	rm -f main.ml
 
 # generic rules :
 #################

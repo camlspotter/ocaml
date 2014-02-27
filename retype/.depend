@@ -1,0 +1,7 @@
+untypeast.cmi :
+main.cmo : my_compile.cmo
+main.cmx : my_compile.cmx
+my_compile.cmo : untypeast.cmi
+my_compile.cmx : untypeast.cmx
+untypeast.cmo : untypeast.cmi
+untypeast.cmx : untypeast.cmi
