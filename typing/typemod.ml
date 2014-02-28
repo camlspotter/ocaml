@@ -170,20 +170,20 @@ let merge_constraint initial_env loc  sg lid constr =
         real_id := Some id;
         (Pident id, lid, Twith_typesubst tdecl),
         make_next_first rs rem
-    | (Sig_module(id, mty, rs) :: rem, [s], Pwith_module (lid))
+    | (Sig_module(id, mty, rs) :: rem, [s], Pwith_module (lid'))
       when Ident.name id = s ->
-        let (path, mty') = Typetexp.find_module initial_env loc lid.txt in
+        let (path, mty') = Typetexp.find_module initial_env loc lid'.txt in
         let newmty = Mtype.strengthen env mty' path in
         ignore(Includemod.modtypes env newmty mty);
-        (Pident id, lid, Twith_module (path, lid)),
+        (Pident id, lid, Twith_module (path, lid')),
         Sig_module(id, newmty, rs) :: rem
-    | (Sig_module(id, mty, rs) :: rem, [s], Pwith_modsubst (lid))
+    | (Sig_module(id, mty, rs) :: rem, [s], Pwith_modsubst (lid'))
       when Ident.name id = s ->
-        let (path, mty') = Typetexp.find_module initial_env loc lid.txt in
+        let (path, mty') = Typetexp.find_module initial_env loc lid'.txt in
         let newmty = Mtype.strengthen env mty' path in
         ignore(Includemod.modtypes env newmty mty);
         real_id := Some id;
-        (Pident id, lid, Twith_modsubst (path, lid)),
+        (Pident id, lid, Twith_modsubst (path, lid')),
         make_next_first rs rem
     | (Sig_module(id, mty, rs) :: rem, s :: namelist, _)
       when Ident.name id = s ->
