@@ -119,10 +119,20 @@ let implementation ppf sourcefile outputprefix =
         let ppf = Format.formatter_of_out_channel oc2 in
         Format.fprintf ppf "%a@." Pprintast.structure ptree; 
         close_out oc2;
+        
         Env.reset_cache ();
         Env.set_unit_name modulename;
+
         ptree)
-      ++ Typemod.type_implementation sourcefile outputprefix modulename env
+      ++ ( fun ptree -> 
+(*
+           Location.input_name := sourcefile;
+           Compmisc.init_path false;
+           Env.set_unit_name modulename;
+           let env = Compmisc.initial_env () in
+           Env.reset_cache ();
+*)
+           Typemod.type_implementation sourcefile outputprefix modulename env ptree)
 
       ++ Translmod.transl_implementation modulename
       ++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
