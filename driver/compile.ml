@@ -120,16 +120,17 @@ let implementation ppf sourcefile outputprefix =
         Format.fprintf ppf "%a@." Pprintast.structure ptree; 
         close_out oc2;
         
-        Env.reset_cache ();
-        Env.set_unit_name modulename;
-
         ptree)
       ++ ( fun ptree -> 
 (*
+           Env.reset_cache ();
+           Env.set_unit_name modulename;
+*)
            Location.input_name := sourcefile;
            Compmisc.init_path false;
            Env.set_unit_name modulename;
            let env = Compmisc.initial_env () in
+(*
            Env.reset_cache ();
 *)
            Typemod.type_implementation sourcefile outputprefix modulename env ptree)
