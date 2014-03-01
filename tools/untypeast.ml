@@ -380,7 +380,7 @@ and untype_module_type mty =
           untype_module_type mtype2)
     | Tmty_with (mtype, list) ->
         Pmty_with (untype_module_type mtype,
-          List.map (fun (_path, lid, withc) ->
+          List.rev_map (fun (_path, lid, withc) -> (* rev to keep ordering *)
               lid, untype_with_constraint withc
           ) list)
     | Tmty_typeof mexpr ->
@@ -475,7 +475,7 @@ and untype_class_type ct =
 and untype_class_signature cs =
   {
     pcsig_self = untype_core_type cs.csig_self;
-    pcsig_fields = List.map untype_class_type_field cs.csig_fields;
+    pcsig_fields = List.rev_map untype_class_type_field cs.csig_fields; (* rev to keep the declaration order *)
     pcsig_loc = cs.csig_loc;
   }
 
