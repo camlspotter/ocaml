@@ -12,3 +12,9 @@ class c1 = object
   val v = 1
 end
 
+class c2 = object
+  val v = 1
+  method m1 = v
+  method m2 = v
+end
+
