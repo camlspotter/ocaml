@@ -440,7 +440,7 @@ let rec transl_modtype env smty =
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
       let init_sg = extract_sig env sbody.pmty_loc body.mty_type in
-      let (tcstrs, final_sg) =
+      let (rev_tcstrs, final_sg) =
         List.fold_left
           (fun (tcstrs,sg) (lid, sdecl) ->
             let (tcstr, sg) = merge_constraint env smty.pmty_loc sg lid sdecl
@@ -448,7 +448,7 @@ let rec transl_modtype env smty =
             (tcstr :: tcstrs, sg)
         )
         ([],init_sg) constraints in
-      mkmty (Tmty_with ( body, tcstrs))
+      mkmty (Tmty_with ( body, List.rev rev_tcstrs))
       (Mtype.freshen (Mty_signature final_sg)) env loc
   | Pmty_typeof smod ->
       let tmty, mty = !type_module_type_of_fwd env smod in
