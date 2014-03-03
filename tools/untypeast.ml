@@ -380,7 +380,7 @@ and untype_module_type mty =
           untype_module_type mtype2)
     | Tmty_with (mtype, list) ->
         Pmty_with (untype_module_type mtype,
-          List.map (fun (_path, lid, withc) ->
+          List.rev_map (fun (_path, lid, withc) ->
               lid, untype_with_constraint withc
           ) list)
     | Tmty_typeof mexpr ->
