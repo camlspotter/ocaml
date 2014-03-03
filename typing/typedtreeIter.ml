@@ -195,7 +195,6 @@ module MakeIterator(Iter : IteratorArgument) : sig
     and iter_pattern pat =
       Iter.enter_pattern pat;
       List.iter (fun (cstr, _) -> match cstr with
-              | Tpat_untypeast_mark -> ()
               | Tpat_type _ -> ()
               | Tpat_unpack -> ()
               | Tpat_constraint ct -> iter_core_type ct) pat.pat_extra;

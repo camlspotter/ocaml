@@ -221,7 +221,7 @@ module MakeMap(Map : MapArgument) = struct
   and map_pat_extra pat_extra =
     match pat_extra with
       | Tpat_constraint ct, loc -> (Tpat_constraint (map_core_type  ct), loc)
-      | (Tpat_type _ | Tpat_unpack | Tpat_untypeast_mark), _ -> pat_extra
+      | (Tpat_type _ | Tpat_unpack), _ -> pat_extra
 
   and map_expression exp =
     let exp = Map.enter_expression exp in

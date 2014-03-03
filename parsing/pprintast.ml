@@ -195,7 +195,8 @@ class printer  ()= object(self:'self)
   (* trailing space added *)
   method rec_flag f = function
     | Nonrecursive -> ()
-    | Recursive | Default -> pp f "rec "
+    | Default -> pp f "(* default *) "
+    | Recursive -> pp f "rec "
   method direction_flag f = function
     | Upto -> pp f "to@ "
     | Downto -> pp f "downto@ "
