@@ -34,16 +34,54 @@ let interface ppf sourcefile outputprefix =
       Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
     if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
-    let tsg = Typemod.transl_signature initial_env ast in
-    if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
-    let sg = tsg.sig_type in
-    if !Clflags.print_types then
-      Printtyp.wrap_printing_env initial_env (fun () ->
-        fprintf std_formatter "%a@."
-          Printtyp.signature (Typemod.simplify_signature sg));
-    ignore (Includemod.signatures initial_env sg sg);
-    Typecore.force_delayed_checks ();
-    Warnings.check_fatal ();
+
+    (* Save the parsed result as xxx.mli1 *)
+    let mli1file = outputprefix ^ ".mli1" in
+    let oc1 = open_out_bin mli1file in
+    let ppf = Format.formatter_of_out_channel oc1 in
+    Format.fprintf ppf "%a@." Pprintast.signature ast;
+    close_out oc1;
+
+    let do_type ast = 
+      let tsg = Typemod.transl_signature initial_env ast in
+      if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
+      let sg = tsg.sig_type in
+      if !Clflags.print_types then
+        Printtyp.wrap_printing_env initial_env (fun () ->
+          fprintf std_formatter "%a@."
+            Printtyp.signature (Typemod.simplify_signature sg));
+      ignore (Includemod.signatures initial_env sg sg);
+      Typecore.force_delayed_checks ();
+      Warnings.check_fatal ();
+      tsg, sg
+    in
+
+    let tsg, sg = do_type ast in
+
+    (* Untype then save it as xxx.mli2 *)
+    let ast = Untypeast.untype_signature tsg in
+    let mli2file = outputprefix ^ ".mli2" in
+    let oc2 = open_out_bin mli2file in
+    let ppf = Format.formatter_of_out_channel oc2 in
+    Format.fprintf ppf "%a@." Pprintast.signature ast;
+    close_out oc2;
+
+    (* Retype!
+
+       Beware! We must reset the state of typing, 
+       or anything strange could happen!
+           
+       I am not sure all the followings are required but at least
+       they are done at the beginning of implementation, so it should be
+       ok.
+    *)
+    Location.input_name := sourcefile;
+    Compmisc.init_path false;
+    Env.set_unit_name modulename;
+    let initial_env = Compmisc.initial_env () in
+
+    let tsg, sg = do_type ast in
+    
     if not !Clflags.print_types then begin
       let sg = Env.save_signature sg modulename (outputprefix ^ ".cmi") in
       Typemod.save_signature modulename tsg outputprefix sourcefile
@@ -90,18 +128,14 @@ let implementation ppf sourcefile outputprefix =
     let objfile = outputprefix ^ ".cmo" in
     let oc = open_out_bin objfile in
 
-    let ml1file = outputprefix ^ ".ml1" in
-    let oc1 = open_out_bin ml1file in
-    let ml2file = outputprefix ^ ".ml2" in
-    let oc2 = open_out_bin ml2file in
     try
       Pparse.file ppf inputfile Parse.implementation ast_impl_magic_number
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       (* ++ print_if ppf Clflags.dump_source Pprintast.structure *)
       ++ (fun ptree -> 
-(*
-        Format.eprintf "%a@." Pprintast.structure ptree; 
-*)
+        (* Save the parsed result as xxx.ml1 *)
+        let ml1file = outputprefix ^ ".ml1" in
+        let oc1 = open_out_bin ml1file in
         let ppf = Format.formatter_of_out_channel oc1 in
         Format.fprintf ppf "%a@." Pprintast.structure ptree; 
         close_out oc1;
@@ -112,28 +146,30 @@ let implementation ppf sourcefile outputprefix =
                   Printtyped.implementation_with_coercion
 
       ++ (fun (str, _) -> 
+        (* Untype then save it as xxx.ml2 *)
         let ptree =  Untypeast.untype_structure str in
-(*
-        Format.eprintf "%a@." Pprintast.structure ptree;
-*)
+        let ml2file = outputprefix ^ ".ml2" in
+        let oc2 = open_out_bin ml2file in
         let ppf = Format.formatter_of_out_channel oc2 in
         Format.fprintf ppf "%a@." Pprintast.structure ptree; 
         close_out oc2;
-        
         ptree)
+
       ++ ( fun ptree -> 
-(*
-           Env.reset_cache ();
-           Env.set_unit_name modulename;
-*)
-           Location.input_name := sourcefile;
-           Compmisc.init_path false;
-           Env.set_unit_name modulename;
-           let env = Compmisc.initial_env () in
-(*
-           Env.reset_cache ();
-*)
-           Typemod.type_implementation sourcefile outputprefix modulename env ptree)
+        (* Retype!
+
+           Beware! We must reset the state of typing, 
+           or anything strange could happen!
+           
+           I am not sure all the followings are required but at least
+           they are done at the beginning of implementation, so it should be
+           ok.
+        *)
+        Location.input_name := sourcefile;
+        Compmisc.init_path false;
+        Env.set_unit_name modulename;
+        let env = Compmisc.initial_env () in
+        Typemod.type_implementation sourcefile outputprefix modulename env ptree)
 
       ++ Translmod.transl_implementation modulename
       ++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
