@@ -141,7 +141,13 @@ and untype_pattern pat =
     | { pat_extra= (Tpat_constraint ct, _) :: rem; _ } ->
         Ppat_constraint (untype_pattern { pat with pat_extra=rem },
                          untype_core_type ct)
-    | { pat_extra; pat_desc = Tpat_alias ( { pat_desc = Tpat_any }, id, name ) } when List.exists (function (Tpat_untypeast_mark, _) -> true | _ -> false) pat_extra ->
+    | { pat_extra; pat_desc = Tpat_alias ( { pat_desc = Tpat_any; pat_loc }, id, name ) } when pat_loc = Location.none ->
+        (* let (x : t) = ... x is unused ...
+           => let ((_ as x) : t) = ... x is unused ...
+
+           Since ocamlc gives different warnings for the former and the latter at stdlib/parsing.ml,
+           we need to recover the original.
+        *)
         (* CR jfuruse: remove Tpat_untypeast_mark? *)
         begin
           match (Ident.name id).[0] with
@@ -217,6 +223,24 @@ and untype_expression exp =
           List.map (fun (pat, exp) ->
               untype_pattern pat, untype_expression exp) list,
           untype_expression exp)
+
+    | Texp_function 
+        (label, 
+         [ { pat_desc = Tpat_var (_, {txt = "*opt*"}) }, 
+           { exp_desc = 
+               Texp_let (Default, 
+                         [pat, { exp_desc = Texp_match(_, [_ (* Some *); (_, default) ], _) }], 
+                         exp)
+           } 
+         ],
+         _)
+        when Btype.is_optional label ->
+
+        let pat = untype_pattern pat in
+        let default = untype_expression default in
+        let exp = untype_expression exp in
+        Pexp_function(label, Some default, [pat, exp])
+
     | Texp_function (label, cases, _) ->
         Pexp_function (label, None,
           List.map (fun (pat, exp) ->
@@ -475,7 +499,7 @@ and untype_class_type ct =
 and untype_class_signature cs =
   {
     pcsig_self = untype_core_type cs.csig_self;
-    pcsig_fields = List.rev_map untype_class_type_field cs.csig_fields; (* rev to keep the declaration order *)
+    pcsig_fields = List.map untype_class_type_field cs.csig_fields;
     pcsig_loc = cs.csig_loc;
   }
 
