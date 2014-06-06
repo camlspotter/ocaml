@@ -12,6 +12,8 @@
 
 (* Entry points in the parser *)
 
+let () = Lexer.set_preprocessor Indent.init Indent.preprocess
+
 (* Skip tokens to the end of the phrase *)
 
 let rec skip_phrase lexbuf =
