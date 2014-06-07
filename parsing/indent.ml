@@ -13,7 +13,7 @@ let to_string = function
   | BARBAR -> "BARBAR"
   | BARRBRACKET -> "BARRBRACKET"
   | BEGIN -> "BEGIN"
-  | CHAR _ -> "CHAR of (char)"
+  | CHAR c -> "CHAR " ^ Printf.sprintf "%c" c
   | CLASS -> "CLASS"
   | COLON -> "COLON"
   | COLONCOLON -> "COLONCOLON"
@@ -33,7 +33,7 @@ let to_string = function
   | EXCEPTION -> "EXCEPTION"
   | EXTERNAL -> "EXTERNAL"
   | FALSE -> "FALSE"
-  | FLOAT _ -> "FLOAT of (string)"
+  | FLOAT s -> "FLOAT " ^ s
   | FOR -> "FOR"
   | FUN -> "FUN"
   | FUNCTION -> "FUNCTION"
@@ -44,17 +44,17 @@ let to_string = function
   | IF -> "IF"
   | IN -> "IN"
   | INCLUDE -> "INCLUDE"
-  | INFIXOP0 _ -> "INFIXOP0 of (string)"
-  | INFIXOP1 _ -> "INFIXOP1 of (string)"
-  | INFIXOP2 _ -> "INFIXOP2 of (string)"
-  | INFIXOP3 _ -> "INFIXOP3 of (string)"
-  | INFIXOP4 _ -> "INFIXOP4 of (string)"
+  | INFIXOP0 s -> "INFIXOP0 " ^ s
+  | INFIXOP1 s -> "INFIXOP1 " ^ s
+  | INFIXOP2 s -> "INFIXOP2 " ^ s
+  | INFIXOP3 s -> "INFIXOP3 " ^ s
+  | INFIXOP4 s -> "INFIXOP4 " ^ s
   | INHERIT -> "INHERIT"
   | INITIALIZER -> "INITIALIZER"
   | INT _ -> "INT of (int)"
-  | INT32 _ -> "INT32 of (int32)"
-  | INT64 _ -> "INT64 of (int64)"
-  | LABEL _ -> "LABEL of (string)"
+  | INT32 i -> "INT32 " ^ Int32.to_string i
+  | INT64 i -> "INT64 " ^ Int64.to_string i
+  | LABEL s -> "LABEL " ^ s
   | LAZY -> "LAZY"
   | LBRACE -> "LBRACE"
   | LBRACELESS -> "LBRACELESS"
@@ -67,7 +67,7 @@ let to_string = function
   | LESS -> "LESS"
   | LESSMINUS -> "LESSMINUS"
   | LET -> "LET"
-  | LIDENT _ -> "LIDENT of (string)"
+  | LIDENT s -> "LIDENT " ^ s
   | LPAREN -> "LPAREN"
   | LBRACKETAT -> "LBRACKETAT"
   | LBRACKETATAT -> "LBRACKETATAT"
@@ -79,18 +79,18 @@ let to_string = function
   | MINUSGREATER -> "MINUSGREATER"
   | MODULE -> "MODULE"
   | MUTABLE -> "MUTABLE"
-  | NATIVEINT _ -> "NATIVEINT of (nativeint)"
+  | NATIVEINT v -> "NATIVEINT " ^ Nativeint.to_string v
   | NEW -> "NEW"
   | OBJECT -> "OBJECT"
   | OF -> "OF"
   | OPEN -> "OPEN"
-  | OPTLABEL _ -> "OPTLABEL of (string)"
+  | OPTLABEL s -> "OPTLABEL " ^ s
   | OR -> "OR"
   | PERCENT -> "PERCENT"
   | PLUS -> "PLUS"
   | PLUSDOT -> "PLUSDOT"
   | PLUSEQ -> "PLUSEQ"
-  | PREFIXOP _ -> "PREFIXOP of (string)"
+  | PREFIXOP s -> "PREFIXOP " ^ s
   | PRIVATE -> "PRIVATE"
   | QUESTION -> "QUESTION"
   | QUOTE -> "QUOTE"
@@ -103,7 +103,7 @@ let to_string = function
   | SHARP -> "SHARP"
   | SIG -> "SIG"
   | STAR -> "STAR"
-  | STRING _ -> "STRING of (string * string option)"
+  | STRING (s, _) -> "STRING " ^ s
   | STRUCT -> "STRUCT"
   | THEN -> "THEN"
   | TILDE -> "TILDE"
@@ -111,14 +111,14 @@ let to_string = function
   | TRUE -> "TRUE"
   | TRY -> "TRY"
   | TYPE -> "TYPE"
-  | UIDENT _ -> "UIDENT of (string)"
+  | UIDENT s -> "UIDENT " ^ s
   | UNDERSCORE -> "UNDERSCORE"
   | VAL -> "VAL"
   | VIRTUAL -> "VIRTUAL"
   | WHEN -> "WHEN"
   | WHILE -> "WHILE"
   | WITH -> "WITH"
-  | COMMENT _ -> "COMMENT of (string * Location.t)"
+  | COMMENT _ -> "COMMENT"
   | EOL -> "EOL"
 
 
@@ -138,22 +138,31 @@ let indent = ref None
 (** special colons stack *)
 let stack = ref []
 
+(** debug *)
+let debug = try ignore @@ Sys.getenv "OCAMLINDENTDEBUG"; true with _ -> false
+
 let init () = 
   Queue.clear queue;
   previous_token := `None;
   indent := None;
   stack := []
-
+  
 let in_the_same_line p1 p2 =
   p1.pos_fname = p2.pos_fname && p1.pos_lnum = p2.pos_lnum
 
 let update_indent p t =
-  match !indent with
-  | Some (p', _) when in_the_same_line p p' -> None
+  match t with
+  | EOF -> 
+      (* Make sure EOF flushes all the stack elements *)
+      Some ( { p with pos_cnum = p.pos_bol - 1 }, (* negative indent! *)
+             t )
   | _ -> 
-      let i = Some (p, t) in
-      indent := i;
-      i
+      match !indent with
+      | Some (p', _) when in_the_same_line p p' -> None
+      | _ -> 
+          let i = Some (p, t) in
+          indent := i;
+          i
 
 let indentation p = p.pos_cnum - p.pos_bol
 
@@ -164,19 +173,24 @@ let rec preprocess lexer lexbuf =
 
       let token = lexer lexbuf in
       let start_p = lexeme_start_p lexbuf in
+      let end_p =   lexeme_end_p   lexbuf in
 
       (* If we see a newline, check the stack and insert closing tokens
          if necessary! *)
       begin match update_indent start_p token with
       | None -> ()
       | Some (p, t) ->
-          let rec close = function
-            | [] -> []
+          let rec close ever_closed = function
+            | [] -> ever_closed, []
             | ((p', t') :: is as stack) ->
                 if 
-                  if t' = BAR then indentation p' < indentation p
-                  else indentation p' <= indentation p
+                  if t = BAR then indentation p < indentation p'
+                  else indentation p <= indentation p'
                 then begin 
+                  if debug then 
+                    Format.eprintf "Closing %d %d@." 
+                      (indentation p)
+                      (indentation p');
                   Queue.add 
                     begin match t' with
                     | DO -> DONE
@@ -190,10 +204,18 @@ let rec preprocess lexer lexbuf =
                     (* | LET | REC *)
                     | _ -> assert false
                     end queue;
-                  close is
-                end else stack
+                  close true is
+                end else ever_closed, stack
           in
-          stack := close !stack
+          let closed, stack' = close false !stack in
+          stack := stack';
+          (* Insert ; 
+             If the last token is ;, it is also introduced
+             after the closing token.
+          *)
+          match closed, !previous_token with
+          | true, `Some SEMI -> Queue.add SEMI queue
+          | _ -> ()
       end;
 
       let token = 
@@ -209,7 +231,10 @@ let rec preprocess lexer lexbuf =
            from the last token because of COMMENTs *)
         | `Colon (colon_pos, _key), _ when in_the_same_line colon_pos start_p ->
             (* error. After special : you must change a line *)
-            assert false
+            raise Syntaxerr.(Error (Expecting ({ Location.loc_start= start_p;
+                                                 loc_end= end_p;
+                                                 loc_ghost = false },
+                                               "newline")))
   
         | `Colon _, _ -> 
             previous_token := `Some token;
@@ -264,9 +289,7 @@ let rec preprocess lexer lexbuf =
       | exception Queue.Empty ->
           preprocess lexer lexbuf
 
-(*
 let preprocess lexer lexbuf =
   let t = preprocess lexer lexbuf in
-  prerr_endline @@ to_string t;
+  if debug then prerr_endline @@ to_string t;
   t
-*)
