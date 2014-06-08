@@ -134,7 +134,8 @@ Indentation of the line starts with `|`
 
 The indentation level of the line which starts with the vertical bar `|` 
 for the pattern matches is treated a bit differently, in order to support
-the common indentation convention of or-patterns. Auto closing only happens 
+the common indentation convention of or-patterns: they are the same level
+with `match`, `funciton` and `try`. Auto closing only happens 
 for these lines when their indentation levels are strictly less than 
 the indentation levels of the lines with special keywords:
 
