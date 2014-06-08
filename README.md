@@ -117,7 +117,7 @@ Note that this is not the horizontal level of the special keywords:
     match x with
       p -> function:   
         | A -> 1       (* No closing happens *) 
-	| B -> 2
+        | B -> 2
     | q -> ...         (* Closing since the level is less than the line of function: *)
 
 is equvalient with
@@ -125,7 +125,7 @@ is equvalient with
     match x with
       p -> begin function
         | A -> 1
-	| B -> 2
+        | B -> 2
         end
     | q -> ...
 
