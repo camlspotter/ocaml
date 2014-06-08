@@ -134,9 +134,9 @@ Indentation of the line starts with `|`
 
 The indentation level of the line which starts with the vertical bar `|` 
 for the pattern matches is treated a bit differently, in order to support
-the or-patterns of pattern matches. Auto closing only happens for these lines
-when their indentation levels are strictly less than the indentation levels 
-of the lines with special keywords:
+the common indentation convention of or-patterns. Auto closing only happens 
+for these lines when their indentation levels are strictly less than 
+the indentation levels of the lines with special keywords:
 
     let rec f x = 
       match x mod 3, x mod 5 with:   (* Introduces an implicit begin *)
