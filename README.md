@@ -188,3 +188,12 @@ is rejected as a syntax error. You can still write comments:
     | p -> e2
 
 is ok.
+
+
+Future work?
+====================================
+
+* `let:` (`let: rec` or `let rec:` ?), but is it really required?
+* `lazy:`
+* Auto closing of `;;` using indentation levels
+* More tests
