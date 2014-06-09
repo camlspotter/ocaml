@@ -194,7 +194,17 @@ is ok.
 Future work?
 ====================================
 
-* `let:` (`let: rec` or `let rec:` ?), but is it really required?
-* `lazy:`
-* Auto closing of `;;` using indentation levels
 * More tests
+
+* `let:` (`let: rec` or `let rec:` ?)
+
+     Is it really required? `in`-less `let` in Haskell's `do` 
+     has no serious meaning to me.
+
+* `lazy:`
+
+     I often write `lazy begin ... end`. This can be useful.
+
+* `begin:` and `(:`
+
+     Uh, oh.
