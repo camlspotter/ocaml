@@ -1090,8 +1090,8 @@ expr:
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
       { mkexp_attrs (Pexp_function(List.rev $4)) $2 }
-  | FUNCTION ext_attributes BEGIN opt_bar match_cases END
-      { mkexp_attrs (Pexp_function(List.rev $5)) $2 }
+  | FUNCTION BEGIN ext_attributes opt_bar match_cases END
+      { mkexp_attrs (Pexp_function(List.rev $5)) $3 }
   | FUN ext_attributes labeled_simple_pattern fun_def
       { let (l,o,p) = $3 in
         mkexp_attrs (Pexp_fun(l, o, p, $4)) $2 }
@@ -1186,6 +1186,8 @@ expr:
       { mkexp_attrs (Pexp_assert $3) $2 }
   | LAZY ext_attributes simple_expr %prec below_SHARP
       { mkexp_attrs (Pexp_lazy $3) $2 }
+  | LAZY DO ext_attributes seq_expr DONE /* should be LAZY BEGIN .. END but this is ambiguous with the above original rule. */
+      { mkexp_attrs (Pexp_lazy $4) $3 }
   | OBJECT ext_attributes class_structure END
       { mkexp_attrs (Pexp_object $3) $2 }
   | OBJECT ext_attributes class_structure error

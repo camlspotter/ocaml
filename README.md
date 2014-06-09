@@ -87,14 +87,14 @@ Special keywords
 
 Auto-insertion of `begin` .. `end` for the following keywords:
 
-* `with:`, `then:`, `else:` and `function:`
+* `with:`, `then:`, `else:`, `function:` and `lazy:`
 
 Auto-insertion of the corresponding ending keywords for the following:
 
 * `do:` (`done` is not required)
 * `sig:`, `struct:`, `object:` (`end` is not required)
 
-When the implicit closeings are inserted?
+When the implicit closings are inserted?
 ===========================================
 
 The implicit closing happens when the indentation level goes 
@@ -141,9 +141,9 @@ the indentation levels of the lines with special keywords:
 
     let rec f x = 
       match x mod 3, x mod 5 with:   (* Introduces an implicit begin *)
-      | true, false -> print_string "fiz" (* This does not close the implicit begin *)
-      | false, true -> print_string "buz"
-      | true,  true -> print_string "fizbuz"
+      | 0, 0 -> print_string "fizbuz"
+      | 0, _ -> print_string "fiz" (* This does not close the implicit begin *)
+      | _, 0 -> print_string "buz"
       | _ -> print_int x;
       f (x+1)                        (* close is inserted before this line *)
 
@@ -151,9 +151,9 @@ is equivalent with
 
     let rec f x = 
       begin match x mod 3, x mod 5 with
-      | true, false -> print_string "fiz"
-      | false, true -> print_string "buz"
-      | true,  true -> print_string "fizbuz"
+      | 0, 0 -> print_string "fizbuz"
+      | 0, _ -> print_string "fiz"
+      | _, 0 -> print_string "buz"
       | _ -> print_int x;
       end;
       f (x+1)
@@ -179,6 +179,9 @@ is equilvalent with
 Note
 ====================================
 
+`xxx:` must be at the end of lines
+-------------------------------------
+
 After the special keywords, you must immediately change the line:
 
     match e1 with: p -> e2
@@ -190,6 +193,19 @@ is rejected as a syntax error. You can still write comments:
 
 is ok.
 
+Attributes
+-------------------------------------
+
+Special `xxx:` keywords whose original versions can take attributes
+are also able to take attributes, after `:` signs changing the line:
+
+    function:
+    [@blahblah]
+    | p -> e
+
+The line changing is mandatory. `function: [@blahblah]` may look better 
+but it is not possible for the current implementation approach 
+as a simple lexer level converter.
 
 Future work?
 ====================================
@@ -200,10 +216,6 @@ Future work?
 
      Is it really required? `in`-less `let` in Haskell's `do` 
      has no serious meaning to me.
-
-* `lazy:`
-
-     I often write `lazy begin ... end`. This can be useful.
 
 * `begin:` and `(:`
 

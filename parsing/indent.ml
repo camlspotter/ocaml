@@ -201,6 +201,7 @@ let rec preprocess lexer lexbuf =
                     | STRUCT -> END
                     | THEN -> END
                     | WITH -> END
+                    | LAZY -> DONE
                     (* | LET | REC *)
                     | _ -> assert false
                     end queue;
@@ -257,7 +258,8 @@ let rec preprocess lexer lexbuf =
             | SIG
             | STRUCT
             | THEN
-            | WITH ->
+            | WITH 
+            | LAZY ->
                 (* special colon *)
                 begin match !indent with
                 | Some (p, _) -> 
@@ -265,6 +267,17 @@ let rec preprocess lexer lexbuf =
                     stack := (p, t) :: !stack;
                     begin match t with
                     | ELSE | FUNCTION | THEN | WITH -> Some BEGIN
+                    | LAZY -> 
+                        (* lazy: need to be handled a bit differently,
+                           since 
+                             lazy: [@x] e
+                           should not be translated to
+                             lazy begin [@x] e end
+                           which is a valid expression in OCaml and is not
+                           equivalent with
+                             lazy [@x] begin e end
+                        *)   
+                        Some DO
                     | _ -> None
                     end
                 | None -> assert false
