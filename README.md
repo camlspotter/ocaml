@@ -28,17 +28,18 @@ in
 
 is equivalent to the original OCaml code below:
 
-    let f e = 
-      if e then begin              (* <- begin inserted *)
-        print_endline "true!";
-        42
-      end else begin               (* <- end and begin inserted *)
-        print_endline "false!";
-        -1
-      end                          (* <- end inserted *)  
-    in
-    ...
-
+```
+let f e = 
+  if e then begin              (* <- begin inserted *)
+    print_endline "true!";
+    42
+  end else begin               (* <- end and begin inserted *)
+    print_endline "false!";
+    -1
+  end                          (* <- end inserted *)  
+in
+...
+```
 
 This Python style `xxx:` keywords are introduced all the paired keywords
 like `do` and `done`, `object` and `end`, etc. and all the open keywords
