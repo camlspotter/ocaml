@@ -82,6 +82,8 @@ is equlivalent with
       | B -> 5
       end
 
+You can see more samples at `testsuite/indent/indent_test.ml`.
+
 Special keywords
 ====================================
 
