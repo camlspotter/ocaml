@@ -24,7 +24,7 @@ The following program using two special keywords `then:` and `else:`:
     in
     ...
 
-is equivalent with the original OCaml code below:
+is equivalent to the original OCaml code below:
 
     let f e = 
       if e then begin              (* <- begin inserted *)
@@ -97,28 +97,28 @@ Auto-insertion of the corresponding ending keywords for the following:
 When the implicit closings are inserted?
 ===========================================
 
-The implicit closing happens when the indentation level goes 
-to less than or equal to the indentation level where the special keywords 
-are introduced:
+The implicit closing of a special keyword `xxx:` happens when 
+the indentation level goes to *less than* or *equal to* 
+the indentation level where the special keyword is introduced:
 
-    for i = 0 to 100 do:
-      print_int i;
-    print_endline "printed 100!"
+    for i = 0 to 100 do:         (* indent level 0 *)
+      print_int i;               (* level 2 *)
+    print_endline "printed 100!" (* back to 0 *)
 
-is equivalent with
+is equivalent to
 
     for i = 0 to 100 do
       print_int i;
     done;
     print_endline "printed 100!"
 
-Note that this is not the horizontal level of the special keywords:
+Note that this is not the horizontal level of the special keyword:
 
     match x with
-      p -> function:   
-        | A -> 1       (* No closing happens *) 
+      p -> function:   (* indent level 2 at p. Not 7 at function: *)
+        | A -> 1       (* level 4. No closing happens *) 
         | B -> 2
-    | q -> ...         (* Closing since the level is less than the line of function: *)
+    | q -> ...         (* Level 0. *)
 
 is equvalient with
 
@@ -134,20 +134,22 @@ Indentation of the line starts with `|`
 
 The indentation level of the line which starts with the vertical bar `|` 
 for the pattern matches is treated a bit differently, in order to support
-the common indentation convention of or-patterns: they are the same level
-with `match`, `funciton` and `try`. Auto closing only happens 
-for these lines when their indentation levels are strictly less than 
-the indentation levels of the lines with special keywords:
+the common indentation convention of or-patterns: they are often leveled
+at the same with `match`, `funciton` and `try`. 
+
+At the lines starts with `|`, the auto closing only happens when their
+indentation levels are *strictly less than* those of the lines with 
+the corresponding special keywords:
 
     let rec f x = 
-      match x mod 3, x mod 5 with:   (* Introduces an implicit begin *)
-      | 0, 0 -> print_string "fizbuz"
-      | 0, _ -> print_string "fiz" (* This does not close the implicit begin *)
-      | _, 0 -> print_string "buz"
-      | _ -> print_int x;
-      f (x+1)                        (* close is inserted before this line *)
+      match x mod 3, x mod 5 with:    (* level 2. Introduces an implicit begin. *)
+      | 0, 0 -> print_string "fizbuz" (* level 2. This does not close the implicit begin *)
+      | 0, _ -> print_string "fiz"    (* level 2. *)
+      | _, 0 -> print_string "buz"    (* level 2. *)
+      | _ -> print_int x;             (* level 2. *)
+      f (x+1)                         (* level 2. Start not with | *)
 
-is equivalent with
+is equivalent to
 
     let rec f x = 
       begin match x mod 3, x mod 5 with
@@ -162,7 +164,7 @@ Handling of `;`
 ------------------------------------------
 
 If `;` symbol for sequential execution `e1; e2` appears at the end of a line
-and this line is considered to be implicitly closed, then the `;` is treated
+and implicit closing happens just after this line, then the `;` is treated
 as if it is after the closing:
 
     for i = 0 to 100 do:
@@ -206,6 +208,30 @@ are also able to take attributes, after `:` signs changing the line:
 The line changing is mandatory. `function: [@blahblah]` may look better 
 but it is not possible for the current implementation approach 
 as a simple lexer level converter.
+
+Behind the scene
+====================================
+
+This hack uses 'Lexer preprocessor', which is introduced in OCaml 4.02.0
+in `lexer.mll`. There is a function `Lexer.set_preprocessor` to push 
+your own lexer level filter between the lex token stream and the parser.
+There is no way to use this from the command line, and you need to modify
+the compiler but it seems easy to use. (Except that the preprocessor receives
+`EOL` tokens at each end of line, unlike the original lex token streams.)
+
+To make the hack around implicit `begin` introduction as simple as possible,
+some syntaxes are extended. For example, the following is valid with this patch:
+
+      match x mod 3, x mod 5 with begin (* begin after with *)
+      | 0, 0 -> print_string "fizbuz"
+      | 0, _ -> print_string "fiz"
+      | _, 0 -> print_string "buz"
+      | _ -> print_int x;
+      end
+
+This variant is actually used for the desugared version of `match ... with:`.
+Technically, for lexer based filter, it is hard to insert `begin` in front 
+of `match` when it sees `with:` in its token stream.
 
 Future work?
 ====================================
