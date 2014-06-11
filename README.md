@@ -14,15 +14,17 @@ based on the code indentation.
 
 The following program using two special keywords `then:` and `else:`:
 
-    let f e =
-      if e then:
-        print_endline "true!";
-        42
-      else:
-        print_endline "false!";
-        -1
-    in
-    ...
+```ocaml
+let f e =
+  if e then:
+    print_endline "true!";
+    42
+  else:
+    print_endline "false!";
+    -1
+in
+...
+```
 
 is equivalent to the original OCaml code below:
 
