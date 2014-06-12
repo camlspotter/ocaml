@@ -43,14 +43,14 @@ fun x -> `Foo x
 
 Note that the polymorphic variant constructors can take at most 
 one argument and it is determined purely syntactically. 
-Therefore `(\`Foo ..)` can take only one argument:
+Therefore ``(`Foo ..)`` can take only one argument:
 
 ```ocaml
 `(`Foo..) (1,2,3)  (* `Foo (1,2,3) *)
 `(`Foo..) 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
 ```
 
-Code `(\`Foo)` has no special meaning. It is just equivalent to `\`Foo`.
+Code `(\`Foo)` has no special meaning. It is just equivalent to ```Foo``.
 
 Record fields and class methods as functions
 ---------------------------------------------
