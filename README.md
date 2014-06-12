@@ -50,7 +50,7 @@ Therefore ``(`Foo ..)`` can take only one argument:
 `(`Foo..) 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
 ```
 
-Code `(\`Foo)` has no special meaning. It is just equivalent to `` `Foo``.
+Code ``(`Foo)`` has no special meaning. It is just equivalent to ```Foo``.
 
 Record fields and class methods as functions
 ---------------------------------------------
