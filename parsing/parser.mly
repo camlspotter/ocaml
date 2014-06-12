@@ -1334,6 +1334,15 @@ simple_expr:
           (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
           ( { txt = "curried"; loc = Location.none }, PStr [] )
       }
+  | LPAREN name_tag DOTDOT RPAREN
+      { 
+        let noloc txt = {txt; loc=Location.none} in
+        let x = "x" in
+        let x_pat = mkpat(Ppat_var (noloc x)) in
+        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
+        let name_x = mkexp(Pexp_variant($2, Some x_exp)) in
+        mkexp(Pexp_fun("", None, x_pat, name_x))
+      }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
