@@ -992,9 +992,9 @@ let width_of_pad_opt pad_opt = match pad_opt with
   | None -> max_int
   | Some width -> width
 
-let stopper_of_formatting fmting =
+let stopper_of_formatting_lit fmting =
   if fmting = Escaped_percent then '%', "" else
-    let str = string_of_formatting fmting in
+    let str = string_of_formatting_lit fmting in
     let stp = str.[1] in
     let sub_str = String.sub str 2 (String.length str - 2) in
     stp, sub_str
@@ -1033,10 +1033,13 @@ fun k fmt -> match fmt with
   | Scan_char_set (_, _, rest)       -> take_format_readers k rest
   | Scan_get_counter (_, rest)       -> take_format_readers k rest
 
-  | Formatting (_, rest)             -> take_format_readers k rest
+  | Formatting_lit (_, rest)         -> take_format_readers k rest
+  | Formatting_gen (Open_tag (Format (fmt, _)), rest) -> take_format_readers k (concat_fmt fmt rest)
+
 
   | Format_arg (_, _, rest)          -> take_format_readers k rest
-  | Format_subst (_, _, fmtty, rest) -> take_fmtty_format_readers k fmtty rest
+  | Format_subst (_, fmtty, rest)    ->
+     take_fmtty_format_readers k (erase_rel (symm fmtty)) rest
   | Ignored_param (ign, rest)        -> take_ignored_format_readers k ign rest
 
   | End_of_format                    -> k Nil
@@ -1066,7 +1069,8 @@ fun k fmtty fmt -> match fmtty with
   | Theta_ty rest               -> take_fmtty_format_readers k rest fmt
   | Format_arg_ty (_, rest)     -> take_fmtty_format_readers k rest fmt
   | End_of_fmtty                -> take_format_readers k fmt
-  | Format_subst_ty (_, ty, rest) ->
+  | Format_subst_ty (ty1, ty2, rest) ->
+    let ty = trans (symm ty1) ty2 in
     take_fmtty_format_readers k (concat_fmtty ty rest) fmt
 
 (* Take readers associated to an ignored parameter. *)
@@ -1094,77 +1098,6 @@ fun k ign fmt -> match ign with
   | Ignored_scan_get_counter _      -> take_format_readers k fmt
 
 (******************************************************************************)
-                          (* Scanf "%(...%)" tools *)
-
-(* Type used to cross and substract reader_nb_unifer. *)
-(* Used to interface make_format_subst_rnus and convert_fmtty_on_reader_nb. *)
-type (_, _, _, _, _, _, _) format_subst_rnus = Format_subst_rnus :
-    ('d3, 'q3, 'd2, 'q2) reader_nb_unifier *
-    ('d1, 'q1, 'd3, 'q3) reader_nb_unifier *
-    ('q1, 'e1, 'q3, 'e3) reader_nb_unifier ->
-    ('d1, 'q1, 'e1, 'd2, 'q2, 'd3, 'e3) format_subst_rnus
-
-(* Cross and substract reader_nb_unifers. *)
-(* Used when formats contains encapsulated "%(...%)" like "%(..%(..%)..%)". *)
-(* See (convert_fmtty_on_reader_nb _ "%(...%)"). *)
-let rec make_format_subst_rnus : type d1 q1 e1 d2 q2 d3 e3 .
-    (d1, e1, d3, e3) reader_nb_unifier -> (d1, q1, d2, q2) reader_nb_unifier ->
-      (d1, q1, e1, d2, q2, d3, e3) format_subst_rnus =
-fun rnu sub_rnu -> match rnu, sub_rnu with
-  | Succ_reader rnu_rest, Succ_reader sub_rnu_rest ->
-    let Format_subst_rnus (sub_rnu', sub_fmtty_rnu, rest_rnu) =
-      make_format_subst_rnus rnu_rest sub_rnu_rest in
-    Format_subst_rnus(Succ_reader sub_rnu', Succ_reader sub_fmtty_rnu, rest_rnu)
-  | _, Zero_reader ->
-    Format_subst_rnus (Zero_reader, Zero_reader, rnu)
-  | Zero_reader, Succ_reader _ ->
-    (* Impossible! By hypothesis: rnu > sub_rnu. *)
-    assert false
-
-(* Use a reader_nb_unifier to transform 'd and 'e parameters of an fmtty. *)
-(* See make_scanf "%(...%)". *)
-let rec convert_fmtty_on_reader_nb : type a b c d1 d2 e1 e2 f .
-    (d1, e1, d2, e2) reader_nb_unifier -> (a, b, c, d1, e1, f) fmtty ->
-      (a, b, c, d2, e2, f) fmtty =
-fun rnu fmtty -> match rnu, fmtty with
-  | _, Char_ty rest       -> Char_ty      (convert_fmtty_on_reader_nb rnu rest)
-  | _, String_ty rest     -> String_ty    (convert_fmtty_on_reader_nb rnu rest)
-  | _, Int_ty rest        -> Int_ty       (convert_fmtty_on_reader_nb rnu rest)
-  | _, Int32_ty rest      -> Int32_ty     (convert_fmtty_on_reader_nb rnu rest)
-  | _, Nativeint_ty rest  -> Nativeint_ty (convert_fmtty_on_reader_nb rnu rest)
-  | _, Int64_ty rest      -> Int64_ty     (convert_fmtty_on_reader_nb rnu rest)
-  | _, Float_ty rest      -> Float_ty     (convert_fmtty_on_reader_nb rnu rest)
-  | _, Bool_ty rest       -> Bool_ty      (convert_fmtty_on_reader_nb rnu rest)
-  | _, Alpha_ty rest      -> Alpha_ty     (convert_fmtty_on_reader_nb rnu rest)
-  | _, Theta_ty rest      -> Theta_ty     (convert_fmtty_on_reader_nb rnu rest)
-
-  | Succ_reader rnu_rest, Reader_ty fmtty_rest ->
-    Reader_ty (convert_fmtty_on_reader_nb rnu_rest fmtty_rest)
-  | Succ_reader rnu_rest, Ignored_reader_ty fmtty_rest ->
-    Ignored_reader_ty (convert_fmtty_on_reader_nb rnu_rest fmtty_rest)
-
-  | _, Format_arg_ty (sub_fmtty, rest) ->
-    Format_arg_ty (sub_fmtty, convert_fmtty_on_reader_nb rnu rest)
-  | _, Format_subst_ty (sub_rnu, sub_fmtty, rest) ->
-    let Format_subst_rnus (sub_rnu', sub_fmtty_rnu, rest_rnu) =
-      make_format_subst_rnus rnu sub_rnu in
-    let sub_fmtty' = convert_fmtty_on_reader_nb sub_fmtty_rnu sub_fmtty in
-    let rest' = convert_fmtty_on_reader_nb rest_rnu rest in
-    Format_subst_ty (sub_rnu', sub_fmtty', rest')
-
-  | Zero_reader, End_of_fmtty -> End_of_fmtty
-
-  | Zero_reader, Reader_ty _ ->
-    (* Impossible, by typing constraints on fmtty and rnu constructors: *)
-    (*   rnu = Zero_reader    =>  d1 == e1 *)
-    (*   fmtty = Reader_ty _  =>  d1 <> e1 *)
-    assert false
-  | Zero_reader, Ignored_reader_ty _ ->
-    assert false (* Similar. *)
-  | Succ_reader _, End_of_fmtty ->
-    assert false (* Similar. *)
-
-(******************************************************************************)
                           (* Generic scanning *)
 
 (* Make a generic scanning function. *)
@@ -1185,8 +1118,8 @@ fun ib fmt readers -> match fmt with
     let c = token_char ib in
     Cons (c, make_scanf ib rest readers)
 
-  | String (pad, Formatting (fmting, rest)) ->
-    let stp, str = stopper_of_formatting fmting in
+  | String (pad, Formatting_lit (fmting_lit, rest)) ->
+    let stp, str = stopper_of_formatting_lit fmting_lit in
     let scan width _ ib = scan_string (Some stp) width ib in
     let str_rest = String_literal (str, rest) in
     pad_prec_scanf ib str_rest readers pad No_precision scan token_string
@@ -1251,21 +1184,34 @@ fun ib fmt readers -> match fmt with
       with Failure msg -> bad_input msg
     in
     Cons (fmt, make_scanf ib rest readers)
-  | Format_subst (pad_opt, rnu, fmtty, rest) ->
-    let fmtty' = convert_fmtty_on_reader_nb rnu fmtty in
+  | Format_subst (pad_opt, fmtty, rest) ->
     let _ = scan_caml_string (width_of_pad_opt pad_opt) ib in
     let s = token_string ib in
     let fmt, fmt' =
       try
         let Fmt_EBB fmt = fmt_ebb_of_string s in
-        type_format fmt fmtty, type_format fmt fmtty'
+        let Fmt_EBB fmt' = fmt_ebb_of_string s in
+        (* TODO: find a way to avoid reparsing twice *)
+
+        (* TODO: these type-checks below *can* fail because of type
+           ambiguity in presence of ignored-readers: "%_r%d" and "%d%_r"
+           are typed in the same way.
+
+           # Scanf.sscanf "\"%_r%d\"3" "%(%d%_r%)" ignore
+             (fun fmt n -> string_of_format fmt, n);;
+           Exception: CamlinternalFormat.Type_mismatch.
+
+           We should properly catch this exception.
+        *)
+        type_format fmt (erase_rel fmtty),
+        type_format fmt' (erase_rel (symm fmtty))
       with Failure msg -> bad_input msg
     in
-    Cons (Format (fmt', s),
-          make_scanf ib (concat_fmt fmt rest) readers)
+    Cons (Format (fmt, s),
+          make_scanf ib (concat_fmt fmt' rest) readers)
 
-  | Scan_char_set (width_opt, char_set, Formatting (fmting, rest)) ->
-    let stp, str = stopper_of_formatting fmting in
+  | Scan_char_set (width_opt, char_set, Formatting_lit (fmting_lit, rest)) ->
+    let stp, str = stopper_of_formatting_lit fmting_lit in
     let width = width_of_pad_opt width_opt in
     let _ = scan_chars_in_char_set char_set (Some stp) width ib in
     let s = token_string ib in
@@ -1280,9 +1226,12 @@ fun ib fmt readers -> match fmt with
     let count = get_counter ib counter in
     Cons (count, make_scanf ib rest readers)
 
-  | Formatting (formatting, rest) ->
-    String.iter (check_char ib) (string_of_formatting formatting);
+  | Formatting_lit (formatting_lit, rest) ->
+    String.iter (check_char ib) (string_of_formatting_lit formatting_lit);
     make_scanf ib rest readers
+  | Formatting_gen (Open_tag (Format (fmt', _)), rest) ->
+    check_char ib '@'; check_char ib '{'; check_char ib '<';
+    make_scanf ib (concat_fmt fmt' (Char_literal ('<', rest))) readers
 
   | Ignored_param (ign, rest) ->
     let Param_format_EBB fmt' = param_format_of_ignored_format ign rest in

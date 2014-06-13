@@ -208,21 +208,21 @@ let merge_constraint initial_env loc sg constr =
         real_id := Some id;
         (Pident id, lid, Twith_typesubst tdecl),
         make_next_first rs rem
-    | (Sig_module(id, md, rs) :: rem, [s], Pwith_module (_, lid))
+    | (Sig_module(id, md, rs) :: rem, [s], Pwith_module (_, lid'))
       when Ident.name id = s ->
-        let path, md' = Typetexp.find_module initial_env loc lid.txt in
+        let path, md' = Typetexp.find_module initial_env loc lid'.txt in
         let md'' = {md' with md_type = Mtype.remove_aliases env md'.md_type} in
         let newmd = Mtype.strengthen_decl env md'' path in
         ignore(Includemod.modtypes env newmd.md_type md.md_type);
-        (Pident id, lid, Twith_module (path, lid)),
+        (Pident id, lid, Twith_module (path, lid')),
         Sig_module(id, newmd, rs) :: rem
-    | (Sig_module(id, md, rs) :: rem, [s], Pwith_modsubst (_, lid))
+    | (Sig_module(id, md, rs) :: rem, [s], Pwith_modsubst (_, lid'))
       when Ident.name id = s ->
-        let path, md' = Typetexp.find_module initial_env loc lid.txt in
+        let path, md' = Typetexp.find_module initial_env loc lid'.txt in
         let newmd = Mtype.strengthen_decl env md' path in
         ignore(Includemod.modtypes env newmd.md_type md.md_type);
         real_id := Some id;
-        (Pident id, lid, Twith_modsubst (path, lid)),
+        (Pident id, lid, Twith_modsubst (path, lid')),
         make_next_first rs rem
     | (Sig_module(id, md, rs) :: rem, s :: namelist, _)
       when Ident.name id = s ->
@@ -517,15 +517,15 @@ let rec transl_modtype env smty =
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
       let init_sg = extract_sig env sbody.pmty_loc body.mty_type in
-      let (tcstrs, final_sg) =
+      let (rev_tcstrs, final_sg) =
         List.fold_left
-          (fun (tcstrs,sg) sdecl ->
+          (fun (rev_tcstrs,sg) sdecl ->
             let (tcstr, sg) = merge_constraint env smty.pmty_loc sg sdecl
             in
-            (tcstr :: tcstrs, sg)
+            (tcstr :: rev_tcstrs, sg)
         )
         ([],init_sg) constraints in
-      mkmty (Tmty_with ( body, tcstrs))
+      mkmty (Tmty_with ( body, List.rev rev_tcstrs))
         (Mtype.freshen (Mty_signature final_sg)) env loc
         smty.pmty_attributes
   | Pmty_typeof smod ->
@@ -800,6 +800,29 @@ and transl_recmodule_modtypes loc env sdecls =
   in
   (dcl2, env2)
 
+(* Simplify multiple specifications of a value or an extension in a signature.
+   (Other signature components, e.g. types, modules, etc, are checked for
+   name uniqueness.)  If multiple specifications with the same name,
+   keep only the last (rightmost) one. *)
+
+let simplify_signature sg =
+  let rec simplif val_names ext_names res = function
+    [] -> res
+  | (Sig_value(id, descr) as component) :: sg ->
+      let name = Ident.name id in
+      simplif (StringSet.add name val_names) ext_names
+              (if StringSet.mem name val_names then res else component :: res)
+              sg
+  | (Sig_typext(id, ext, es) as component) :: sg ->
+      let name = Ident.name id in
+      simplif val_names (StringSet.add name ext_names)
+              (if StringSet.mem name ext_names then res else component :: res)
+              sg
+  | component :: sg ->
+      simplif val_names ext_names (component :: res) sg
+  in
+    simplif StringSet.empty StringSet.empty [] (List.rev sg)
+
 (* Try to convert a module expression to a module path. *)
 
 exception Not_a_path
@@ -1052,11 +1075,17 @@ let rec type_module ?(alias=false) sttn funct_body anchor env smod =
   | Pmod_structure sstr ->
       let (str, sg, finalenv) =
         type_structure funct_body anchor env sstr smod.pmod_loc in
-      rm { mod_desc = Tmod_structure str;
-           mod_type = Mty_signature sg;
-           mod_env = env;
-           mod_attributes = smod.pmod_attributes;
-           mod_loc = smod.pmod_loc }
+      let md =
+        rm { mod_desc = Tmod_structure str;
+             mod_type = Mty_signature sg;
+             mod_env = env;
+             mod_attributes = smod.pmod_attributes;
+             mod_loc = smod.pmod_loc }
+      in
+      let sg' = simplify_signature sg in
+      if List.length sg' = List.length sg then md else
+      wrap_constraint (Env.implicit_coercion env) md (Mty_signature sg')
+        Tmodtype_implicit
   | Pmod_functor(name, smty, sbody) ->
       let mty = may_map (transl_modtype env) smty in
       let ty_arg = may_map (fun m -> m.mty_type) mty in
@@ -1436,39 +1465,6 @@ and normalize_signature_item env = function
   | Sig_module(id, md, _) -> normalize_modtype env md.md_type
   | _ -> ()
 
-(* Simplify multiple specifications of a value or an extension in a signature.
-   (Other signature components, e.g. types, modules, etc, are checked for
-   name uniqueness.)  If multiple specifications with the same name,
-   keep only the last (rightmost) one. *)
-
-let rec simplify_modtype mty =
-  match mty with
-    Mty_ident path -> mty
-  | Mty_alias path -> mty
-  | Mty_functor(id, arg, res) -> Mty_functor(id, arg, simplify_modtype res)
-  | Mty_signature sg -> Mty_signature(simplify_signature sg)
-
-and simplify_signature sg =
-  let rec simplif val_names ext_names res = function
-    [] -> res
-  | (Sig_value(id, descr) as component) :: sg ->
-      let name = Ident.name id in
-      simplif (StringSet.add name val_names) ext_names
-              (if StringSet.mem name val_names then res else component :: res)
-              sg
-  | (Sig_typext(id, ext, es) as component) :: sg ->
-      let name = Ident.name id in
-      simplif val_names (StringSet.add name ext_names)
-              (if StringSet.mem name ext_names then res else component :: res)
-              sg
-  | Sig_module(id, md, rs) :: sg ->
-      let md = {md with md_type = simplify_modtype md.md_type} in
-      simplif val_names ext_names (Sig_module(id, md, rs) :: res) sg
-  | component :: sg ->
-      simplif val_names ext_names (component :: res) sg
-  in
-    simplif StringSet.empty StringSet.empty [] (List.rev sg)
-
 (* Extract the module type of a module expression *)
 
 let type_module_type_of env smod =
@@ -1485,8 +1481,6 @@ let type_module_type_of env smod =
   let mty = tmty.mod_type in
   (* PR#6307: expand aliases at root and submodules *)
   let mty = Mtype.remove_aliases env mty in
-  (* PR#5037: clean up inferred signature to remove duplicate specs *)
-  let mty = simplify_modtype mty in
   (* PR#5036: must not contain non-generalized type variables *)
   if not (closed_modtype mty) then
     raise(Error(smod.pmod_loc, env, Non_generalizable_module mty));
