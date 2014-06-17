@@ -64,6 +64,8 @@ let desugar_let_bindings lbs =
   in
   check [] haskellishes;
 
+  (* CR jfuruse: check: all the haskellish things are used *)
+
   let mapper = desugar haskellishes in
   List.map (fun vb ->
     { vb with pvb_pat = mapper.Ast_mapper.pat mapper vb.pvb_pat }) lbs
