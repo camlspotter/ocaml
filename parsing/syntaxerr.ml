@@ -21,6 +21,9 @@ type error =
   | Other of Location.t
   | Ill_formed_ast of Location.t * string
 
+  | Desugar_same_declared_twice of Location.t * Location.t * string
+  | Desugar_declaration_is_never_used of Location.t * string
+
 exception Error of error
 exception Escape_error
 
@@ -55,6 +58,20 @@ let prepare_error = function
   | Ill_formed_ast (loc, s) ->
       Location.errorf ~loc "Error: broken invariant in parsetree: %s" s
 
+  | Desugar_same_declared_twice (loc, loc', v) ->
+      Location.errorf ~loc
+        ~sub:[
+          Location.error ~loc:loc'
+            (Printf.sprintf "Error: The first declaration of the type of variable '%s'" v)
+        ]
+        ~if_highlight:
+          (Printf.sprintf "Error: The type of variable '%s' is declared more than once. The first one is at the highlightened place"
+             v)
+        "Error: The type of variable '%s' is declared more than once" v
+
+  | Desugar_declaration_is_never_used (loc, v) ->
+      Location.errorf ~loc "Error: varable-type declaration of '%s' lacks definition" v 
+
 let () =
   Location.register_error_of_exn
     (function
@@ -74,6 +91,8 @@ let location_of_error = function
   | Not_expecting (l, _)
   | Ill_formed_ast (l, _)
   | Expecting (l, _) -> l
+  | Desugar_same_declared_twice (l, _, _) -> l
+  | Desugar_declaration_is_never_used (l, _) -> l
 
 
 let ill_formed_ast loc s =

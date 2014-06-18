@@ -1,6 +1,7 @@
 (* desugaring of Haskellish value-type declaration *)
 open Asttypes
 open Parsetree
+open Syntaxerr
 
 let filter_let_binding = function 
   | { pvb_pat = 
@@ -10,7 +11,7 @@ let filter_let_binding = function
       pvb_attributes = (({ txt = "haskellish" }, PStr []) :: _);
       (* pvb_loc = symbol_rloc() *) 
     } -> 
-      `Left (sloc.txt, (sloc.loc, ty, loc))
+      `Left (sloc.txt, (sloc.loc, ty, loc, ref false (* used or not *)))
       
   | x -> `Right x
 
@@ -22,7 +23,8 @@ let desugar tbl =
       match pat.ppat_desc with
       | Ppat_var {txt} -> 
           begin match List.assoc txt tbl with
-          | (_vloc, ty, patloc) -> 
+          | (_vloc, ty, patloc, used) -> 
+              used := true;
               { ppat_desc = Ppat_constraint (pat, ty);
                 ppat_loc = patloc;
                 ppat_attributes = [] }
@@ -43,29 +45,31 @@ let list_partition_map f xs =
   in
   aux ([],[]) xs
 
-type error =
-  | Same_variable_declared_twice of string * Location.t * Location.t
-
-exception Error of error
-
 let desugar_let_bindings lbs =
   let (haskellishes, lbs) = list_partition_map filter_let_binding lbs in
 
   (* sanity checks: no variable is declared twice *)
   let rec check st = function
     | [] -> ()
-    | (v, (vloc, _, _) as x)::xs -> 
+    | (v, (vloc, _, _, _) as x)::xs -> 
         begin match List.assoc v st with
-        | (vloc', _, _) ->
-            raise (Error (Same_variable_declared_twice (v, vloc, vloc')))
+        | (vloc', _, _, _) ->
+            raise (Error (Desugar_same_declared_twice(vloc', vloc, v)))
         | exception Not_found -> 
             check (x::st) xs
         end
   in
   check [] haskellishes;
 
-  (* CR jfuruse: check: all the haskellish things are used *)
-
   let mapper = desugar haskellishes in
-  List.map (fun vb ->
-    { vb with pvb_pat = mapper.Ast_mapper.pat mapper vb.pvb_pat }) lbs
+  let lbs = List.map (fun vb ->
+    { vb with pvb_pat = mapper.Ast_mapper.pat mapper vb.pvb_pat }) lbs in
+
+  (* check: all the haskellish declarations are used? *)
+  List.iter (fun (v, (vloc, _, _, used)) ->
+    if !used = false then
+      raise (Error (Desugar_declaration_is_never_used (vloc, v)))
+  ) haskellishes;
+
+  lbs
+  
