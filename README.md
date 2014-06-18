@@ -40,7 +40,7 @@ and (f,g) = (fun x -> x), (fun x -> x)
 since it is equivalent to the following invalid code:
 
 ```ocaml
-let (f : 'a . 'a -> 'a ,g) = (fun x -> x), (fun x -> x)
+let ((f : 'a . 'a -> 'a), g) = (fun x -> x), (fun x -> x)
 ;;
 ```
 
