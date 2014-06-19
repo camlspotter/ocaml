@@ -27,6 +27,10 @@ type mapper = {
   attributes: mapper -> attribute list -> attribute list;
   case: mapper -> case -> case;
   cases: mapper -> case list -> case list;
+  
+  pattern_guards : mapper -> pattern_guard list -> pattern_guard list;
+  pattern_guard : mapper -> pattern_guard -> pattern_guard;
+
   class_declaration: mapper -> class_declaration -> class_declaration;
   class_description: mapper -> class_description -> class_description;
   class_expr: mapper -> class_expr -> class_expr;
@@ -593,12 +597,16 @@ let default_mapper =
       (fun this {pc_lhs; pc_guard; pc_rhs} ->
          {
            pc_lhs = this.pat this pc_lhs;
-           pc_guard = map_opt (this.expr this) pc_guard;
+           pc_guard = this.pattern_guards this pc_guard;
            pc_rhs = this.expr this pc_rhs;
          }
       );
 
-
+    pattern_guards = (fun this l -> List.map (this.pattern_guard this) l);
+    pattern_guard = 
+      (fun this -> function
+        | Pguard_when e -> Pguard_when (this.expr this e)
+        | Pguard_with (p, e) -> Pguard_with (this.pat this p, this.expr this e)); 
 
     location = (fun this l -> l);
 

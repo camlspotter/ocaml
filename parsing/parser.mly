@@ -411,6 +411,7 @@ let mkctf_attrs d attrs =
 %token WHILE
 %token WITH
 %token <string * Location.t> COMMENT
+%token LESSMINUSMINUS
 
 %token EOL
 
@@ -1378,8 +1379,16 @@ match_cases:
 match_case:
     pattern MINUSGREATER seq_expr
       { Exp.case $1 $3 }
-  | pattern WHEN seq_expr MINUSGREATER seq_expr
-      { Exp.case $1 ~guard:$3 $5 }
+  | pattern guards MINUSGREATER seq_expr
+      { Exp.case $1 ~guard:(List.rev $2) $4 }
+;
+guards:
+  | guard { [$1] }
+  | guards AND guard { $3 :: $1 }
+;
+guard:
+  | WHEN seq_expr { Pguard_when $2 }
+  | WITH pattern LESSMINUS expr { Pguard_with ($2, $4) }
 ;
 fun_def:
     MINUSGREATER seq_expr                       { $2 }

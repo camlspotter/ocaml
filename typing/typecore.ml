@@ -161,8 +161,12 @@ let iter_expression f e =
     | Pexp_pack me -> module_expr me
 
   and case {pc_lhs = _; pc_guard; pc_rhs} =
-    may expr pc_guard;
+    List.iter pattern_guard pc_guard;
     expr pc_rhs
+
+  and pattern_guard = function
+    | Pguard_when e -> expr e
+    | Pguard_with (_, e) -> expr e
 
   and binding x =
     expr x.pvb_expr
@@ -231,7 +235,9 @@ let all_idents_cases el =
   in
   List.iter
     (fun cp ->
-      may (iter_expression f) cp.pc_guard;
+      List.iter (function
+        | Pguard_when e -> iter_expression f e
+        | Pguard_with _ -> assert false) cp.pc_guard;
       iter_expression f cp.pc_rhs
     )
     el;
@@ -1877,7 +1883,7 @@ and type_expect_ ?in_function env sexp ty_expected =
         (* TODO: keep attributes, call type_function directly *)
   | Pexp_fun (l, None, spat, sexp) ->
       type_function ?in_function loc sexp.pexp_attributes env ty_expected
-        l [{pc_lhs=spat; pc_guard=None; pc_rhs=sexp}]
+        l [{pc_lhs=spat; pc_guard=[]; pc_rhs=sexp}]
   | Pexp_function caselist ->
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
@@ -3442,8 +3448,9 @@ and type_cases ?in_function env ty_arg ty_res partial_flag loc caselist =
         let loc =
           let open Location in
           match pc_guard with
-          | None -> pc_rhs.pexp_loc
-          | Some g -> {pc_rhs.pexp_loc with loc_start=g.pexp_loc.loc_start}
+          | [] -> pc_rhs.pexp_loc
+          | [Pguard_when g] -> {pc_rhs.pexp_loc with loc_start=g.pexp_loc.loc_start}
+          | _ -> assert false (* CR jfuruse: Pguard_with *)
         in
         if !Clflags.principal then begin_def (); (* propagation of pattern *)
         let scope = Some (Annot.Idef loc) in
@@ -3499,11 +3506,12 @@ and type_cases ?in_function env ty_arg ty_res partial_flag loc caselist =
           Printtyp.raw_type_expr ty_res'; *)
         let guard =
           match pc_guard with
-          | None -> None
-          | Some scond ->
+          | [] -> None
+          | [ Pguard_when scond ] ->
               Some
                 (type_expect ext_env (wrap_unpacks scond unpacks)
                    Predef.type_bool)
+          | _ -> assert false (* CR jfuruse: Pguard_with *)
         in
         let exp = type_expect ?in_function ext_env sexp ty_res' in
         {

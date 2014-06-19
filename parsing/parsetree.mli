@@ -197,6 +197,10 @@ and pattern_desc =
   | Ppat_extension of extension
         (* [%id] *)
 
+and pattern_guard = 
+  | Pguard_when of expression
+  | Pguard_with of pattern * expression
+
 (* Value expressions *)
 
 and expression =
@@ -324,7 +328,7 @@ and expression_desc =
 and case =   (* (P -> E) or (P when E0 -> E) *)
     {
      pc_lhs: pattern;
-     pc_guard: expression option;
+     pc_guard: pattern_guard list; (* CR jfuruse: should be pc_guard*s* *)
      pc_rhs: expression;
     }
 
