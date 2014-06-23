@@ -424,6 +424,7 @@ rule token = parse
   | "&"  { AMPERSAND }
   | "&&" { AMPERAMPER }
   | "`"  { BACKQUOTE }
+  | "``" { BACKQUOTEBACKQUOTE }
   | "'"  { QUOTE }
   | "("  { LPAREN }
   | ")"  { RPAREN }

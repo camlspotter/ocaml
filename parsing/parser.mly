@@ -299,6 +299,7 @@ let mkctf_attrs d attrs =
 %token AS
 %token ASSERT
 %token BACKQUOTE
+%token BACKQUOTEBACKQUOTE
 %token BANG
 %token BAR
 %token BARBAR
@@ -463,7 +464,7 @@ The precedences must be listed from low to high.
 %nonassoc LBRACKETATAT
 %right    COLONCOLON                    /* expr (e :: e :: e) */
 %left     INFIXOP2 PLUS PLUSDOT MINUS MINUSDOT PLUSEQ /* expr (e OP e OP e) */
-%left     PERCENT INFIXOP3 STAR                 /* expr (e OP e OP e) */
+%left     PERCENT INFIXOP3 STAR BACKQUOTEBACKQUOTE                /* expr (e OP e OP e) */
 %right    INFIXOP4                      /* expr (e OP e OP e) */
 %nonassoc prec_unary_minus prec_unary_plus /* unary - */
 %nonassoc prec_constant_constructor     /* cf. simple_expr (C versus C x) */
@@ -1160,6 +1161,8 @@ expr:
       { mkinfix $1 "&&" $3 }
   | expr COLONEQUAL expr
       { mkinfix $1 ":=" $3 }
+  | expr BACKQUOTEBACKQUOTE val_longident expr
+      { mkexp(Pexp_apply( mkexp(Pexp_ident (mkrhs $3 3)), ["", $1; "", $4])) }
   | subtractive expr %prec prec_unary_minus
       { mkuminus $1 $2 }
   | additive expr %prec prec_unary_plus
