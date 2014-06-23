@@ -9,6 +9,7 @@ to OCaml. Currently it includes:
 * Python like indentation rule
 * Line comment: `/// comment`
 * Pattern guards `with p <- e ->`
+* Function as infix operator: ```24 ``div 8 = 3```
 
 Trivia of giraffes
 -----------------------------------
