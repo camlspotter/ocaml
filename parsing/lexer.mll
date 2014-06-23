@@ -482,11 +482,31 @@ rule token = parse
             { INFIXOP4(Lexing.lexeme lexbuf) }
   | '%'     { PERCENT }
   | ['*' '/' '%'] symbolchar *
-            { INFIXOP3(Lexing.lexeme lexbuf) }
+            { 
+              let s = Lexing.lexeme lexbuf in
+              match String.sub s 0 3 with
+              | "///" -> line_comment (String.sub s 3 (String.length s - 3)) lexbuf
+              | _ -> INFIXOP3(Lexing.lexeme lexbuf) 
+              | exception _ -> INFIXOP3(Lexing.lexeme lexbuf) 
+            }
   | eof { EOF }
   | _
       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
                      Location.curr lexbuf))
+      }
+
+and line_comment s0 = parse
+  | [^ '\010' '\013']*
+      { 
+        let s = Lexing.lexeme lexbuf in
+        let loc = Location.curr lexbuf in
+        let start_pos = loc.Location.loc_start in
+        let len = String.length s0 in
+        let start_pos = { start_pos 
+                          with Lexing.pos_bol = start_pos.Lexing.pos_bol - len;
+                               pos_cnum = start_pos.Lexing.pos_cnum - len }
+        in
+        COMMENT (s0 ^ s, { loc with Location.loc_start = start_pos })
       }
 
 and comment = parse
