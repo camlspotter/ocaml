@@ -21,12 +21,12 @@ which had a camel's hump and leopard's coat patterns.
 Giraffe was imported to ancient China by Zhèng Hé(鄭和)'s fleet in 1419.
 The emperor named it "qílín"(麒麟) since its look had some similarity with
 the description of the mystical sacred animal with the same name, 
-which was believed to appear only when the country was leaded 
+which was believed to appear only when the country was led 
 by a wise and merciful ruler, and the emperor had some problem 
 in his self-esteem just as we have.
 
 The word "qílín" is still used for giraffe in Japan as キリン(Kirin) 
-and Korea as 기린.
+and Korea as 기린. Of course we do no longer belive the myth.
 
 The meaning of chinese character "大" is big, and can be pronounsed 
 as "O" in Japanese. Therefore OCamleopard can be translated to "大麒麟",
