@@ -1125,8 +1125,30 @@ expr:
       { mkexp_attrs(Pexp_for($3, $5, $7, $6, $9)) $2 }
   | expr COLONCOLON expr
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$1;$3])) (symbol_rloc()) }
+/*
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
+*/
+  | LPAREN DOT label_longident RPAREN
+      { 
+        (* (.l) => (fun x -> x.l) *)
+        let noloc txt = {txt; loc=Location.none} in
+        let x = "x" in
+        let x_pat = mkpat(Ppat_var (noloc x)) in
+        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
+        let x_l = mkexp(Pexp_field(x_exp, mkrhs $3 3)) in
+        mkexp(Pexp_fun("", None, x_pat, x_l))
+      }
+  | LPAREN SHARP label RPAREN
+      { 
+        (* (#l) => (fun x -> x#l) *)
+        let noloc txt = {txt; loc=Location.none} in
+        let x = "x" in
+        let x_pat = mkpat(Ppat_var (noloc x)) in
+        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
+        let x_l = mkexp(Pexp_send(x_exp, $3)) in
+        mkexp(Pexp_fun("", None, x_pat, x_l))
+      }
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
@@ -1205,8 +1227,17 @@ simple_expr:
       { mkexp(Pexp_construct(mkrhs $1 1, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
+  | LPAREN constr_longident DOTDOT RPAREN /* (Some ..) for fun x -> Some x */
+      { Exp.attr 
+          (mkexp(Pexp_construct(mkrhs $2 1, None)))
+          ( { txt = "curried"; loc = Location.none }, PStr [] ) 
+      }
   | LPAREN seq_expr RPAREN
-      { reloc_exp $2 }
+      { match reloc_exp $2 with
+        | ({ pexp_desc = Pexp_construct (loc, None) } as e) ->
+            Exp.attr e ( { txt = "uncurried"; loc = Location. none }, PStr [] )
+        | e -> e
+      }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
   | BEGIN ext_attributes seq_expr END
@@ -1300,6 +1331,27 @@ simple_expr:
       { unclosed "(" 3 ")" 7 }
   | extension
       { mkexp (Pexp_extension $1) }
+  | LPAREN COLONCOLON RPAREN
+      { 
+        Exp.attr
+          (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
+          ( { txt = "uncurried"; loc = Location.none }, PStr [] )
+      }
+  | LPAREN COLONCOLON DOTDOT RPAREN
+      { 
+        Exp.attr
+          (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
+          ( { txt = "curried"; loc = Location.none }, PStr [] )
+      }
+  | LPAREN name_tag DOTDOT RPAREN
+      { 
+        let noloc txt = {txt; loc=Location.none} in
+        let x = "x" in
+        let x_pat = mkpat(Ppat_var (noloc x)) in
+        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
+        let name_x = mkexp(Pexp_variant($2, Some x_exp)) in
+        mkexp(Pexp_fun("", None, x_pat, name_x))
+      }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
