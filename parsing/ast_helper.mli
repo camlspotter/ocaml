@@ -140,7 +140,7 @@ module Exp:
     val open_: ?loc:loc -> ?attrs:attrs -> override_flag -> lid -> expression -> expression
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> expression
 
-    val case: pattern -> ?guard:expression -> expression -> case
+    val case: pattern -> ?guard:pattern_guard list -> expression -> case
   end
 
 (** Value declarations *)

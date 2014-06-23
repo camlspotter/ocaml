@@ -24,6 +24,10 @@ class printer :
             unit
     method case_list :
       Format.formatter -> Parsetree.case list -> unit
+
+    method pattern_guards : Format.formatter -> Parsetree.pattern_guard list -> unit
+    method pattern_guard : Format.formatter -> Parsetree.pattern_guard -> unit
+
     method class_expr : Format.formatter -> Parsetree.class_expr -> unit
     method class_field : Format.formatter -> Parsetree.class_field -> unit
     method class_params_def :

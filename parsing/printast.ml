@@ -828,11 +828,19 @@ and case i ppf {pc_lhs; pc_guard; pc_rhs} =
   line i ppf "<case>\n";
   pattern (i+1) ppf pc_lhs;
   begin match pc_guard with
-  | None -> ()
-  | Some g -> line (i+1) ppf "<when>\n"; expression (i + 2) ppf g
+  | [] -> ()
+  | gs -> list (i+1) guard ppf gs
   end;
   expression (i+1) ppf pc_rhs;
 
+and guard i ppf = function
+  | Pguard_when e -> 
+      line (i+1) ppf "<when>\n"; expression (i + 2) ppf e
+  | Pguard_with (p, e) ->
+      line (i+1) ppf "<with>\n"; 
+      pattern (i + 2) ppf p;
+      expression (i + 2) ppf e      
+      
 and value_binding i ppf x =
   line i ppf "<def>\n";
   attributes (i+1) ppf x.pvb_attributes;

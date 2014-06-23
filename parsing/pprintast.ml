@@ -1335,8 +1335,19 @@ class printer  ()= object(self:'self)
   method case_list f l : unit =
     let aux f {pc_lhs; pc_guard; pc_rhs} =
       pp f "@;| @[<2>%a%a@;->@;%a@]"
-        self#pattern pc_lhs (self#option self#expression ~first:"@;when@;") pc_guard self#under_pipe#expression pc_rhs in
+        self#pattern pc_lhs self#pattern_guards pc_guard self#under_pipe#expression pc_rhs in
     self#list aux f l ~sep:""
+
+  method pattern_guards f = function
+    | [] -> ()
+    | pgs -> self#list self#pattern_guard f pgs
+
+  method pattern_guard f = function
+    | Pguard_when e -> 
+        pp f "@;when@;%a" self#expression e
+    | Pguard_with (p, e) ->
+        pp f "@;with@;@[%a@ <-@ %a@]" self#pattern p self#expression e
+
   method label_x_expression_param f (l,e) =
     match l with
     | ""  -> self#expression2 f e ; (* level 2*)

@@ -243,7 +243,7 @@ and untype_cases l = List.map untype_case l
 and untype_case {c_lhs; c_guard; c_rhs} =
   {
    pc_lhs = untype_pattern c_lhs;
-   pc_guard = option untype_expression c_guard;
+   pc_guard = (match c_guard with Some g -> [ Pguard_when (untype_expression g) ] | None -> []);
    pc_rhs = untype_expression c_rhs;
   }
 

@@ -21,6 +21,10 @@ type mapper = {
   attributes: mapper -> attribute list -> attribute list;
   case: mapper -> case -> case;
   cases: mapper -> case list -> case list;
+
+  pattern_guards : mapper -> pattern_guard list -> pattern_guard list;
+  pattern_guard : mapper -> pattern_guard -> pattern_guard;
+
   class_declaration: mapper -> class_declaration -> class_declaration;
   class_description: mapper -> class_description -> class_description;
   class_expr: mapper -> class_expr -> class_expr;
