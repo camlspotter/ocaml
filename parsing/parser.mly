@@ -411,7 +411,6 @@ let mkctf_attrs d attrs =
 %token WHILE
 %token WITH
 %token <string * Location.t> COMMENT
-%token LESSMINUSMINUS
 
 %token EOL
 
