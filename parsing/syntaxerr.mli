@@ -22,6 +22,8 @@ type error =
   | Variable_in_scope of Location.t * string
   | Other of Location.t
   | Ill_formed_ast of Location.t * string
+  | Desugar_same_declared_twice of Location.t * Location.t * string
+  | Desugar_declaration_is_never_used of Location.t * string
 
 exception Error of error
 exception Escape_error

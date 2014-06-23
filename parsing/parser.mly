@@ -1318,8 +1318,11 @@ label_ident:
     LIDENT   { ($1, mkexp(Pexp_ident(mkrhs (Lident $1) 1))) }
 ;
 let_bindings:
+    let_bindings_ { Desugar.desugar_let_bindings $1 }
+;
+let_bindings_:
     let_binding                                 { [$1] }
-  | let_bindings AND let_binding                { $3 :: $1 }
+  | let_bindings_ AND let_binding                { $3 :: $1 }
 ;
 let_bindings_no_attrs:
    let_bindings {
@@ -1341,6 +1344,15 @@ let_binding:
     let_binding_ post_item_attributes {
       let (p, e) = $1 in Vb.mk ~loc:(symbol_rloc()) ~attrs:$2 p e
     }
+  | let_binding_haskellish post_item_attributes {
+      let (p, ty) = $1 in 
+      { pvb_pat = ghpat(Ppat_constraint(p, ty));
+        pvb_expr = mkexp (Pexp_constant (Const_string ("haskellish", None))); (* dummy *)
+        pvb_attributes = ( ({ txt = "haskellish"; loc = symbol_gloc() },
+                            PStr []) :: $2);
+        pvb_loc = symbol_rloc()
+      }
+    }
 ;
 let_binding_:
     val_ident fun_binding
@@ -1356,6 +1368,13 @@ let_binding_:
       { ($1, $3) }
   | simple_pattern_not_ident COLON core_type EQUAL seq_expr
       { (ghpat(Ppat_constraint($1, $3)), $5) }
+;
+let_binding_haskellish:
+  /* Haskellish x : type declaration */
+    val_ident COLON typevar_list DOT core_type
+      { mkpatvar $1 1, ghtyp(Ptyp_poly(List.rev $3,$5)) }
+  | val_ident COLON core_type
+      { mkpatvar $1 1, $3 }
 ;
 fun_binding:
     strict_binding
