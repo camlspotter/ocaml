@@ -358,6 +358,7 @@ let mkctf_attrs d attrs =
 %token LESS
 %token LESSMINUS
 %token LET
+%token LETCOLON
 %token <string> LIDENT
 %token LPAREN
 %token LBRACKETAT
@@ -1082,6 +1083,8 @@ expr:
       { $1 }
   | simple_expr simple_labeled_expr_list
       { mkexp(Pexp_apply($1, List.rev $2)) }
+  | LETCOLON structure IN seq_expr
+      { Desugar_local_structure.desugar $2 $4 }
   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
@@ -1332,6 +1335,7 @@ let_bindings_no_attrs:
        l;
      l
    }
+;
 
 lident_list:
     LIDENT                            { [$1] }
