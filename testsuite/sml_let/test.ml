@@ -10,7 +10,12 @@ let () =
     and y = x + 1   (* y = 2, not 3 *)
 
     val () = assert (y = 2)  (* seq_expr is banned. 
-                                Always requires val () = e *)
+                                Always requires val () = e 
+                                
+                                It is since:
+                                * I do not force writing ;;
+                                * I want to omit val 
+                             *)
 
     rec f x = f x   (* recursion *)
 
