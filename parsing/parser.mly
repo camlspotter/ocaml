@@ -678,7 +678,7 @@ structurex:
 structure_tailx:
     /* empty */          { [] }
   | SEMISEMI structurex   { $2 }
-  | structure_itemx structure_tailx { $1 :: $2 }
+  | structure_itemx SEMISEMI structure_tailx { $1 :: $3 }
 ;
 structure_itemx:
     VAL ext_attributes let_bindings
