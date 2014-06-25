@@ -672,16 +672,16 @@ structure_item:
       { mkstr(Pstr_attribute $1) }
 ;
 structurex:
-    seq_expr post_item_attributes structure_tailx { mkstrexp $1 $2 :: $3 }
+/*    seq_expr post_item_attributes structure_tailx { mkstrexp $1 $2 :: $3 } */
   | structure_tailx { $1 }
 ;
 structure_tailx:
     /* empty */          { [] }
   | SEMISEMI structurex   { $2 }
-  | structure_itemx SEMISEMI structure_tailx { $1 :: $3 }
+  | structure_itemx structure_tailx { $1 :: $2 }
 ;
 structure_itemx:
-    VAL ext_attributes let_bindings
+  | VAL ext_attributes let_bindings
       {
         match $3 with
           [ {pvb_pat = { ppat_desc = Ppat_any; ppat_loc = _ };
