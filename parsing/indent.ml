@@ -121,7 +121,6 @@ let to_string = function
   | COMMENT _ -> "COMMENT"
   | EOL -> "EOL"
   | BACKQUOTEBACKQUOTE -> "BACKQUOTEBACKQUOTE"
-  | LETCOLON -> "LETCOLON"
 
 
 (** state *)
@@ -173,7 +172,7 @@ let rec preprocess lexer lexbuf =
   | t -> t
   | exception Queue.Empty ->
 
-      let token = lexer lexbuf in
+      let token =   lexer lexbuf in
       let start_p = lexeme_start_p lexbuf in
       let end_p =   lexeme_end_p   lexbuf in
 
@@ -185,30 +184,33 @@ let rec preprocess lexer lexbuf =
           let rec close ever_closed = function
             | [] -> ever_closed, []
             | ((p', t') :: is as stack) ->
-                if 
+                let must_be_closed = 
                   if t = BAR then indentation p < indentation p'
                   else indentation p <= indentation p'
-                then begin 
+                in
+                if not must_be_closed then 
+                  ever_closed, stack
+                else begin 
                   if debug then 
                     Format.eprintf "Closing %d %d@." 
                       (indentation p)
                       (indentation p');
-                  Queue.add 
+                  flip Queue.add queue 
                     begin match t' with
-                    | DO -> DONE
-                    | ELSE -> END
+                    | DO       -> DONE
+                    | ELSE     -> END
                     | FUNCTION -> END
-                    | OBJECT -> END
-                    | SIG -> END
-                    | STRUCT -> END
-                    | THEN -> END
-                    | WITH -> END
-                    | LAZY -> DONE
+                    | OBJECT   -> END
+                    | SIG      -> END
+                    | STRUCT   -> END
+                    | THEN     -> END
+                    | WITH     -> END
+                    | LAZY     -> DONE
                     (* | LET | REC *)
                     | _ -> assert false
-                    end queue;
+                    end;
                   close true is
-                end else ever_closed, stack
+                  end
           in
           let closed, stack' = close false !stack in
           stack := stack';
