@@ -120,6 +120,8 @@ let to_string = function
   | WITH -> "WITH"
   | COMMENT _ -> "COMMENT"
   | EOL -> "EOL"
+  | BACKQUOTEBACKQUOTE -> "BACKQUOTEBACKQUOTE"
+  | LETCOLON -> "LETCOLON"
 
 
 (** state *)

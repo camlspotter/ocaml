@@ -359,6 +359,7 @@ let mkctf_attrs d attrs =
 %token LESS
 %token LESSMINUS
 %token LET
+%token LETCOLON
 %token <string> LIDENT
 %token LPAREN
 %token LBRACKETAT
@@ -632,6 +633,79 @@ structure_item:
             mkstr(Pstr_eval (exp, attrs))
         | l ->
             let str = mkstr(Pstr_value($3, List.rev l)) in
+            let (ext, attrs) = $2 in
+            if attrs <> [] then not_expecting 2 "attribute";
+            match ext with
+            | None -> str
+            | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
+      }
+  | EXTERNAL val_ident COLON core_type EQUAL primitive_declaration
+    post_item_attributes
+      { mkstr
+          (Pstr_primitive (Val.mk (mkrhs $2 2) $4
+                             ~prim:$6 ~attrs:$7 ~loc:(symbol_rloc ()))) }
+  | TYPE type_declarations
+      { mkstr(Pstr_type (List.rev $2) ) }
+  | TYPE str_type_extension
+      { mkstr(Pstr_typext $2) }
+  | EXCEPTION str_exception_declaration
+      { mkstr(Pstr_exception $2) }
+  | MODULE module_binding
+      { mkstr(Pstr_module $2) }
+  | MODULE REC module_bindings
+      { mkstr(Pstr_recmodule(List.rev $3)) }
+  | MODULE TYPE ident post_item_attributes
+      { mkstr(Pstr_modtype (Mtd.mk (mkrhs $3 3)
+                              ~attrs:$4 ~loc:(symbol_rloc()))) }
+  | MODULE TYPE ident EQUAL module_type post_item_attributes
+      { mkstr(Pstr_modtype (Mtd.mk (mkrhs $3 3)
+                              ~typ:$5 ~attrs:$6 ~loc:(symbol_rloc()))) }
+  | open_statement { mkstr(Pstr_open $1) }
+  | CLASS class_declarations
+      { mkstr(Pstr_class (List.rev $2)) }
+  | CLASS TYPE class_type_declarations
+      { mkstr(Pstr_class_type (List.rev $3)) }
+  | INCLUDE module_expr post_item_attributes
+      { mkstr(Pstr_include (Incl.mk $2 ~attrs:$3 ~loc:(symbol_rloc()))) }
+  | item_extension post_item_attributes
+      { mkstr(Pstr_extension ($1, $2)) }
+  | floating_attribute
+      { mkstr(Pstr_attribute $1) }
+;
+structurex:
+/*    seq_expr post_item_attributes structure_tailx { mkstrexp $1 $2 :: $3 } */
+  | structure_tailx { $1 }
+;
+structure_tailx:
+    /* empty */          { [] }
+  | SEMISEMI structurex   { $2 }
+  | structure_itemx structure_tailx { $1 :: $2 }
+;
+structure_itemx:
+  | VAL ext_attributes let_bindings
+      {
+        match $3 with
+          [ {pvb_pat = { ppat_desc = Ppat_any; ppat_loc = _ };
+             pvb_expr = exp; pvb_attributes = attrs}] ->
+            let exp = wrap_exp_attrs exp $2 in
+            mkstr(Pstr_eval (exp, attrs))
+        | l ->
+            let str = mkstr(Pstr_value(Nonrecursive, List.rev l)) in
+            let (ext, attrs) = $2 in
+            if attrs <> [] then not_expecting 2 "attribute";
+            match ext with
+            | None -> str
+            | Some id -> ghstr (Pstr_extension((id, PStr [str]), []))
+      }
+  | REC ext_attributes let_bindings
+      {
+        match $3 with
+          [ {pvb_pat = { ppat_desc = Ppat_any; ppat_loc = _ };
+             pvb_expr = exp; pvb_attributes = attrs}] ->
+            let exp = wrap_exp_attrs exp $2 in
+            mkstr(Pstr_eval (exp, attrs))
+        | l ->
+            let str = mkstr(Pstr_value(Recursive, List.rev l)) in
             let (ext, attrs) = $2 in
             if attrs <> [] then not_expecting 2 "attribute";
             match ext with
@@ -1083,6 +1157,8 @@ expr:
       { $1 }
   | simple_expr simple_labeled_expr_list
       { mkexp(Pexp_apply($1, List.rev $2)) }
+  | LETCOLON structurex IN seq_expr
+      { Desugar_local_structure.desugar $2 $4 }
   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
@@ -1398,6 +1474,7 @@ let_bindings_no_attrs:
        l;
      l
    }
+;
 
 lident_list:
     LIDENT                            { [$1] }

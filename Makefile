@@ -46,7 +46,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
   parsing/ast_mapper.cmo \
   parsing/desugar.cmo \
-  parsing/syntaxerr.cmo parsing/desugar_pattern_guard.cmo parsing/parser.cmo \
+  parsing/syntaxerr.cmo parsing/desugar_pattern_guard.cmo parsing/desugar_local_structure.cmo parsing/parser.cmo \
   parsing/lexer.cmo parsing/indent.cmo parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo
 
