@@ -195,7 +195,7 @@ let rec preprocess lexer lexbuf =
                     Format.eprintf "Closing %d %d@." 
                       (indentation p)
                       (indentation p');
-                  flip Queue.add queue 
+                  queue |> Queue.add
                     begin match t' with
                     | DO       -> DONE
                     | ELSE     -> END
