@@ -10,7 +10,7 @@ type t = Foo of int * float
 Then
 
 ```ocaml
-(Foo) 
+Foo
 ```
 
 is equal to `fun (x,y) -> Foo (x,y)`. And,
