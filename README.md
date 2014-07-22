@@ -21,11 +21,6 @@ They are tested in their appearence order. The bound variables
 in pattern guards can be used in the later pattern guards and boolean guards,
 in addition to the case action.
 
-Thread safety
--------------------------------------
-
-Pattern guards are thread-safe; its desugaring uses no mutabile data.
-
 Performance
 -------------------------------------
 
@@ -55,7 +50,7 @@ with
 | PG.WithExit v -> (Obj.magic v : 'a)
 ```
 
-Using a reference might have better performance but it would sacrifice the thread safety. The best solution is to implement pattern guards not as a syntax sugar but directly in the pattern match compiler.
+The best solution is to implement pattern guards not as a syntax sugar but directly in the pattern match compiler.
 
 Test sample
 ---------------------------
