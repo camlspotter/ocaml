@@ -1310,11 +1310,7 @@ simple_expr:
           ( { txt = "curried"; loc = Location.none }, PStr [] ) 
       }
   | LPAREN seq_expr RPAREN
-      { match reloc_exp $2 with
-        | ({ pexp_desc = Pexp_construct (loc, None) } as e) ->
-            Exp.attr e ( { txt = "uncurried"; loc = Location. none }, PStr [] )
-        | e -> e
-      }
+      { reloc_exp $2 }
   | LPAREN seq_expr error
       { unclosed "(" 1 ")" 3 }
   | BEGIN ext_attributes seq_expr END
