@@ -20,5 +20,9 @@ let _ = prerr_endline "5"///
 
 //// 
 
+/// let (///) x y = x + y
+
+let (+///) x y = x + y (* This is still considered as an operator. *)
+
 (* the following end without newline *)
 ///
