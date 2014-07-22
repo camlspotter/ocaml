@@ -4,12 +4,13 @@ OCamleopard / 大麒麟
 OCamleopard / 大麒麟 (or simply "+leopard") is a collection of small modifications 
 to OCaml. Currently it includes:
 
-* Variant constructor as functions: `(Some) : 'a -> 'a option`
-* Haskell style value-type declaration: `let f : 'a. 'a -> 'a and f x = x`
-* Python like indentation rule
-* Line comment: `/// comment`
-* Pattern guards `with p <- e ->`
-* Function as infix operator: ```24 ``div 8 = 3```
+* Variant constructor as functions: `Some : 'a -> 'a option` (See README_curried_constr.md)
+* Haskell style value-type declaration: `let f : 'a. 'a -> 'a and f x = x` (See README_haskellish_type.md)
+* Python like indentation rule (See README_indent.md)
+* Line comment: `/// comment` (See README_linecomment.md)
+* Pattern guards `with p <- e ->` (See README_pattern_guard.md)
+* Function as infix operator: ```24 ``div 8 = 3``` (See README_backquote_infix.md)
+* SML style local name space by ``let:`` (See README_sml_let.md)
 
 Trivia of giraffes
 -----------------------------------
