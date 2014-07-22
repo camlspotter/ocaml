@@ -411,7 +411,6 @@ let mkctf_attrs d attrs =
 %token WHILE
 %token WITH
 %token <string * Location.t> COMMENT
-%token LESSMINUSMINUS
 
 %token EOL
 
@@ -1099,7 +1098,7 @@ expr:
   | MATCH ext_attributes seq_expr WITH opt_bar match_cases
       { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
   | TRY ext_attributes seq_expr WITH opt_bar match_cases
-      { mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
+      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
   | TRY ext_attributes seq_expr WITH error
       { syntax_error() }
   | expr_comma_list %prec below_COMMA
