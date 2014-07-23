@@ -320,7 +320,6 @@ rule token = parse
       { let s = Lexing.lexeme lexbuf in
         try Hashtbl.find keyword_table s
         with Not_found -> LIDENT s }
-  | "let:" { LETCOLON }
   | lowercase_latin1 identchar_latin1 *
       { warn_latin1 lexbuf; LIDENT (Lexing.lexeme lexbuf) }
   | uppercase identchar *

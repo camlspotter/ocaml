@@ -358,7 +358,6 @@ let mkctf_attrs d attrs =
 %token LESS
 %token LESSMINUS
 %token LET
-%token LETCOLON
 %token <string> LIDENT
 %token LPAREN
 %token LBRACKETAT
@@ -1156,8 +1155,8 @@ expr:
       { $1 }
   | simple_expr simple_labeled_expr_list
       { mkexp(Pexp_apply($1, List.rev $2)) }
-  | LETCOLON structurex IN seq_expr
-      { Desugar_local_structure.desugar $2 $4 }
+  | LET COLON structurex IN seq_expr
+      { Desugar_local_structure.desugar $3 $5 }
   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
@@ -1166,6 +1165,8 @@ expr:
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
       { mkexp_attrs (Pexp_function(List.rev $4)) $2 }
+  | FUNCTION BEGIN ext_attributes opt_bar match_cases END
+      { mkexp_attrs (Pexp_function(List.rev $5)) $3 }
   | FUN ext_attributes labeled_simple_pattern fun_def
       { let (l,o,p) = $3 in
         mkexp_attrs (Pexp_fun(l, o, p, $4)) $2 }
@@ -1173,8 +1174,12 @@ expr:
       { mkexp_attrs (Pexp_newtype($5, $7)) $2 }
   | MATCH ext_attributes seq_expr WITH opt_bar match_cases
       { mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
+  | MATCH ext_attributes seq_expr WITH BEGIN opt_bar match_cases END
+      { mkexp_attrs (Pexp_match($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH opt_bar match_cases
       { mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
+  | TRY ext_attributes seq_expr WITH BEGIN opt_bar match_cases END
+      { mkexp_attrs (Pexp_try($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH error
       { syntax_error() }
   | expr_comma_list %prec below_COMMA
@@ -1256,6 +1261,8 @@ expr:
       { mkexp_attrs (Pexp_assert $3) $2 }
   | LAZY ext_attributes simple_expr %prec below_SHARP
       { mkexp_attrs (Pexp_lazy $3) $2 }
+  | LAZY DO ext_attributes seq_expr DONE /* should be LAZY BEGIN .. END but this is ambiguous with the above original rule. */
+      { mkexp_attrs (Pexp_lazy $4) $3 }
   | OBJECT ext_attributes class_structure END
       { mkexp_attrs (Pexp_object $3) $2 }
   | OBJECT ext_attributes class_structure error
