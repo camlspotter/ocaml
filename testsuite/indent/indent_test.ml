@@ -97,3 +97,17 @@ let x = lazy:
 let o = object:
   [@blahblah]
   method x = 1
+
+(* EOL tokens have indent 0 and must be ignored! *)
+let f e =
+  if e then:
+
+    print_endline "true!";
+
+    42
+
+  else:
+
+    print_endline "false!";
+
+    -1 (* You cannot write ;; here *)

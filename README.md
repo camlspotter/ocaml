@@ -10,7 +10,7 @@ to OCaml. Currently it includes:
 * Line comment: `/// comment` (See README_linecomment.md)
 * Pattern guards `with p <- e ->` (See README_pattern_guard.md)
 * Function as infix operator: ```24 ``div 8 = 3``` (See README_backquote_infix.md)
-* SML style local name space by ``let:`` (See README_sml_let.md)
+* SML style local name space by ``let:`` (See README_sml_let.md and README_sml_let_indent.md)
 
 Trivia of giraffes
 -----------------------------------

@@ -1156,8 +1156,11 @@ expr:
       { $1 }
   | simple_expr simple_labeled_expr_list
       { mkexp(Pexp_apply($1, List.rev $2)) }
-  | LET COLON structurex IN seq_expr
-      { Desugar_local_structure.desugar $3 $5 }
+  | LET COLON BEGIN structurex END IN seq_expr
+      { 
+        Desugar_local_structure.check_let_colon_positions (rhs_loc 1) (rhs_loc 6);
+        Desugar_local_structure.desugar $4 $7 
+      }
   | LET ext_attributes rec_flag let_bindings_no_attrs IN seq_expr
       { mkexp_attrs (Pexp_let($3, List.rev $4, $6)) $2 }
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
