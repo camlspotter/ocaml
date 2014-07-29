@@ -52,3 +52,13 @@ let rec structure exp rev_str =
 
 let desugar str exp = structure exp [] str
 
+let check_let_colon_positions loc1 loc2 =
+  let open Lexing in
+  let open Location in
+  let indent l = l.loc_start.pos_cnum - l.loc_start.pos_bol in
+  if not (loc1.loc_start.pos_fname = loc2.loc_start.pos_fname
+         && indent loc1 = indent loc2) then
+    raise Syntaxerr.(Error (Expecting (loc2, 
+                                       Printf.sprintf "'in' at the same indent %d of let:" (indent loc1))))
+
+  

@@ -40,6 +40,28 @@ in
 ...
 ```
 
+To make `let:` indentation rule consistent as the other keywords with `:`,
+until `let:`'s cooresponding `in` appears, any lexer tokens cannot appear
+left of and the same level of `let:`.
+
+Unlike the other keywords with `:` in +indent, `let:` is not to omit
+the corresponding `in`. `in` must appear at the same indent level of `let:`,
+otherwise it is rejected as a syntax error:
+
+``ocaml
+let:
+  val x = 1
+  and y = 2
+
+  rec f x = g x
+  and g x = f x
+ in        <---- Syntax error
+...
+```
+
+It is possible to make it omittable but I feel `in` should be always written.
+ 
+
 Implicit `val` insertion: how it works
 -------------------------------------------
 
@@ -93,19 +115,6 @@ let:
   
     x = 1
 ```
-
-The following code is valid and `val` is inserted before `x`. This is ok for itself but does not go well with other keywords with `:` in +indent.
-```ocaml
-    let:
-  module M = struct
-    ...
-  end
-  
-  x = 1
-    in 
-```
-We can simply reject the level goes smaller than the indentation level of `let:`.
-
 
 Some design choices
 --------------------------------------
