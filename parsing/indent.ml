@@ -130,7 +130,8 @@ let queue = Queue.create ()
 (** the last token excluding the comments *)
 let previous_token : [ `Colon of position * token
                      | `None
-                     | `Some of token ] ref = ref `None
+                     | `Some of token
+                     ] ref = ref `None
 
 (** the indent of the current line *)
 let indent = ref None
@@ -152,15 +153,17 @@ let in_the_same_line p1 p2 =
 
 let update_indent p t =
   match t with
+  | EOL ->
+      (* ignore EOL! *)
+      None
   | EOF -> 
       (* Make sure EOF flushes all the stack elements *)
-      Some ( { p with pos_cnum = p.pos_bol - 1 }, (* negative indent! *)
-             t )
+      Some { p with pos_cnum = p.pos_bol - 1 } (* negative indent! *)
   | _ -> 
       match !indent with
-      | Some (p', _) when in_the_same_line p p' -> None
+      | Some p' when in_the_same_line p p' -> None
       | _ -> 
-          let i = Some (p, t) in
+          let i = Some p in
           indent := i;
           i
 
@@ -179,30 +182,35 @@ let rec preprocess lexer lexbuf =
          if necessary! *)
       begin match update_indent start_p token with
       | None -> ()
-      | Some (p, t) ->
+      | Some p -> (* We see a newline *)
+
+          (* Insert implicit closing keywords *)
+
           let rec close ever_closed = function
             | [] -> ever_closed, []
             | ((p', t') :: is as stack) ->
                 if 
-                  if t = BAR then indentation p < indentation p'
-                  else indentation p <= indentation p'
+                  (if token = BAR then (<) else (<=))
+                    (indentation p)
+                    (indentation p')
                 then begin 
                   if debug then 
-                    Format.eprintf "Closing %d %d@." 
-                      (indentation p)
-                      (indentation p');
-                  Queue.add 
+                    Format.eprintf "Closing %s(%d) by %s(%d)@." 
+                      (to_string t')
+                      (indentation p')
+                      (to_string token)
+                      (indentation p);
+                  Queue.add
                     begin match t' with
-                    | DO -> DONE
-                    | ELSE -> END
+                    | DO       -> DONE
+                    | ELSE     -> END
                     | FUNCTION -> END
-                    | OBJECT -> END
-                    | SIG -> END
-                    | STRUCT -> END
-                    | THEN -> END
-                    | WITH -> END
-                    | LAZY -> DONE
-                    (* | LET | REC *)
+                    | OBJECT   -> END
+                    | SIG      -> END
+                    | STRUCT   -> END
+                    | THEN     -> END
+                    | WITH     -> END
+                    | LAZY     -> DONE
                     | _ -> assert false
                     end queue;
                   close true is
@@ -210,23 +218,28 @@ let rec preprocess lexer lexbuf =
           in
           let closed, stack' = close false !stack in
           stack := stack';
+
           (* Insert ; 
              If the last token is ;, it is also introduced
              after the closing token.
           *)
-          match closed, !previous_token with
+          begin match closed, !previous_token with
           | true, `Some SEMI -> Queue.add SEMI queue
           | _ -> ()
+          end;
       end;
 
-      let token = 
+      (* Insertion of the token itself *)
+
+      let tokens = 
         match !previous_token, token with
-        | _, COMMENT _ -> Some token
-        | _, EOL -> None (* Oh, if preprocessor is here, the original creates EOL! *)
+        | _, COMMENT _ -> [ token ]
+        | _, EOL -> 
+            [] (* Oh, if preprocessor is here, the original creates EOL! *)
   
         | `None, _ -> 
             previous_token := `Some token;
-            Some token 
+            [ token ]
   
         (* We need to check the line against colon_pos. This can be different
            from the last token because of COMMENTs *)
@@ -239,7 +252,7 @@ let rec preprocess lexer lexbuf =
   
         | `Colon _, _ -> 
             previous_token := `Some token;
-            Some token 
+            [ token ]
   
         | `Some t, COLON ->
             begin match t with
@@ -248,13 +261,7 @@ let rec preprocess lexer lexbuf =
             | DO
             | ELSE
             | FUNCTION
-  (*
-            | LET
-  *)
             | OBJECT
-  (*
-            | REC
-  *)
             | SIG
             | STRUCT
             | THEN
@@ -262,11 +269,18 @@ let rec preprocess lexer lexbuf =
             | LAZY ->
                 (* special colon *)
                 begin match !indent with
-                | Some (p, _) -> 
+                | Some p -> 
                     previous_token := `Colon (p, t);
                     stack := (p, t) :: !stack;
+
+                    (* Special insertion.
+
+                       We remove the COLON, but some syntax constructs 
+                       require special BEGIN..END instead to help parsing. 
+                       
+                       For let:, we also keep the COLON. *)
                     begin match t with
-                    | ELSE | FUNCTION | THEN | WITH -> Some BEGIN
+                    | ELSE | FUNCTION | THEN | WITH -> [ BEGIN ]
                     | LAZY -> 
                         (* lazy: need to be handled a bit differently,
                            since 
@@ -277,26 +291,24 @@ let rec preprocess lexer lexbuf =
                            equivalent with
                              lazy [@x] begin e end
                         *)   
-                        Some DO
-                    | _ -> None
+                        [ DO ]
+                    | _ -> []
                     end
                 | None -> assert false
                 end
   
             | _ -> 
                 previous_token := `Some COLON;
-                Some COLON
+                [ COLON ]
             end
 
         | _ -> 
             previous_token := `Some token;
-            Some token
+            [ token ]
       in
-      begin match token with
-      | Some t -> Queue.add t queue 
-      | None -> ()
-      end;
+      List.iter (fun t -> Queue.add t queue) tokens;
 
+      (* return the first available token back to the parser *)
       match Queue.take queue with
       | q -> q
       | exception Queue.Empty ->
