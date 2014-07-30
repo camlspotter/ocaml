@@ -289,6 +289,17 @@ let mkcf_attrs d attrs =
 let mkctf_attrs d attrs =
   Ctf.mk ~loc:(symbol_rloc()) ~attrs d
 
+let mketa locopt e =
+  match locopt with
+  | None -> e
+  | Some loc ->
+      let open Pat in
+      let open Exp in
+      let gloc = { loc with loc_ghost = true } in
+      (* fun & -> (e) & *)
+      fun_ ~loc:gloc "" None (var ~loc { txt="&"; loc })
+        (apply ~loc e ["", ident ~loc { txt= Lident "&"; loc } ])
+
 %}
 
 /* Tokens */
@@ -992,12 +1003,12 @@ method_:
   | override_flag private_flag label strict_binding
       { mkloc $3 (rhs_loc 3), $2,
         Cfk_concrete ($1, ghexp(Pexp_poly ($4, None))) }
-  | override_flag private_flag label COLON poly_type EQUAL seq_expr
+  | override_flag private_flag label COLON poly_type EQUAL eta seq_expr
       { mkloc $3 (rhs_loc 3), $2,
-        Cfk_concrete ($1, ghexp(Pexp_poly($7, Some $5))) }
+        Cfk_concrete ($1, ghexp(Pexp_poly(mketa $7 $8, Some $5))) }
   | override_flag private_flag label COLON TYPE lident_list
-    DOT core_type EQUAL seq_expr
-      { let exp, poly = wrap_type_annotation $6 $8 $10 in
+    DOT core_type EQUAL eta seq_expr
+      { let exp, poly = wrap_type_annotation $6 $8 (mketa $10 $11) in
         mkloc $3 (rhs_loc 3), $2,
         Cfk_concrete ($1, ghexp(Pexp_poly(exp, Some poly))) }
 ;
@@ -1492,20 +1503,24 @@ let_binding:
       }
     }
 ;
+eta:
+    AMPERSAND   { Some (symbol_rloc()) }
+  | /* empty */ { None }
+;
 let_binding_:
     val_ident fun_binding
       { (mkpatvar $1 1, $2) }
-  | val_ident COLON typevar_list DOT core_type EQUAL seq_expr
+  | val_ident COLON typevar_list DOT core_type EQUAL eta seq_expr
       { (ghpat(Ppat_constraint(mkpatvar $1 1,
                                ghtyp(Ptyp_poly(List.rev $3,$5)))),
-         $7) }
-  | val_ident COLON TYPE lident_list DOT core_type EQUAL seq_expr
-      { let exp, poly = wrap_type_annotation $4 $6 $8 in
+         mketa $7 $8) }
+  | val_ident COLON TYPE lident_list DOT core_type EQUAL eta seq_expr
+      { let exp, poly = wrap_type_annotation $4 $6 (mketa $8 $9) in
         (ghpat(Ppat_constraint(mkpatvar $1 1, poly)), exp) }
-  | pattern EQUAL seq_expr
-      { ($1, $3) }
-  | simple_pattern_not_ident COLON core_type EQUAL seq_expr
-      { (ghpat(Ppat_constraint($1, $3)), $5) }
+  | pattern EQUAL eta seq_expr
+      { ($1, mketa $3 $4) }
+  | simple_pattern_not_ident COLON core_type EQUAL eta seq_expr
+      { (ghpat(Ppat_constraint($1, $3)), mketa $5 $6) }
 ;
 let_binding_haskellish:
   /* Haskellish x : type declaration */
@@ -1517,12 +1532,12 @@ let_binding_haskellish:
 fun_binding:
     strict_binding
       { $1 }
-  | type_constraint EQUAL seq_expr
-      { mkexp_constraint $3 $1 }
+  | type_constraint EQUAL eta seq_expr
+      { mkexp_constraint (mketa $3 $4) $1 }
 ;
 strict_binding:
-    EQUAL seq_expr
-      { $2 }
+    EQUAL eta seq_expr
+      { mketa $2 $3 }
   | labeled_simple_pattern fun_binding
       { let (l, o, p) = $1 in ghexp(Pexp_fun(l, o, p, $2)) }
   | LPAREN TYPE LIDENT RPAREN fun_binding

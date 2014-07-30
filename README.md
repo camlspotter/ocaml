@@ -11,6 +11,8 @@ to OCaml. Currently it includes:
 * Pattern guards `with p <- e ->` (See README_pattern_guard.md)
 * Function as infix operator: ```24 ``div 8 = 3``` (See README_backquote_infix.md)
 * SML style local name space by ``let:`` (See README_sml_let.md and README_sml_let_indent.md)
+* SML style local name space by ``let:`` (See README_sml_let.md)
+* η-expansion syntax sugar: `let id x = x;; let id2 = & id id;;`
 
 Trivia of giraffes
 -----------------------------------
