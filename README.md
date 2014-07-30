@@ -12,7 +12,7 @@ to OCaml. Currently it includes:
 * Function as infix operator: ```24 ``div 8 = 3``` (See README_backquote_infix.md)
 * SML style local name space by ``let:`` (See README_sml_let.md and README_sml_let_indent.md)
 * SML style local name space by ``let:`` (See README_sml_let.md)
-* η-expansion syntax sugar: `let id x = x;; let id2 = & id id;;`
+* η-expansion syntax sugar: `let id x = x;; let id2 = & id id;;` (See README_eta.md)
 
 Trivia of giraffes
 -----------------------------------
