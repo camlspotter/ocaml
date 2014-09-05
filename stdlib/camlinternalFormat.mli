@@ -20,12 +20,15 @@ val param_format_of_ignored_format :
 
 type ('b, 'c) acc_formatting_gen =
   | Acc_open_tag of ('b, 'c) acc
+  | Acc_open_box of ('b, 'c) acc
 
 and ('b, 'c) acc =
   | Acc_formatting_lit of ('b, 'c) acc * formatting_lit
   | Acc_formatting_gen of ('b, 'c) acc * ('b, 'c) acc_formatting_gen
-  | Acc_string         of ('b, 'c) acc * string
-  | Acc_char           of ('b, 'c) acc * char
+  | Acc_string_literal of ('b, 'c) acc * string
+  | Acc_char_literal   of ('b, 'c) acc * char
+  | Acc_data_string    of ('b, 'c) acc * string
+  | Acc_data_char      of ('b, 'c) acc * char
   | Acc_delay          of ('b, 'c) acc * ('b -> 'c)
   | Acc_flush          of ('b, 'c) acc
   | Acc_invalid_arg    of ('b, 'c) acc * string
@@ -73,6 +76,8 @@ val string_of_fmtty :
   ('a, 'b, 'c, 'd, 'e, 'f) CamlinternalFormatBasics.fmtty -> string
 val string_of_fmt :
   ('a, 'b, 'c, 'd, 'e, 'f) CamlinternalFormatBasics.fmt -> string
+
+val open_box_of_string : string -> int * block_type
 
 val symm :
    ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
