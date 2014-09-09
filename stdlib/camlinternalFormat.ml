@@ -1,19 +1,5 @@
 open CamlinternalFormatBasics
 
-let legacy_behavior = true
-(** When this flag is enabled, the format parser tries to behave as
-    the <4.02 implementations, in particular it ignores most benine
-    nonsensical format. When the flag is disabled, it will reject any
-    format that is not accepted by the specification.
-
-    A typical example would be "%+ d": specifying both '+' (if the
-    number is positive, pad with a '+' to get the same width as
-    negative numbres) and ' ' (if the number is positive, pad with
-    a space) does not make sense, but the legacy (< 4.02)
-    implementation was happy to just ignore the space.
-*)
-
-
 (******************************************************************************)
            (* Tools to manipulate scanning set of chars (see %[...]) *)
 
@@ -115,17 +101,20 @@ fun ign fmt -> match ign with
 
 type ('b, 'c) acc_formatting_gen =
   | Acc_open_tag of ('b, 'c) acc
+  | Acc_open_box of ('b, 'c) acc
 
 (* Reversed list of printing atoms. *)
 (* Used to accumulate printf arguments. *)
 and ('b, 'c) acc =
-  | Acc_formatting_lit of ('b, 'c) acc * formatting_lit(* Special fmtting (box) *)
+  | Acc_formatting_lit of ('b, 'c) acc * formatting_lit (* Special fmtting (box)      *)
   | Acc_formatting_gen of ('b, 'c) acc * ('b, 'c) acc_formatting_gen (* Special fmtting (box) *)
-  | Acc_string         of ('b, 'c) acc * string        (* Literal or generated string*)
-  | Acc_char           of ('b, 'c) acc * char          (* Literal or generated char  *)
-  | Acc_delay          of ('b, 'c) acc * ('b -> 'c)    (* Delayed printing (%a, %t)  *)
-  | Acc_flush          of ('b, 'c) acc                 (* Flush                      *)
-  | Acc_invalid_arg    of ('b, 'c) acc * string        (* Raise Invalid_argument msg *)
+  | Acc_string_literal of ('b, 'c) acc * string         (* Literal string             *)
+  | Acc_char_literal   of ('b, 'c) acc * char           (* Literal char               *)
+  | Acc_data_string    of ('b, 'c) acc * string         (* Generated string           *)
+  | Acc_data_char      of ('b, 'c) acc * char           (* Generated char             *)
+  | Acc_delay          of ('b, 'c) acc * ('b -> 'c)     (* Delayed printing (%a, %t)  *)
+  | Acc_flush          of ('b, 'c) acc                  (* Flush                      *)
+  | Acc_invalid_arg    of ('b, 'c) acc * string         (* Raise Invalid_argument msg *)
   | End_of_acc
 
 (* List of heterogeneous values. *)
@@ -435,7 +424,6 @@ let bprint_float_fmt buf ign_flag fconv pad prec =
 (* Compute the literal string representation of a formatting_lit. *)
 (* Also used by Printf and Scanf where formatting is not interpreted. *)
 let string_of_formatting_lit formatting_lit = match formatting_lit with
-  | Open_box (str, _, _) -> str
   | Close_box            -> "@]"
   | Close_tag            -> "@}"
   | Break (str, _, _)    -> str
@@ -453,6 +441,7 @@ let string_of_formatting_gen : type a b c d e f .
     (a, b, c, d, e, f) formatting_gen -> string =
   fun formatting_gen -> match formatting_gen with
   | Open_tag (Format (_, str)) -> str
+  | Open_box (Format (_, str)) -> str
 
 (***)
 
@@ -587,6 +576,7 @@ let bprint_fmt buf fmt =
       bprint_string_literal buf (string_of_formatting_lit fmting_lit);
       fmtiter rest ign_flag;
     | Formatting_gen (fmting_gen, rest) ->
+      bprint_string_literal buf "@{";
       bprint_string_literal buf (string_of_formatting_gen fmting_gen);
       fmtiter rest ign_flag;
 
@@ -802,6 +792,7 @@ let rec fmtty_of_formatting_gen : type a b c d e f .
     (a, b, c, d, e, f) fmtty =
 fun formatting_gen -> match formatting_gen with
   | Open_tag (Format (fmt, _)) -> fmtty_of_fmt fmt
+  | Open_box (Format (fmt, _)) -> fmtty_of_fmt fmt
 
 (* Extract the type representation (an fmtty) of a format. *)
 and fmtty_of_fmt : type a b c d e f .
@@ -1070,6 +1061,10 @@ and type_formatting_gen : type a1 a3 b1 b3 c1 c3 d1 d3 e1 e2 e3 f1 f2 f3 .
     (a3, b3, c3, d3, e3, f3) fmt_fmtty_ebb =
 fun formatting_gen fmt0 fmtty0 -> match formatting_gen with
   | Open_tag (Format (fmt1, str)) ->
+    let Fmt_fmtty_EBB (fmt2, fmtty2) = type_format_gen fmt1 fmtty0 in
+    let Fmt_fmtty_EBB (fmt3, fmtty3) = type_format_gen fmt0 fmtty2 in
+    Fmt_fmtty_EBB (Formatting_gen (Open_tag (Format (fmt2, str)), fmt3), fmtty3)
+  | Open_box (Format (fmt1, str)) ->
     let Fmt_fmtty_EBB (fmt2, fmtty2) = type_format_gen fmt1 fmtty0 in
     let Fmt_fmtty_EBB (fmt3, fmtty3) = type_format_gen fmt0 fmtty2 in
     Fmt_fmtty_EBB (Formatting_gen (Open_tag (Format (fmt2, str)), fmt3), fmtty3)
@@ -1356,11 +1351,11 @@ let rec make_printf : type a b c d e f .
 fun k o acc fmt -> match fmt with
   | Char rest ->
     fun c ->
-      let new_acc = Acc_char (acc, c) in
+      let new_acc = Acc_data_char (acc, c) in
       make_printf k o new_acc rest
   | Caml_char rest ->
     fun c ->
-      let new_acc = Acc_string (acc, format_caml_char c) in
+      let new_acc = Acc_data_string (acc, format_caml_char c) in
       make_printf k o new_acc rest
   | String (pad, rest) ->
     make_string_padding k o acc rest pad (fun str -> str)
@@ -1377,7 +1372,7 @@ fun k o acc fmt -> match fmt with
   | Float (fconv, pad, prec, rest) ->
     make_float_padding_precision k o acc rest pad prec fconv
   | Bool rest ->
-    fun b -> make_printf k o (Acc_string (acc, string_of_bool b)) rest
+    fun b -> make_printf k o (Acc_data_string (acc, string_of_bool b)) rest
   | Alpha rest ->
     fun f x -> make_printf k o (Acc_delay (acc, fun o -> f o x)) rest
   | Theta rest ->
@@ -1396,15 +1391,15 @@ fun k o acc fmt -> match fmt with
     make_printf k o (Acc_flush acc) rest
 
   | String_literal (str, rest) ->
-    make_printf k o (Acc_string (acc, str)) rest
+    make_printf k o (Acc_string_literal (acc, str)) rest
   | Char_literal (chr, rest) ->
-    make_printf k o (Acc_char (acc, chr)) rest
+    make_printf k o (Acc_char_literal (acc, chr)) rest
 
   | Format_arg (_, sub_fmtty, rest) ->
     let ty = string_of_fmtty sub_fmtty in
     (fun str ->
       ignore str;
-      make_printf k o (Acc_string (acc, ty)) rest)
+      make_printf k o (Acc_data_string (acc, ty)) rest)
   | Format_subst (_, fmtty, rest) ->
     fun (Format (fmt, _)) -> make_printf k o acc
       (concat_fmt (recast fmt fmtty) rest)
@@ -1417,7 +1412,7 @@ fun k o acc fmt -> match fmt with
     (* Accepted for backward compatibility. *)
     (* Interpret %l, %n and %L as %u. *)
     fun n ->
-      let new_acc = Acc_string (acc, format_int "%u" n) in
+      let new_acc = Acc_data_string (acc, format_int "%u" n) in
       make_printf k o new_acc rest
   | Ignored_param (ign, rest) ->
     make_ignored_param k o acc ign rest
@@ -1427,6 +1422,10 @@ fun k o acc fmt -> match fmt with
   | Formatting_gen (Open_tag (Format (fmt', _)), rest) ->
     let k' koc kacc =
       make_printf k koc (Acc_formatting_gen (acc, Acc_open_tag kacc)) rest in
+    make_printf k' o End_of_acc fmt'
+  | Formatting_gen (Open_box (Format (fmt', _)), rest) ->
+    let k' koc kacc =
+      make_printf k koc (Acc_formatting_gen (acc, Acc_open_box kacc)) rest in
     make_printf k' o End_of_acc fmt'
 
   | End_of_format ->
@@ -1496,15 +1495,15 @@ and make_string_padding : type x z a b c d e f .
   fun k o acc fmt pad trans -> match pad with
   | No_padding ->
     fun x ->
-      let new_acc = Acc_string (acc, trans x) in
+      let new_acc = Acc_data_string (acc, trans x) in
       make_printf k o new_acc fmt
   | Lit_padding (padty, width) ->
     fun x ->
-      let new_acc = Acc_string (acc, fix_padding padty width (trans x)) in
+      let new_acc = Acc_data_string (acc, fix_padding padty width (trans x)) in
       make_printf k o new_acc fmt
   | Arg_padding padty ->
     fun w x ->
-      let new_acc = Acc_string (acc, fix_padding padty w (trans x)) in
+      let new_acc = Acc_data_string (acc, fix_padding padty w (trans x)) in
       make_printf k o new_acc fmt
 
 (* Fix padding and precision for int, int32, nativeint or int64. *)
@@ -1518,39 +1517,39 @@ and make_int_padding_precision : type x y z a b c d e f .
   | No_padding, No_precision ->
     fun x ->
       let str = trans iconv x in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | No_padding, Lit_precision p ->
     fun x ->
       let str = fix_int_precision p (trans iconv x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | No_padding, Arg_precision ->
     fun p x ->
       let str = fix_int_precision p (trans iconv x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Lit_padding (padty, w), No_precision ->
     fun x ->
       let str = fix_padding padty w (trans iconv x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Lit_padding (padty, w), Lit_precision p ->
     fun x ->
       let str = fix_padding padty w (fix_int_precision p (trans iconv x)) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Lit_padding (padty, w), Arg_precision ->
     fun p x ->
       let str = fix_padding padty w (fix_int_precision p (trans iconv x)) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Arg_padding padty, No_precision ->
     fun w x ->
       let str = fix_padding padty w (trans iconv x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Arg_padding padty, Lit_precision p ->
     fun w x ->
       let str = fix_padding padty w (fix_int_precision p (trans iconv x)) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Arg_padding padty, Arg_precision ->
     fun w p x ->
       let str = fix_padding padty w (fix_int_precision p (trans iconv x)) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
 
 (* Convert a float, fix padding and precision if needed. *)
 (* Take the float argument and one or two extra integer arguments if needed. *)
@@ -1562,41 +1561,41 @@ and make_float_padding_precision : type x y a b c d e f .
   | No_padding, No_precision ->
     fun x ->
       let str = convert_float fconv default_float_precision x in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | No_padding, Lit_precision p ->
     fun x ->
       let str = convert_float fconv p x in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | No_padding, Arg_precision ->
     fun p x ->
       let str = convert_float fconv p x in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Lit_padding (padty, w), No_precision ->
     fun x ->
       let str = convert_float fconv default_float_precision x in
       let str' = fix_padding padty w str in
-      make_printf k o (Acc_string (acc, str')) fmt
+      make_printf k o (Acc_data_string (acc, str')) fmt
   | Lit_padding (padty, w), Lit_precision p ->
     fun x ->
       let str = fix_padding padty w (convert_float fconv p x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Lit_padding (padty, w), Arg_precision ->
     fun p x ->
       let str = fix_padding padty w (convert_float fconv p x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Arg_padding padty, No_precision ->
     fun w x ->
       let str = convert_float fconv default_float_precision x in
       let str' = fix_padding padty w str in
-      make_printf k o (Acc_string (acc, str')) fmt
+      make_printf k o (Acc_data_string (acc, str')) fmt
   | Arg_padding padty, Lit_precision p ->
     fun w x ->
       let str = fix_padding padty w (convert_float fconv p x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
   | Arg_padding padty, Arg_precision ->
     fun w p x ->
       let str = fix_padding padty w (convert_float fconv p x) in
-      make_printf k o (Acc_string (acc, str)) fmt
+      make_printf k o (Acc_data_string (acc, str)) fmt
 
 (******************************************************************************)
                           (* Continuations for make_printf *)
@@ -1607,15 +1606,15 @@ and make_float_padding_precision : type x y a b c d e f .
 let rec output_acc o acc = match acc with
   | Acc_formatting_lit (p, fmting_lit) ->
     let s = string_of_formatting_lit fmting_lit in
-    output_acc o p;
-    output_string o s;
+    output_acc o p; output_string o s;
   | Acc_formatting_gen (p, Acc_open_tag acc') ->
-    output_acc o p;
-    output_string o "@{<";
-    output_acc o acc';
-    output_char o '>';
-  | Acc_string (p, s)        -> output_acc o p; output_string o s
-  | Acc_char (p, c)          -> output_acc o p; output_char o c
+    output_acc o p; output_string o "@{"; output_acc o acc';
+  | Acc_formatting_gen (p, Acc_open_box acc') ->
+    output_acc o p; output_string o "@["; output_acc o acc';
+  | Acc_string_literal (p, s)
+  | Acc_data_string (p, s)   -> output_acc o p; output_string o s
+  | Acc_char_literal (p, c)
+  | Acc_data_char (p, c)     -> output_acc o p; output_char o c
   | Acc_delay (p, f)         -> output_acc o p; f o
   | Acc_flush p              -> output_acc o p; flush o
   | Acc_invalid_arg (p, msg) -> output_acc o p; invalid_arg msg;
@@ -1627,15 +1626,15 @@ let rec output_acc o acc = match acc with
 let rec bufput_acc b acc = match acc with
   | Acc_formatting_lit (p, fmting_lit) ->
     let s = string_of_formatting_lit fmting_lit in
-    bufput_acc b p;
-    Buffer.add_string b s;
+    bufput_acc b p; Buffer.add_string b s;
   | Acc_formatting_gen (p, Acc_open_tag acc') ->
-    bufput_acc b p;
-    Buffer.add_string b "@{<";
-    bufput_acc b acc';
-    Buffer.add_char b '>';
-  | Acc_string (p, s)        -> bufput_acc b p; Buffer.add_string b s
-  | Acc_char (p, c)          -> bufput_acc b p; Buffer.add_char b c
+    bufput_acc b p; Buffer.add_string b "@{"; bufput_acc b acc';
+  | Acc_formatting_gen (p, Acc_open_box acc') ->
+    bufput_acc b p; Buffer.add_string b "@["; bufput_acc b acc';
+  | Acc_string_literal (p, s)
+  | Acc_data_string (p, s)   -> bufput_acc b p; Buffer.add_string b s
+  | Acc_char_literal (p, c)
+  | Acc_data_char (p, c)     -> bufput_acc b p; Buffer.add_char b c
   | Acc_delay (p, f)         -> bufput_acc b p; f b
   | Acc_flush p              -> bufput_acc b p;
   | Acc_invalid_arg (p, msg) -> bufput_acc b p; invalid_arg msg;
@@ -1648,15 +1647,15 @@ let rec bufput_acc b acc = match acc with
 let rec strput_acc b acc = match acc with
   | Acc_formatting_lit (p, fmting_lit) ->
     let s = string_of_formatting_lit fmting_lit in
-    strput_acc b p;
-    Buffer.add_string b s;
+    strput_acc b p; Buffer.add_string b s;
   | Acc_formatting_gen (p, Acc_open_tag acc') ->
-    strput_acc b p;
-    Buffer.add_string b "@{<";
-    strput_acc b acc';
-    Buffer.add_char b '>';
-  | Acc_string (p, s)        -> strput_acc b p; Buffer.add_string b s
-  | Acc_char (p, c)          -> strput_acc b p; Buffer.add_char b c
+    strput_acc b p; Buffer.add_string b "@{"; strput_acc b acc';
+  | Acc_formatting_gen (p, Acc_open_box acc') ->
+    strput_acc b p; Buffer.add_string b "@["; strput_acc b acc';
+  | Acc_string_literal (p, s)
+  | Acc_data_string (p, s)   -> strput_acc b p; Buffer.add_string b s
+  | Acc_char_literal (p, c)
+  | Acc_data_char (p, c)     -> strput_acc b p; Buffer.add_char b c
   | Acc_delay (p, f)         -> strput_acc b p; Buffer.add_string b (f ())
   | Acc_flush p              -> strput_acc b p;
   | Acc_invalid_arg (p, msg) -> strput_acc b p; invalid_arg msg;
@@ -1670,6 +1669,49 @@ let failwith_message (Format (fmt, _)) =
   let buf = Buffer.create 256 in
   let k () acc = strput_acc buf acc; failwith (Buffer.contents buf) in
   make_printf k () End_of_acc fmt
+
+(******************************************************************************)
+                            (* Formatting tools *)
+
+(* Convert a string to an open block description (indent, block_type) *)
+let open_box_of_string str =
+  if str = "" then (0, Pp_box) else
+    let len = String.length str in
+    let invalid_box () = failwith_message "invalid box description %S" str in
+    let rec parse_spaces i =
+      if i = len then i else
+        match str.[i] with
+        | ' ' | '\t' -> parse_spaces (i + 1)
+        | _ -> i
+    and parse_lword i j =
+      if j = len then j else
+        match str.[j] with
+        | 'a' .. 'z' -> parse_lword i (j + 1)
+        | _ -> j
+    and parse_int i j =
+      if j = len then j else
+        match str.[j] with
+        | '0' .. '9' | '-' -> parse_int i (j + 1)
+        | _ -> j in
+    let wstart = parse_spaces 0 in
+    let wend = parse_lword wstart wstart in
+    let box_name = String.sub str wstart (wend - wstart) in
+    let nstart = parse_spaces wend in
+    let nend = parse_int nstart nstart in
+    let indent =
+      if nstart = nend then 0 else
+        try int_of_string (String.sub str nstart (nend - nstart))
+        with Failure _ -> invalid_box () in
+    let exp_end = parse_spaces nend in
+    let () = if exp_end <> len then invalid_box () in
+    let box_type = match box_name with
+      | "" | "b" -> Pp_box
+      | "h"      -> Pp_hbox
+      | "v"      -> Pp_vbox
+      | "hv"     -> Pp_hvbox
+      | "hov"    -> Pp_hovbox
+      | _        -> invalid_box () in
+    (indent, box_type)
 
 (******************************************************************************)
                             (* Parsing tools *)
@@ -1713,7 +1755,7 @@ fun pad prec fmt ->
 
 (* Parse a string representing a format and create a fmt_ebb. *)
 (* Raise an Failure exception in case of invalid format. *)
-let fmt_ebb_of_string str =
+let fmt_ebb_of_string ?legacy_behavior str =
   (* Parameters naming convention:                                    *)
   (*   - lit_start: start of the literal sequence.                    *)
   (*   - str_ind: current index in the string.                        *)
@@ -1729,6 +1771,22 @@ let fmt_ebb_of_string str =
   (*   - prec: precision of the current micro-format.                 *)
   (*   - symb: char representing the conversion ('c', 's', 'd', ...). *)
   (*   - char_set: set of characters as bitmap (see scanf %[...]).    *)
+
+  let legacy_behavior = match legacy_behavior with
+    | Some flag -> flag
+    | None -> true
+  (** When this flag is enabled, the format parser tries to behave as
+      the <4.02 implementations, in particular it ignores most benine
+      nonsensical format. When the flag is disabled, it will reject any
+      format that is not accepted by the specification.
+
+      A typical example would be "%+ d": specifying both '+' (if the
+      number is positive, pad with a '+' to get the same width as
+      negative numbres) and ' ' (if the number is positive, pad with
+      a space) does not make sense, but the legacy (< 4.02)
+      implementation was happy to just ignore the space.
+  *)
+  in
 
   (* Raise a Failure with a friendly error message. *)
   (* Used when the end of the format (or the current sub-format) was encoutered
@@ -1776,6 +1834,7 @@ let fmt_ebb_of_string str =
 
   and parse_ign : type e f . int -> int -> int -> (_, _, e, f) fmt_ebb =
   fun pct_ind str_ind end_ind ->
+    if str_ind = end_ind then unexpected_end_of_format end_ind;
     match str.[str_ind] with
       | '_' -> parse_flags pct_ind (str_ind+1) end_ind true
       | _ -> parse_flags pct_ind str_ind end_ind false
@@ -1864,6 +1923,7 @@ let fmt_ebb_of_string str =
     if str_ind = end_ind then unexpected_end_of_format end_ind;
     let parse_literal str_ind =
       let new_ind, prec = parse_positive str_ind end_ind 0 in
+      if new_ind = end_ind then unexpected_end_of_format end_ind;
       parse_conversion pct_ind (new_ind + 1) end_ind plus sharp space ign pad
         (Lit_precision prec) str.[new_ind] in
     match str.[str_ind] with
@@ -2154,12 +2214,12 @@ let fmt_ebb_of_string str =
     else
       match str.[str_ind] with
       | '[' ->
-        parse_open_box (str_ind + 1) end_ind
+        parse_tag false (str_ind + 1) end_ind
       | ']' ->
         let Fmt_EBB fmt_rest = parse (str_ind + 1) end_ind in
         Fmt_EBB (Formatting_lit (Close_box, fmt_rest))
       | '{' ->
-        parse_open_tag (str_ind + 1) end_ind
+        parse_tag true (str_ind + 1) end_ind
       | '}' ->
         let Fmt_EBB fmt_rest = parse (str_ind + 1) end_ind in
         Fmt_EBB (Formatting_lit (Close_tag, fmt_rest))
@@ -2195,66 +2255,39 @@ let fmt_ebb_of_string str =
         let Fmt_EBB fmt_rest = parse (str_ind + 1) end_ind in
         Fmt_EBB (Formatting_lit (Scan_indic c, fmt_rest))
 
-  (* Try to read the optionnal <...> after "@[". *)
-  and parse_open_box : type e f . int -> int -> (_, _, e, f) fmt_ebb =
-  fun str_ind end_ind ->
-    let next_ind, box_ty, indent =
-      try
-        if str_ind = end_ind then raise Not_found;
-        match str.[str_ind] with
-        | '<' -> (
-          let str_ind_1 = parse_spaces (str_ind + 1) end_ind in
-          let i = ref str_ind_1 in
-          while !i < end_ind && str.[!i] >= 'a' && str.[!i] <= 'z' do
-            incr i;
-          done;
-          let box_ty = match String.sub str str_ind_1 (!i - str_ind_1) with
-            | ""    -> Pp_box
-            | "b"   -> Pp_box
-            | "h"   -> Pp_hbox
-            | "v"   -> Pp_vbox
-            | "hv"  -> Pp_hvbox
-            | "hov" -> Pp_hovbox
-            | _     -> raise Not_found
-          in
-          let str_ind_3 = parse_spaces !i end_ind in
-          match str.[str_ind_3] with
-          | '0' .. '9' | '-' ->
-            let str_ind_4, indent = parse_integer str_ind_3 end_ind in
-            let str_ind_5 = parse_spaces str_ind_4 end_ind in
-            if str.[str_ind_5] <> '>' then raise Not_found;
-            str_ind_5 + 1, box_ty, indent
-          | '>' ->
-            str_ind_3 + 1, box_ty, 0
-          | _ ->
-            raise Not_found
-        )
-        | _ -> raise Not_found
-      with Not_found | Failure _ ->
-        str_ind, Pp_box, 0
-    in
-    let s = String.sub str (str_ind - 2) (next_ind - str_ind + 2) in
-    let Fmt_EBB fmt_rest = parse next_ind end_ind in
-    Fmt_EBB (Formatting_lit (Open_box (s, box_ty, indent), fmt_rest))
+  and check_open_box : type a b c d e f . (a, b, c, d, e, f) fmt -> unit =
+  fun fmt -> match fmt with
+    | String_literal (str, End_of_format) -> (
+      try ignore (open_box_of_string str) with Failure _ ->
+        ((* Emit warning: invalid open box *))
+    )
+    | _ -> ()
 
-  (* Try to read the optionnal <name> after "@{". *)
-  and parse_open_tag : type e f . int -> int -> (_, _, e, f) fmt_ebb =
-  fun str_ind end_ind ->
+  (* Try to read the optionnal <name> after "@{" or "@[". *)
+  and parse_tag : type e f . bool -> int -> int -> (_, _, e, f) fmt_ebb =
+  fun is_open_tag str_ind end_ind ->
     try
       if str_ind = end_ind then raise Not_found;
       match str.[str_ind] with
       | '<' ->
         let ind = String.index_from str (str_ind + 1) '>' in
         if ind >= end_ind then raise Not_found;
-        let as_str = String.sub str (str_ind + 1) (ind - str_ind - 1) in
+        let sub_str = String.sub str str_ind (ind - str_ind + 1) in
         let Fmt_EBB fmt_rest = parse (ind + 1) end_ind in
-        let Fmt_EBB sub_fmt = parse (str_ind + 1) ind in
-        Fmt_EBB (Formatting_gen (Open_tag (Format (sub_fmt, as_str)), fmt_rest))
+        let Fmt_EBB sub_fmt = parse str_ind (ind + 1) in
+        let sub_format = Format (sub_fmt, sub_str) in
+        let formatting = if is_open_tag then Open_tag sub_format else (
+          check_open_box sub_fmt;
+          Open_box sub_format) in
+        Fmt_EBB (Formatting_gen (formatting, fmt_rest))
       | _ ->
         raise Not_found
     with Not_found ->
       let Fmt_EBB fmt_rest = parse str_ind end_ind in
-      Fmt_EBB (Formatting_gen (Open_tag (Format (End_of_format, "")), fmt_rest))
+      let sub_format = Format (End_of_format, "") in
+      let formatting =
+        if is_open_tag then Open_tag sub_format else Open_box sub_format in
+      Fmt_EBB (Formatting_gen (formatting, fmt_rest))
 
   (* Try to read the optionnal <width offset> after "@;". *)
   and parse_good_break : type e f . int -> int -> (_, _, e, f) fmt_ebb =
@@ -2388,6 +2421,7 @@ let fmt_ebb_of_string str =
         parse_char_set_content (str_ind + 1) end_ind
     in
     let str_ind, reverse =
+      if str_ind = end_ind then unexpected_end_of_format end_ind;
       match str.[str_ind] with
         | '^' -> str_ind + 1, true
         | _ -> str_ind, false in
