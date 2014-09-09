@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 4.02.0+dev10-2014-05-20+sml_let+indent
+=======
+4.02.0
+>>>>>>> 4.02.0
 
 # The version string is the first line of this file.
 # It must be in the format described in stdlib/sys.mli
