@@ -32,14 +32,15 @@ let interface ppf sourcefile outputprefix =
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
 
-  (* Save the parsed result as xxx.mli1 *)
+  (* HACK: Save the parsed result as xxx.mli1 *)
   let mli1file = outputprefix ^ ".mli1" in
   let oc1 = open_out_bin mli1file in
   let ppf = Format.formatter_of_out_channel oc1 in
   Format.fprintf ppf "%a@." Pprintast.signature ast;
   close_out oc1;
+  (* HACK END *)
 
-  let do_type ast = 
+  let do_type ast = (* We type twice *)
 
   let tsg = Typemod.type_interface initial_env ast in
   if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -55,6 +56,7 @@ let interface ppf sourcefile outputprefix =
 
   in
 
+  (* HACK: typing + untype + retype *)
   let tsg, sg = do_type ast in
   (* Untype then save it as xxx.mli2 *)
   let ast = Untypeast.untype_signature tsg in
@@ -78,6 +80,7 @@ let interface ppf sourcefile outputprefix =
   let initial_env = Compmisc.initial_env () in
 
   let tsg, sg = do_type ast in
+  (* HACK END *)
     
   if not !Clflags.print_types then begin
     let sg = Env.save_signature sg modulename (outputprefix ^ ".cmi") in
@@ -122,8 +125,8 @@ let implementation ppf sourcefile outputprefix =
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ print_if ppf Clflags.dump_source Pprintast.structure
 
+      (* HACK: Save the parsed result as xxx.ml1 *)
       ++ (fun ptree -> 
-        (* Save the parsed result as xxx.ml1 *)
         let ml1file = outputprefix ^ ".ml1" in
         let oc1 = open_out_bin ml1file in
         let ppf = Format.formatter_of_out_channel oc1 in
@@ -131,11 +134,13 @@ let implementation ppf sourcefile outputprefix =
         close_out oc1;
         ptree
       )
+      (* HACK END *)
 
       ++ Typemod.type_implementation sourcefile outputprefix modulename env
       ++ print_if ppf Clflags.dump_typedtree
                   Printtyped.implementation_with_coercion
 
+      (* HACK: untype + retype *)
       ++ (fun (str, _) -> 
         (* Untype then save it as xxx.ml2 *)
         let ptree =  Untypeast.untype_structure str in
@@ -160,6 +165,7 @@ let implementation ppf sourcefile outputprefix =
         Env.set_unit_name modulename;
         let env = Compmisc.initial_env () in
         Typemod.type_implementation sourcefile outputprefix modulename env ptree)
+        (* HACK END *)
 
       ++ Translmod.transl_implementation modulename
       ++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda

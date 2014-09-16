@@ -825,18 +825,6 @@ class printer  ()= object(self:'self)
           | Pexp_poly (e, Some ct) ->
               pp f "%s :@;%a=@;%a"
                 s.txt (self#core_type) ct self#expression e
-(* CR jfuruse: my code
-          | Pexp_poly (e,None) ->
-              self#binding f {pvb_pat={ppat_desc=Ppat_var s;ppat_loc=Location.none;ppat_attributes=[]};
-                              pvb_expr=e;
-                              pvb_attributes=[];
-                              pvb_loc=Location.none;
-                             }
-          | _ ->
-              pp f "%s =@;%a"
-                s.txt
-                self#expression e) e
-*)
           | Pexp_poly (e,None) -> bind e
           | _ -> bind e) e
           self#item_attributes x.pcf_attributes

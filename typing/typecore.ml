@@ -1190,18 +1190,11 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
       let extra = (Tpat_constraint cty, loc, sp.ppat_attributes) in
       if separate then
         match p.pat_desc with
-          (* Changing [(x : t)] to [((_ : as x) : t)] changes the warning if x is not used,
-             and this is problematic at retyping untyped stdlib/parsing.ml. We add a special attribute [@untypeast] with the original [p]
-             so that untypeast can recover [p].
-          *)
           Tpat_var (id,s) ->
             {p with pat_type = ty;
              pat_desc = Tpat_alias
                ({p with pat_desc = Tpat_any; pat_attributes = []}, id,s);
              pat_extra = [extra];
-             pat_attributes = 
-               ({txt="untypeast"; loc= Location.none}, PPat (sp, None)) 
-               :: p.pat_attributes
             }
         | _ -> {p with pat_type = ty;
                 pat_extra = extra :: p.pat_extra}
