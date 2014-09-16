@@ -719,7 +719,7 @@ partialclean::
 	rm -f tools/*.cm* tools/*.$(O) tools/*.$(S)
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp driver toplevel; \
+	(for d in utils parsing typing bytecomp asmcomp driver toplevel tools; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 
