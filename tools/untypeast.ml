@@ -30,11 +30,9 @@ Some notes:
 
 *)
 
-let string_is_prefix ?(from=0) sub str =
+let string_is_prefix sub str =
   let sublen = String.length sub in
-  try 
-    String.sub str from sublen = sub
-  with _ -> false
+  String.length str >= sublen && String.sub str 0 sublen = sub
 
 let option f = function None -> None | Some e -> Some (f e)
 
@@ -315,7 +313,7 @@ and untype_expression exp =
             in
             { uc with pc_lhs = pat })
           exn_cases
-      in 
+      in
       Pexp_match (untype_expression exp, merged_cases)
     | Texp_try (exp, cases) ->
         Pexp_try (untype_expression exp, untype_cases cases)
@@ -614,7 +612,7 @@ and untype_core_type ct =
 
 and untype_class_structure cs =
   let rec remove_self = function
-    | { pat_desc = Tpat_alias (p, id, s) } when string_is_prefix "selfpat-" id.Ident.name ->
+    | { pat_desc = Tpat_alias (p, id, _s) } when string_is_prefix "selfpat-" id.Ident.name ->
         remove_self p
     | p -> p
   in

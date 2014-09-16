@@ -35,7 +35,8 @@ type mapper = {
                            -> constructor_declaration;
   expr: mapper -> expression -> expression;
   extension: mapper -> extension -> extension;
-  extension_constructor: mapper -> extension_constructor -> extension_constructor;
+  extension_constructor: mapper -> extension_constructor
+                         -> extension_constructor;
   include_declaration: mapper -> include_declaration -> include_declaration;
   include_description: mapper -> include_description -> include_description;
   label_declaration: mapper -> label_declaration -> label_declaration;
@@ -70,6 +71,16 @@ val default_mapper: mapper
 (** A default mapper, which implements a "deep identity" mapping. *)
 
 (** {2 Apply mappers to compilation units} *)
+
+val tool_name: unit -> string
+(** Can be used within a ppx preprocessor to know which tool is
+    calling it ["ocamlc"], ["ocamlopt"], ["ocamldoc"], ["ocamldep"],
+    ["ocaml"], ...  Some global variables that reflect command-line
+    options are automatically synchronized between the calling tool
+    and the ppx preprocessor: [Clflags.include_dirs],
+    [Config.load_path], [Clflags.open_modules], [Clflags.for_package],
+    [Clflags.debug]. *)
+
 
 val apply: source:string -> target:string -> mapper -> unit
 (** Apply a mapper (parametrized by the unit name) to a dumped
@@ -120,3 +131,11 @@ val attribute_of_warning: Location.t -> string -> attribute
 (** Encode a warning message into an 'ocaml.ppwarning' attribute which can be
     inserted in a generated Parsetree.  The compiler will be
     responsible for reporting the warning. *)
+
+(** {2 Helper functions to call external mappers} *)
+
+val ppx_context: tool_name:string -> unit -> Parsetree.attribute
+(** Extract information from the current environment and encode it
+    into an attribute an attribute which can be prepended to
+    signature/structure items of an AST to pass the information to an
+    external processor. *)
