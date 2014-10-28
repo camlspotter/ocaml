@@ -1391,7 +1391,7 @@ match_case:
             let payload = 
               PStr (List.rev_map f rev_guards)
             in
-            let ext = (mkloc "pattern_guard" loc, payload ) in
+            let ext = (mkloc "guard" loc, payload ) in
             Exp.case $1 ~guard:(Exp.extension ~loc ext) $4
       }
 ;
