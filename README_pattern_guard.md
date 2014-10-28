@@ -21,6 +21,31 @@ They are tested in their appearence order. The bound variables
 in pattern guards can be used in the later pattern guards and boolean guards,
 in addition to the case action.
 
+Syntax in Pure OCaml + extension
+-------------------------------------
+
+The pattern guards can be also written with OCaml's extension point
+`[%guard <guards>]` and therefore do not require the special syntax explained above.
+
+In `<guards`>, 
+
+* `e` for `when e`
+* `let p = e` for `with p <- e`
+
+For example,
+
+```
+match e with
+| (x, y) with w <- x + y when w = 5 -> prerr_endline "3"
+```
+
+is written as
+
+```
+match e with
+| (x, y) when [%guard let w = x + y;; w = 5] -> prerr_endline "3"
+```
+
 Performance
 -------------------------------------
 

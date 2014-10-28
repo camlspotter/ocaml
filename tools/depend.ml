@@ -201,11 +201,7 @@ and add_cases bv cases =
 
 and add_case bv {pc_lhs; pc_guard; pc_rhs} =
   let bv = add_pattern bv pc_lhs in
-  List.iter (function 
-    | Pguard_when e -> add_expr bv e
-    | Pguard_with (p, e) -> 
-        let bv = add_pattern bv p in
-        add_expr bv e) pc_guard;
+  add_opt add_expr bv pc_guard;
   add_expr bv pc_rhs
 
 and add_bindings recf bv pel =

@@ -13,6 +13,11 @@ module LI = struct
 end
 
 (*
+In Pure OCaml with extension
+[%pattern_guard
+  e;;              for when
+  let p = e;;      for  with p <- e
+]
 
 a ::= -> e
     | when e ; a
@@ -36,9 +41,7 @@ let res = ref (Obj.magic 0 : 'a) in
 
 *)
 
-(* CR jfuruse:
-
-   The above desugaring use a reference, therefore it is not thread-safe.
+(* The above desugaring use a reference, therefore it is not thread-safe.
    The following is a thread-safe version.
 
 desugar (-> e) = 
@@ -66,11 +69,18 @@ function cases =>
     | M.ExitWith v -> v
 *)
 
+(* CR jfuruse: do we really need to care about the thread safety?!?! *)
+
+   
 let need_desugar case =
   match case.pc_guard with
-  | [] -> false
-  | [Pguard_when _] -> false
-  | _ -> true
+  | Some { pexp_desc = Pexp_extension ({txt="guard"}, PStr sitems)} -> 
+      Some (List.map (function
+        | { pstr_desc= Pstr_eval (e, _) } -> `When e
+        | { pstr_desc= Pstr_value (_, [vb])} -> `With (vb.pvb_pat, vb.pvb_expr)
+        | _ -> assert false)
+              sitems)
+  | _ -> None
   
 let ph = "$ph"
 let exp_ph = ident (txt @@ LI.(!ph))
@@ -103,35 +113,37 @@ let desugar_guard tv e_action gs =
             construct (txt @@ LI.(!phm * "ExitWith")) 
               (Some (apply_obj_magic @@ constraint_ e_action tv))
           ]
-    | Pguard_when e :: gs ->
+    | `When e :: gs ->
         apply (ident (txt @@ LI.(!"Pervasives" * "&&")))
           [ "", e;
             "", desugar gs ]
-    | Pguard_with (p, e) :: gs ->
+    | `With (p, e) :: gs ->
         match_ e 
           [ { pc_lhs = p;
-              pc_guard = [Pguard_when (exp_bool true)]; (* stupid but we need it to prevent the following "any" case does not produce Warning 11 *)
+              pc_guard = Some (exp_bool true); (* stupid but we need it to prevent the following "any" case does not produce Warning 11 *)
               pc_rhs = desugar gs }
           ; { pc_lhs = Pat.any ();
-              pc_guard = [];
+              pc_guard = None;
               pc_rhs = exp_bool false } 
           ]
   in
   desugar gs
 
-let desugar_case tv case =
-  if not @@ need_desugar case then case
-  else 
-    { case with
-      pc_guard = [ Pguard_when (desugar_guard tv case.pc_rhs case.pc_guard) ];
-      pc_rhs = assert_ (exp_bool false)
-    }
+let desugar_case tv case guards_opt =
+  match guards_opt with
+  | None -> case
+  | Some guards ->
+      { case with
+        pc_guard = Some (desugar_guard tv case.pc_rhs guards);
+        pc_rhs = assert_ (exp_bool false)
+      }
 
 let desugar_cases build e cases =
-  if not @@ List.exists need_desugar cases then None (* no need *)
+  let guards_opt = List.map need_desugar cases in
+  if List.for_all (fun x -> x = None) guards_opt then None (* no need *)
   else 
     let tv = tvar () in
-    let cases = List.map (desugar_case tv) cases in
+    let cases = List.map2 (desugar_case tv) cases guards_opt in
     let e =   
       letmodule (txt phm) 
         (Mod.structure [Str.exception_ { pext_name = txt "ExitWith";
@@ -140,7 +152,7 @@ let desugar_cases build e cases =
                                          pext_attributes = [] }])
         (try_ (build e cases)
            [ { pc_lhs = Pat.construct (txt phm_ExitWith) @@ Some (Pat.var (txt "v"));
-               pc_guard = [];
+               pc_guard = None;
                pc_rhs = apply_obj_magic @@ ident (txt @@ LI.(!"v")) } ])
     in
     Some e
