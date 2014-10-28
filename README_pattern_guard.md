@@ -75,7 +75,7 @@ with
 | PG.WithExit v -> (Obj.magic v : 'a)
 ```
 
-Using a reference might have better performance but it would sacrifice the thread safety. The best solution is to implement pattern guards not as a syntax sugar but directly in the pattern match compiler.
+The best solution is to implement pattern guards not as a syntax sugar but directly in the pattern match compiler.
 
 Test sample
 ---------------------------
