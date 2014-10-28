@@ -1032,10 +1032,11 @@ fun k fmt -> match fmt with
 
   | Scan_char_set (_, _, rest)       -> take_format_readers k rest
   | Scan_get_counter (_, rest)       -> take_format_readers k rest
+  | Scan_next_char rest              -> take_format_readers k rest
 
   | Formatting_lit (_, rest)         -> take_format_readers k rest
   | Formatting_gen (Open_tag (Format (fmt, _)), rest) -> take_format_readers k (concat_fmt fmt rest)
-
+  | Formatting_gen (Open_box (Format (fmt, _)), rest) -> take_format_readers k (concat_fmt fmt rest)
 
   | Format_arg (_, _, rest)          -> take_format_readers k rest
   | Format_subst (_, fmtty, rest)    ->
@@ -1096,6 +1097,7 @@ fun k ign fmt -> match ign with
   | Ignored_format_subst (_, fmtty) -> take_fmtty_format_readers k fmtty fmt
   | Ignored_scan_char_set _         -> take_format_readers k fmt
   | Ignored_scan_get_counter _      -> take_format_readers k fmt
+  | Ignored_scan_next_char          -> take_format_readers k fmt
 
 (******************************************************************************)
                           (* Generic scanning *)
@@ -1225,13 +1227,19 @@ fun ib fmt readers -> match fmt with
   | Scan_get_counter (counter, rest) ->
     let count = get_counter ib counter in
     Cons (count, make_scanf ib rest readers)
+  | Scan_next_char rest ->
+    let c = Scanning.checked_peek_char ib in
+    Cons (c, make_scanf ib rest readers)
 
   | Formatting_lit (formatting_lit, rest) ->
     String.iter (check_char ib) (string_of_formatting_lit formatting_lit);
     make_scanf ib rest readers
   | Formatting_gen (Open_tag (Format (fmt', _)), rest) ->
-    check_char ib '@'; check_char ib '{'; check_char ib '<';
-    make_scanf ib (concat_fmt fmt' (Char_literal ('<', rest))) readers
+    check_char ib '@'; check_char ib '{';
+    make_scanf ib (concat_fmt fmt' rest) readers
+  | Formatting_gen (Open_box (Format (fmt', _)), rest) ->
+    check_char ib '@'; check_char ib '[';
+    make_scanf ib (concat_fmt fmt' rest) readers
 
   | Ignored_param (ign, rest) ->
     let Param_format_EBB fmt' = param_format_of_ignored_format ign rest in
