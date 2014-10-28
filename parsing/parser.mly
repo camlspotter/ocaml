@@ -1379,15 +1379,29 @@ match_case:
     pattern MINUSGREATER seq_expr
       { Exp.case $1 $3 }
   | pattern guards MINUSGREATER seq_expr
-      { Exp.case $1 ~guard:(List.rev $2) $4 }
+      { match $2 with
+        | [] -> assert false
+        | [`When e] -> Exp.case $1 ~guard:e $4
+        | rev_guards ->
+            let loc = rhs_loc 2 in
+            let f = function
+              | `When e -> Str.eval ~loc:e.pexp_loc e
+              | `With (p, e) -> Str.value ~loc:p.ppat_loc Nonrecursive [Vb.mk ~loc:p.ppat_loc p e] 
+            in
+            let payload = 
+              PStr (List.rev_map f rev_guards)
+            in
+            let ext = (mkloc "pattern_guard" loc, payload ) in
+            Exp.case $1 ~guard:(Exp.extension ~loc ext) $4
+      }
 ;
 guards:
   | guard { [$1] }
   | guards guard { $2 :: $1 }
 ;
 guard:
-  | WHEN seq_expr { Pguard_when $2 }
-  | WITH pattern LESSMINUS expr { Pguard_with ($2, $4) }
+  | WHEN seq_expr { `When $2 }
+  | WITH pattern LESSMINUS expr { `With ($2, $4) }
 ;
 fun_def:
     MINUSGREATER seq_expr                       { $2 }
