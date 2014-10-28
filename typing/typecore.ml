@@ -3473,13 +3473,13 @@ and desugar_type_construct ?in_function env loc lid sarg ty_expected attrs curri
           | _ -> mkpat (Ppat_tuple pats)
         in
         mkexp_attrs (Pexp_function [ { pc_lhs = pat; 
-                                       pc_guard = [];
+                                       pc_guard = None;
                                        pc_rhs = body } ])
           attrs
     | true -> (* (A) ==> fun x y z -> A(x,y,z) *)
         List.fold_right (fun p st ->
           mkexp_attrs (Pexp_function [ { pc_lhs = p;
-                                         pc_guard = [];
+                                         pc_guard = None;
                                          pc_rhs = st } ])
             attrs
         ) pats body
