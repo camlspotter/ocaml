@@ -85,7 +85,7 @@ let need_desugar case =
 let ph = "$ph"
 let exp_ph = ident (txt @@ LI.(!ph))
 let phx = "$phx"
-let exp_phx = ident (txt @@ LI.(!ph))
+let exp_phx = ident (txt @@ LI.(!phx))
 let phm = "$PH"
 let phm_ExitWith = LI.(!phm * "ExitWith")
 
@@ -171,8 +171,8 @@ let desugar_expr exp =
       | Some exp -> fun_ "" None (Pat.var (txt phx)) exp
       end
   | Pexp_try (e, cases) ->
-      begin match desugar_cases (build_help try_) exp_phx cases with
+      begin match desugar_cases (build_help try_) e cases with
       | None -> exp
-      | Some exp -> fun_ "" None (Pat.var (txt phx)) exp
+      | Some exp -> exp
       end
   | _ -> exp
