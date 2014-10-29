@@ -2780,16 +2780,7 @@ and type_format loc str env =
       let mk_int n = mk_cst (Const_int n)
       and mk_string str = mk_cst (Const_string (str, None))
       and mk_char chr = mk_cst (Const_char chr) in
-      let mk_block_type bty = match bty with
-        | Pp_hbox   -> mk_constr "Pp_hbox"   []
-        | Pp_vbox   -> mk_constr "Pp_vbox"   []
-        | Pp_hvbox  -> mk_constr "Pp_hvbox"  []
-        | Pp_hovbox -> mk_constr "Pp_hovbox" []
-        | Pp_box    -> mk_constr "Pp_box"    []
-        | Pp_fits   -> mk_constr "Pp_fits"   [] in
       let rec mk_formatting_lit fmting = match fmting with
-        | Open_box (org, bty, idt) ->
-          mk_constr "Open_box" [ mk_string org; mk_block_type bty; mk_int idt ]
         | Close_box ->
           mk_constr "Close_box" []
         | Close_tag ->
@@ -2815,6 +2806,8 @@ and type_format loc str env =
         fun fmting -> match fmting with
         | Open_tag (Format (fmt', str')) ->
           mk_constr "Open_tag" [ mk_format fmt' str' ]
+        | Open_box (Format (fmt', str')) ->
+          mk_constr "Open_box" [ mk_format fmt' str' ]
       and mk_format : type a b c d e f .
           (a, b, c, d, e, f) CamlinternalFormatBasics.fmt -> string ->
           Parsetree.expression = fun fmt str ->
@@ -2918,6 +2911,8 @@ and type_format loc str env =
           mk_constr "Ignored_scan_get_counter" [
             mk_counter counter
           ]
+        | Ignored_scan_next_char ->
+          mk_constr "Ignored_scan_next_char" []
       and mk_padding : type x y . (x, y) padding -> Parsetree.expression =
       fun pad -> match pad with
         | No_padding         -> mk_constr "No_padding" []
@@ -2983,12 +2978,15 @@ and type_format loc str env =
             mk_int_opt width_opt; mk_string char_set; mk_fmt rest ]
         | Scan_get_counter (cnt, rest) ->
           mk_constr "Scan_get_counter" [ mk_counter cnt; mk_fmt rest ]
+        | Scan_next_char rest ->
+          mk_constr "Scan_next_char" [ mk_fmt rest ]
         | Ignored_param (ign, rest) ->
           mk_constr "Ignored_param" [ mk_ignored ign; mk_fmt rest ]
         | End_of_format ->
           mk_constr "End_of_format" []
       in
-      let Fmt_EBB fmt = fmt_ebb_of_string str in
+      let legacy_behavior = not !Clflags.strict_formats in
+      let Fmt_EBB fmt = fmt_ebb_of_string ~legacy_behavior str in
       mk_constr "Format" [ mk_fmt fmt; mk_string str ]
     ))
   with Failure msg ->

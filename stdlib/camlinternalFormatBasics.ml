@@ -211,7 +211,6 @@ type block_type =
 
 (* Formatting element used by the Format pretty-printter. *)
 type formatting_lit =
-  | Open_box of string * block_type * int               (* @[   *)
   | Close_box                                           (* @]   *)
   | Close_tag                                           (* @}   *)
   | Break of string * int * int          (* @, | @  | @; | @;<> *)
@@ -226,6 +225,8 @@ type formatting_lit =
 (* Formatting element used by the Format pretty-printter. *)
 type ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen =
   | Open_tag : ('a, 'b, 'c, 'd, 'e, 'f) format6 ->      (* @{   *)
+    ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen
+  | Open_box : ('a, 'b, 'c, 'd, 'e, 'f) format6 ->      (* @[   *)
     ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen
 
 (***)
@@ -409,6 +410,9 @@ and ('a, 'b, 'c, 'd, 'e, 'f) fmt =
   | Scan_get_counter :                                       (* %[nlNL] *)
       counter * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
         (int -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Scan_next_char :                                         (* %0c *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+      (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
   | Ignored_param :                                          (* %_ *)
       ('a, 'b, 'c, 'd, 'y, 'x) ignored * ('x, 'b, 'c, 'y, 'e, 'f) fmt ->
         ('a, 'b, 'c, 'd, 'e, 'f) fmt
@@ -452,6 +456,8 @@ and ('a, 'b, 'c, 'd, 'e, 'f) ignored =
       pad_option * char_set -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
   | Ignored_scan_get_counter :                               (* %_[nlNL] *)
       counter -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_scan_next_char :                                 (* %_0c *)
+      ('a, 'b, 'c, 'd, 'd, 'a) ignored
 
 and ('a, 'b, 'c, 'd, 'e, 'f) format6 =
   Format of ('a, 'b, 'c, 'd, 'e, 'f) fmt * string
@@ -601,6 +607,8 @@ fun fmt1 fmt2 -> match fmt1 with
     Scan_char_set (width_opt, char_set, concat_fmt rest fmt2)
   | Scan_get_counter (counter, rest) ->
     Scan_get_counter (counter, concat_fmt rest fmt2)
+  | Scan_next_char (rest) ->
+    Scan_next_char (concat_fmt rest fmt2)
   | Ignored_param (ign, rest) ->
     Ignored_param (ign, concat_fmt rest fmt2)
 
