@@ -1882,6 +1882,50 @@ and type_expect_ ?in_function env sexp ty_expected =
   | Pexp_function caselist ->
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
+
+  (* (F ..) 1 2 3 ==> ([%fun] F) 1 2 3 
+     
+     We here to try contract applications as possible...
+  *)
+  | Pexp_apply ( { pexp_desc = Pexp_apply(x,xs);
+                   pexp_attributes = [] }, ys ) ->
+
+      type_expect_ ?in_function env 
+        { sexp with pexp_desc = Pexp_apply (x, xs @ ys) }
+        ty_expected
+
+  | Pexp_apply({ pexp_desc = Pexp_extension({txt="fun"; loc=loc'}, _) }, 
+               ("", ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) ->
+      (* [%fun] C a b    i.e.   (C..) a b *)
+      type_construct_curried ?in_function env loc ty_expected 
+        sexp.pexp_attributes
+        con loc' xs
+
+  | Pexp_apply({ pexp_desc = Pexp_extension({txt="fun"; loc=loc'}, _) }, 
+               ("", ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) ->
+      (* [%fun] `F a b    i.e.    (`F..) a b *)
+      let open Ast_helper in
+      begin match xs with
+      | ("",x)::xs -> (* (`A..) a b => (`A a) b *)
+          let sexp = Exp.apply ~loc { e with pexp_desc = Pexp_variant (l, Some x) } xs in
+          type_expect_ ?in_function env sexp ty_expected
+      | [] -> (* (`A..) => fun x -> `A x *)
+          let pat = Pat.var ~loc:loc' {txt="x"; loc=loc'} in
+          let var = Exp.ident ~loc:loc' {txt=Longident.Lident "x"; loc=loc'} in
+          let sexp = Ast_helper.Exp.fun_ ~loc "" None pat 
+            { e with pexp_desc = Pexp_variant (l, Some var) }
+          in
+          type_expect_ ?in_function env sexp ty_expected
+      | _ -> assert false (* CR jfuruse: TODO *)
+      end
+
+  (* 
+     [(Some) e]  is translated to  [(fun x -> Some x) e]
+     Optimization of this to [Some e] in this phase is not worth the effort.
+
+  | Pexp_apply(({ pexp_desc = Pexp_construct (lid, None); } as con), xs) ->
+  *)  
+
   | Pexp_apply(sfunct, sargs) ->
       if sargs = [] then
         Syntaxerr.ill_formed_ast loc "Function application with no argument.";
@@ -1969,13 +2013,13 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+  | Pexp_construct(lid, None) -> 
+      (* None  or   (Some) *)
+      (* type_construct env loc lid sarg ty_expected sexp.pexp_attributes *)
+      type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid
   | Pexp_construct(lid, sarg) -> 
-      (* with (Some) and (Constr..) support *)
-      type_construct' ?in_function env loc lid sarg ty_expected sexp.pexp_attributes
-(*
-  | Pexp_construct(lid, sarg) ->
+      (* Some e *)
       type_construct env loc lid sarg ty_expected sexp.pexp_attributes
-*)
   | Pexp_variant(l, sarg) ->
       (* Keep sharing *)
       let ty_expected0 = instance env ty_expected in
@@ -2117,6 +2161,16 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_type = instance env ty_expected;
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+
+  | Pexp_field( { pexp_desc= Pexp_extension ({txt="fun"; loc=loc'}, _) }, lid) -> (* [%fun].label  =>  fun x -> x.label *)
+      let open Ast_helper in
+      let p = Pat.var ~loc:loc' {txt="x"; loc=loc'} in
+      let e = Exp.ident ~loc:loc' {txt=Longident.Lident "x"; loc=loc'} in
+      let sexp = 
+        Exp.fun_  ~loc:loc' "" None p { sexp with pexp_desc = Pexp_field (e, lid) }
+      in
+      type_expect_ ?in_function env sexp ty_expected
+
   | Pexp_field(srecord, lid) ->
       let (record, label, _) = type_label_access env loc srecord lid in
       let (_, ty_arg, ty_res) = instance_label false label in
@@ -2325,6 +2379,16 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_extra = (Texp_coerce (cty, cty'), loc, sexp.pexp_attributes) ::
                        arg.exp_extra;
       }
+
+  | Pexp_send( { pexp_desc= Pexp_extension ({txt="fun"; loc=loc'}, _) }, met) -> (* [%fun]#label  =>  fun x -> x#label *)
+      let open Ast_helper in
+      let p = Pat.var ~loc:loc' {txt="x"; loc=loc'} in
+      let e = Exp.ident ~loc:loc' {txt=Longident.Lident "x"; loc=loc'} in
+      let sexp = 
+        Exp.fun_  ~loc:loc' "" None p { sexp with pexp_desc = Pexp_send (e, met) }
+      in
+      type_expect_ ?in_function env sexp ty_expected
+
   | Pexp_send (e, met) ->
       if !Clflags.principal then begin_def ();
       let obj = type_exp env e in
@@ -3379,18 +3443,13 @@ and type_construct env loc lid sarg ty_expected attrs =
   { texp with
     exp_desc = Texp_construct(lid, constr, args) }
 
-and type_construct' ?in_function env loc lid sarg ty_expected attrs =
-  (* (Constr..) support *)
-  let curried, attrs =       
-    let hits, attrs = List.partition (function 
-      | ({txt="curried"}, _) -> true 
-      | _ -> false) attrs
-    in
-    match hits with
-    | [] -> false, attrs
-    | [_] -> true, attrs
-    | _ -> raise(Error(loc, env, Other "Only one curried attribute allowed."))
+and type_construct_curried ?in_function env loc ty_expected app_attrs sexp apploc xs =
+
+  let lid = match sexp.pexp_desc with
+    | Pexp_construct (lid, None) -> lid
+    | _ -> assert false (* impos *)
   in
+
   let opath =
     try
       let (p0, p,_) = extract_concrete_variant env ty_expected in
@@ -3403,88 +3462,134 @@ and type_construct' ?in_function env loc lid sarg ty_expected attrs =
       (Constructor.disambiguate lid env opath) constrs in
   Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
 
-  match constr.cstr_arity, sarg, curried with
-  | 0, _, true -> (* (None..) must be rejected *)
-      raise (Error(loc, env, Other "Nullary constructor cannot be curried."))
-  | 1, _, true -> (* (Some..) must be rejected *)
-      raise (Error(loc, env, Other "Unary constructor cannot be curried."))
-  | n, _, true -> (* (C..) sarg  =>  (fun x y z -> C (x,y,z)) sarg *)
-      desugar_type_construct ?in_function env loc lid sarg ty_expected attrs curried constr
-  | 0, _, false -> (* None *)
-      type_construct env loc lid sarg ty_expected attrs
-  | 1, (Some _), false -> (* Some (1,2,3) *)
-      type_construct env loc lid sarg ty_expected attrs
-  | n, (Some {pexp_desc = Pexp_tuple sel}), false when n = List.length sel ->
-      (* Foo (1,2,3) where arity of Foo = 3 *)
-      type_construct env loc lid sarg ty_expected attrs
-  | _, None, false
-      (* Non nullary but no arg. C => (fun (x,y,z) -> C (x,y,z)) *)
-  | _, (Some _), false ->
-      (* Arity and e does not agree: C s => (fun (x,y,z) -> C (x,y,z)) s *)     
-      desugar_type_construct ?in_function env loc lid sarg ty_expected attrs curried constr
+(*
+  let open Ast_helper in
+  let app sexp = match args with
+    | [] -> sexp
+    | _ -> Exp.apply sexp args
+  in
+  let mark_desugared sexp = 
+    { sexp with sexp.pexp_attribute = 
+        ({txt="fun_desugared"; loc=Location.none}, PStr []) :: sexp.pexp_attribute }
+  in
+*)
 
-and desugar_type_construct ?in_function env loc lid sarg ty_expected attrs curried constr =
-  let mkexp_attrs desc attrs = { pexp_desc = desc; pexp_loc = Location.none; pexp_attributes = attrs } in
-  let mkexp desc = mkexp_attrs desc [] in
-  let mkpat desc = { ppat_desc = desc; ppat_loc = Location.none; ppat_attributes = [] } in
-  let mkname n = "x" ^ string_of_int n in
-  let mkpatident n = 
-    let name = mkname n in
-    let mkpatvar n = 
-      mkpat (Ppat_var { Asttypes.txt = name; loc = Location.none })
-    in
-    let mkident n = 
-      mkexp (Pexp_ident { Asttypes.txt = Longident.Lident name; loc = Location.none })
-    in
-    mkpatvar n, mkident n
-  in
-  let one_to_n = 
-    let rec one_to_n st = function 
-      | 0 -> List.rev st
-      | n -> one_to_n (n::st) (n-1)
-    in
-    one_to_n []
-  in
-  let app f = 
-    match sarg with
-    | None -> f
-    | Some sarg -> mkexp (Pexp_apply (f, ["", sarg]);)
-  in
-  let patidents = List.map mkpatident (one_to_n constr.cstr_arity) in
-  let pats = List.map fst patidents in
-  let body =
-    let exps = List.map snd patidents in
-    let arg = match exps with
-      | [] -> assert false
-      | [e] -> e
-      | _ -> mkexp (Pexp_tuple exps)
-    in
-    { pexp_desc = Pexp_construct (lid, Some arg);
-      pexp_loc = loc;
-      pexp_attributes = [] }
-  in
-  let unsugared =
-    app @@
-    match curried with
-    | false -> (* (A) ==> fun (x,y,z) -> A(x,y,z) *)
-        let pat = match pats with
-          | [] -> assert false
-          | [p] -> p
-          | _ -> mkpat (Ppat_tuple pats)
+  match constr.cstr_arity with
+  | 0 ->
+      (* (None..) must be rejected *)
+      raise (Error(loc, env, Other "Nullary constructor cannot be curried."))
+  | 1 ->
+      (* (Some..) must be rejected *)
+      raise (Error(loc, env, Other "Unary constructor cannot be curried."))
+  | n ->
+      (* Format.eprintf "Debug: applied args: %d@." (List.length xs); *)
+      (* Unlike (Some) x, here we should optimize partial applications *)
+      (* (C..) a1          =>  (fun a2 a3 -> C (a1,a2,a3)) *)
+      (* (C..) a1 a2 a3    =>  C (a1,a2,a3) *)
+      (* (C..) a1 a2 a3 a4 =>  C (a1,a2,a3) a4 *)
+      let open Ast_helper in
+      let patterns, sarg, remain = 
+        let xi i = Exp.ident {txt=Longident.Lident ("x" ^ string_of_int i); loc=Location.none} in
+        let pi i = Pat.var {txt="x" ^ string_of_int i; loc=Location.none} in
+        let rec loop i xs =
+          if i > n then [], [], xs
+          else
+            match xs with
+            | [] ->
+                let patterns, args, remain = loop (i+1) [] in
+                assert (remain = []);
+                pi i :: patterns,
+                xi i :: args,
+                []
+            | (l,x)::xs ->
+                assert (l = ""); (* CR jfuruse: TODO *)
+                let patterns, args, remain = loop (i+1) xs in
+                patterns,
+                x :: args,
+                remain
         in
-        mkexp_attrs (Pexp_function [ { pc_lhs = pat; 
-                                       pc_guard = None;
-                                       pc_rhs = body } ])
-          attrs
-    | true -> (* (A) ==> fun x y z -> A(x,y,z) *)
-        List.fold_right (fun p st ->
-          mkexp_attrs (Pexp_function [ { pc_lhs = p;
-                                         pc_guard = None;
-                                         pc_rhs = st } ])
-            attrs
-        ) pats body
+        let patterns, args, remain = loop 1 xs in
+        patterns,
+        begin match args with
+        | [] -> assert false
+        | [sarg] -> sarg
+        | args -> Exp.tuple args 
+        end,
+        remain
+      in
+      match patterns, remain with
+      | [], [] -> (* C (a1,a2,a3) *)
+          (* Format.eprintf "Debug0: full@."; *)
+          type_construct env loc lid (Some sarg) ty_expected app_attrs
+      | [], _ ->  (* C (a1,a2,a3) a4 a5 *)
+          (* clearly an error but we delegate to the original typer *)
+          let sexp = 
+            Exp.apply ~loc:apploc ~attrs:app_attrs
+              { sexp with pexp_desc = Pexp_construct (lid, Some sarg) }
+              remain
+          in
+          (* Format.eprintf "Debug1: %a@." Pprintast.expression sexp; *)
+          type_expect_ ?in_function env sexp ty_expected
+      | _, [] -> (* fun a3 -> C (a1,a2,a3) *)
+          let sexp =
+            let rec funs = function
+              | [] -> 
+                  { sexp with pexp_desc = Pexp_construct (lid, Some sarg) }
+              | x::xs ->
+                  Exp.fun_ ~loc:apploc ~attrs:app_attrs
+                    "" None x
+                    (funs xs)
+            in
+            funs patterns
+          in
+          (* Format.eprintf "Debug2: %a@." Pprintast.expression sexp; *)
+          type_expect_ ?in_function env sexp ty_expected
+      | _, _ -> assert false
+
+and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
+  (* None  or   (Some) *)
+  let opath =
+    try
+      let (p0, p,_) = extract_concrete_variant env ty_expected in
+      Some(p0, p, ty_expected.level = generic_level || not !Clflags.principal)
+    with Not_found -> None
   in
-  type_expect_ ?in_function env unsugared ty_expected
+  let constrs = Typetexp.find_all_constructors env lid.loc lid.txt in
+  let constr =
+    wrap_disambiguate "This variant expression is expected to have" ty_expected
+      (Constructor.disambiguate lid env opath) constrs in
+  Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
+
+  match constr.cstr_arity with
+  | 0 -> (* None *)
+      type_construct env loc lid None ty_expected sexp.pexp_attributes
+  | 1 -> (* (Some) => fun x -> Some x *)
+      let sexp = 
+        let open Ast_helper in
+        let p = Pat.var {txt= "x"; loc= Location.none } in
+        let x = Exp.ident {txt= Longident.Lident "x"; loc= Location.none } in
+        let e = { sexp with pexp_desc = Pexp_construct (lid, Some x) } in
+        Exp.fun_ "" None p e
+      in
+      type_expect_ ?in_function env sexp ty_expected
+
+  | n -> (* (F) => fun (x,y) -> F (x,y) *)
+      let sexp = 
+        let open Ast_helper in
+        let make_n n f =
+          let rec loop st = function
+            | 0 -> List.rev st
+            | n -> loop (f n :: st) (n-1)
+          in
+          loop [] n
+        in
+        let names = make_n n (fun i -> "x" ^ string_of_int i) in
+        let p = Pat.(tuple (List.map (fun txt -> var {txt; loc= Location.none}) names)) in
+        let x = Exp.(tuple (List.map (fun txt -> ident {txt= Longident.Lident txt; loc= Location.none }) names)) in
+        let e = { sexp with pexp_desc = Pexp_construct (lid, Some x) } in
+        Exp.fun_ "" None p e
+      in
+      type_expect_ ?in_function env sexp ty_expected
 
 (* Typing of statements (expressions whose values are discarded) *)
 
