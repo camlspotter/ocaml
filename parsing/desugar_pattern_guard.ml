@@ -160,3 +160,5 @@ open Ast_mapper
 let extend super =
   let expr self e = super.expr self & desugar_expr e in 
   { super with expr }
+
+let () = Parser.extend_mapper extend
