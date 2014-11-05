@@ -17,6 +17,7 @@ is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 ```ocaml
 (Foo ..)
+[%fun] Foo
 ```
 
 is equal to `fun x y -> Foo (x,y)`.
@@ -26,6 +27,7 @@ It works for list cons operator too:
 ```ocaml
 (::) : ('a * 'a list) -> 'a list
 (:: ..) : 'a -> 'a list -> 'a list
+[%fun] (::) : 'a -> 'a list -> 'a list
 ```
 
 Polymorphic variants as functions
@@ -33,6 +35,7 @@ Polymorphic variants as functions
 
 ```ocaml
 (`Foo ..)
+[%fun] `Foo
 ```
 
 is equivalent to 
@@ -61,6 +64,7 @@ Record fields as functions:
 
 ```ocaml
 (.label)
+[%fun].label
 ```
 
 is equvalient to 
@@ -73,6 +77,7 @@ Class methods as functions:
 
 ```ocaml
 (#m)
+[%fun]#m
 ```
 
 is equivalent with
