@@ -547,7 +547,7 @@ parse_pattern:
 
 functor_arg:
     LPAREN RPAREN
-      { mkrhs "()" 2, None }
+      { mkrhs "*" 2, None }
   | LPAREN functor_arg_name COLON module_type RPAREN
       { mkrhs $2 2, Some $4 }
 ;
@@ -776,7 +776,7 @@ module_declaration:
   | LPAREN UIDENT COLON module_type RPAREN module_declaration
       { mkmty(Pmty_functor(mkrhs $2 2, Some $4, $6)) }
   | LPAREN RPAREN module_declaration
-      { mkmty(Pmty_functor(mkrhs "()" 1, None, $3)) }
+      { mkmty(Pmty_functor(mkrhs "*" 1, None, $3)) }
 ;
 module_rec_declarations:
     module_rec_declaration                              { [$1] }
@@ -1089,16 +1089,16 @@ expr:
   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_function(List.rev $4)) $2 }
+      { mkexp_attrs (Pexp_function(List.rev $4)) $2 }
   | FUN ext_attributes labeled_simple_pattern fun_def
       { let (l,o,p) = $3 in
         mkexp_attrs (Pexp_fun(l, o, p, $4)) $2 }
   | FUN ext_attributes LPAREN TYPE LIDENT RPAREN fun_def
       { mkexp_attrs (Pexp_newtype($5, $7)) $2 }
   | MATCH ext_attributes seq_expr WITH opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
+      { mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
   | TRY ext_attributes seq_expr WITH opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
+      { mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
   | TRY ext_attributes seq_expr WITH error
       { syntax_error() }
   | expr_comma_list %prec below_COMMA
@@ -1379,15 +1379,29 @@ match_case:
     pattern MINUSGREATER seq_expr
       { Exp.case $1 $3 }
   | pattern guards MINUSGREATER seq_expr
-      { Exp.case $1 ~guard:(List.rev $2) $4 }
+      { match $2 with
+        | [] -> assert false
+        | [`When e] -> Exp.case $1 ~guard:e $4
+        | rev_guards ->
+            let loc = rhs_loc 2 in
+            let f = function
+              | `When e -> Str.eval ~loc:e.pexp_loc e
+              | `With (p, e) -> Str.value ~loc:p.ppat_loc Nonrecursive [Vb.mk ~loc:p.ppat_loc p e] 
+            in
+            let payload = 
+              PStr (List.rev_map f rev_guards)
+            in
+            let ext = (mkloc "guard" loc, payload ) in
+            Exp.case $1 ~guard:(Exp.extension ~loc ext) $4
+      }
 ;
 guards:
   | guard { [$1] }
   | guards guard { $2 :: $1 }
 ;
 guard:
-  | WHEN seq_expr { Pguard_when $2 }
-  | WITH pattern LESSMINUS expr { Pguard_with ($2, $4) }
+  | WHEN seq_expr { `When $2 }
+  | WITH pattern LESSMINUS expr { `With ($2, $4) }
 ;
 fun_def:
     MINUSGREATER seq_expr                       { $2 }

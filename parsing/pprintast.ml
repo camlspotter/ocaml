@@ -351,7 +351,7 @@ class printer  ()= object(self:'self)
       | p -> self#pattern1 f p in
     if x.ppat_attributes <> [] then self#pattern f x
     else match x.ppat_desc with
-    | Ppat_variant (l, Some p) ->  pp f "@[<2>`%s@;%a@]" l self#pattern1 p (*RA*)
+    | Ppat_variant (l, Some p) ->  pp f "@[<2>`%s@;%a@]" l self#simple_pattern p
     | Ppat_construct (({txt=Lident("()"|"[]");_}), _) -> self#simple_pattern f x
     | Ppat_construct (({txt;_} as li), po) -> (* FIXME The third field always false *)
         if txt = Lident "::" then
@@ -1335,19 +1335,8 @@ class printer  ()= object(self:'self)
   method case_list f l : unit =
     let aux f {pc_lhs; pc_guard; pc_rhs} =
       pp f "@;| @[<2>%a%a@;->@;%a@]"
-        self#pattern pc_lhs self#pattern_guards pc_guard self#under_pipe#expression pc_rhs in
+        self#pattern pc_lhs (self#option self#expression ~first:"@;when@;") pc_guard self#under_pipe#expression pc_rhs in
     self#list aux f l ~sep:""
-
-  method pattern_guards f = function
-    | [] -> ()
-    | pgs -> self#list self#pattern_guard f pgs
-
-  method pattern_guard f = function
-    | Pguard_when e -> 
-        pp f "@;when@;%a" self#expression e
-    | Pguard_with (p, e) ->
-        pp f "@;with@;@[%a@ <-@ %a@]" self#pattern p self#expression e
-
   method label_x_expression_param f (l,e) =
     match l with
     | ""  -> self#expression2 f e ; (* level 2*)
