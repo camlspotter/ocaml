@@ -1920,11 +1920,10 @@ and type_expect_ ?in_function env sexp ty_expected =
       end
 
   (* 
-     [(Some) e]  is translated to  [(fun x -> Some x) e]
-     Optimization of this to [Some e] in this phase is not worth the effort.
-
-  | Pexp_apply(({ pexp_desc = Pexp_construct (lid, None); } as con), xs) ->
-  *)  
+     [(Some) e] and [Some @@ e] should be translated to [Some e], 
+     not [(fun x -> Some x) e], but this optimization should be done in
+     bytecomp level, not here. And actually bytecomp does it!
+  *)
 
   | Pexp_apply(sfunct, sargs) ->
       if sargs = [] then
