@@ -1,16 +1,7 @@
 open Asttypes
-open Ast_helper
-open Longident
 open Parsetree
-open Ast_helper.Exp
-
-let txt x = { txt = x; loc = Location.none }
-
-module LI = struct
-  let ( ! ) x = Lident x
-  let ( * ) x y = Ldot (x, y)
-  let (@) x y = Lapply (x, y)
-end
+open Ast_helper
+open Ppxx
 
 (*
 In Pure OCaml with extension
@@ -81,51 +72,33 @@ let need_desugar case =
         | _ -> assert false)
               sitems)
   | _ -> None
-  
-let ph = "$ph"
-let exp_ph = ident (txt @@ LI.(!ph))
+
 let phx = "$phx"
-let exp_phx = ident (txt @@ LI.(!phx))
+let exp_phx = Exp.id phx
 let phm = "$PH"
-let phm_ExitWith = LI.(!phm * "ExitWith")
-
-let tvar = 
-  (* pity we need a counter *)
-  let cntr = ref 0 in
-  fun () ->
-    incr cntr;
-    Typ.var ("p_g_" ^ string_of_int !cntr)
-
-let exp_bool b =
-  construct (txt @@ LI.(!(if b then "true" else "false"))) None
-
-let exp_pervasives s =
-  ident (txt @@ LI.(!"Pervasives" * s))
-
-let apply_obj_magic e =
-  apply (ident (txt @@ LI.(!"Obj" * "magic"))) ["", e]
+let id_phm_ExitWith = lid ?loc:None & phm ^ ".ExitWith"
 
 let desugar_guard tv e_action gs = 
+  let open Exp in
   let rec desugar = function
     | [] -> 
-        apply (exp_pervasives "raise")
-          [ "", 
-            construct (txt @@ LI.(!phm * "ExitWith")) 
-              (Some (apply_obj_magic @@ constraint_ e_action tv))
-          ]
+        with_default_loc e_action.pexp_loc & fun () ->
+          raise_ (phm ^ ".ExitWith") & Some (magic & constraint_ e_action tv)
     | `When e :: gs ->
-        apply (ident (txt @@ LI.(!"Pervasives" * "&&")))
-          [ "", e;
-            "", desugar gs ]
+        with_default_loc e.pexp_loc & fun () ->
+          apply (pervasives "&&")
+            [ "", e;
+              "", desugar gs ]
     | `With (p, e) :: gs ->
-        match_ e 
-          [ { pc_lhs = p;
-              pc_guard = Some (exp_bool true); (* stupid but we need it to prevent the following "any" case does not produce Warning 11 *)
-              pc_rhs = desugar gs }
-          ; { pc_lhs = Pat.any ();
-              pc_guard = None;
-              pc_rhs = exp_bool false } 
-          ]
+        with_default_loc (Location.merge p.ppat_loc e.pexp_loc) & fun () ->
+          match_ e 
+            [ { pc_lhs = p;
+                pc_guard = Some (bool true); (* stupid but we need it to prevent the following "any" case does not produce Warning 11 *)
+                pc_rhs = desugar gs }
+            ; { pc_lhs = Pat.any ();
+                pc_guard = None;
+                pc_rhs = bool false } 
+            ]
   in
   desugar gs
 
@@ -133,46 +106,57 @@ let desugar_case tv case guards_opt =
   match guards_opt with
   | None -> case
   | Some guards ->
+      let guard = desugar_guard tv case.pc_rhs guards in
       { case with
-        pc_guard = Some (desugar_guard tv case.pc_rhs guards);
-        pc_rhs = assert_ (exp_bool false)
+        pc_guard = Some guard;
+        pc_rhs = Exp.assert_false ~loc:guard.pexp_loc ()
       }
 
-let desugar_cases build e cases =
+let desugar_cases loc build e cases =
+  let open Exp in
   let guards_opt = List.map need_desugar cases in
   if List.for_all (fun x -> x = None) guards_opt then None (* no need *)
   else 
-    let tv = tvar () in
-    let cases = List.map2 (desugar_case tv) cases guards_opt in
-    let e =   
-      letmodule (txt phm) 
-        (Mod.structure [Str.exception_ { pext_name = txt "ExitWith";
-                                         pext_kind = Pext_decl ([Typ.constr (txt @@ LI.(!"int")) []], None);
-                                         pext_loc = Location.none;
-                                         pext_attributes = [] }])
-        (try_ (build e cases)
-           [ { pc_lhs = Pat.construct (txt phm_ExitWith) @@ Some (Pat.var (txt "v"));
-               pc_guard = None;
-               pc_rhs = apply_obj_magic @@ ident (txt @@ LI.(!"v")) } ])
-    in
-    Some e
+    with_default_loc loc & fun () ->
+      let tv = Typ.new_var "p_g_" in
+      let cases = List.map2 (desugar_case tv) cases guards_opt in
+      let e =   
+        letmodule (mkloc phm) 
+          (Mod.structure [Str.exception_ { pext_name = mkloc "ExitWith";
+                                           pext_kind = Pext_decl ([Typ.int ()], None);
+                                           pext_loc = Location.none;
+                                           pext_attributes = [] }])
+          (try_ (build e cases)
+             [ { pc_lhs = Pat.construct id_phm_ExitWith & Some (Pat.var "v");
+                 pc_guard = None;
+                 pc_rhs = magic & id "v" } ])
+      in
+      Some e
         
 let desugar_expr exp = 
+  let open Exp in
+  let loc = exp.pexp_loc in
   let build_help f = f ?loc:(Some exp.pexp_loc) ?attrs:(Some exp.pexp_attributes) in
   match exp.pexp_desc with
   | Pexp_match (e, cases) ->
-      begin match desugar_cases (build_help match_) e cases with
+      begin match desugar_cases loc (build_help match_) e cases with
       | None -> exp
       | Some exp -> exp
       end
   | Pexp_function cases ->
-      begin match desugar_cases (build_help match_) exp_phx cases with
+      begin match desugar_cases loc (build_help match_) exp_phx cases with
       | None -> exp
-      | Some exp -> fun_ "" None (Pat.var (txt phx)) exp
+      | Some exp -> fun_ "" None (Pat.var phx) exp
       end
   | Pexp_try (e, cases) ->
-      begin match desugar_cases (build_help try_) e cases with
+      begin match desugar_cases loc (build_help try_) e cases with
       | None -> exp
       | Some exp -> exp
       end
   | _ -> exp
+
+open Ast_mapper
+
+let extend super =
+  let expr self e = super.expr self & desugar_expr e in 
+  { super with expr }
