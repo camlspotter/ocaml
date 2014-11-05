@@ -1318,7 +1318,7 @@ label_ident:
     LIDENT   { ($1, mkexp(Pexp_ident(mkrhs (Lident $1) 1))) }
 ;
 let_bindings:
-    let_bindings_ { Desugar.desugar_let_bindings $1 }
+    let_bindings_ { Desugar_haskellish_type.desugar_let_bindings $1 }
 ;
 let_bindings_:
     let_binding                                 { [$1] }
