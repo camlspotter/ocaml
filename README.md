@@ -11,6 +11,15 @@ in
 ...
 ```
 
+or without its syntax extension,
+
+```ocaml
+let f x 
+    [@has_type f : 'a . 'a -> 'a] = x
+in
+...
+```
+
 This is equivalent to the following:
 
 ```ocaml
@@ -19,9 +28,18 @@ in
 ...
 ```
 
-which makes some people feel lousy, since you need to rewrite your
-function definition like `let f x = x` with `fun` to add 
-the quantified type constraint.
+which makes some people feel lousy, since adding a polymorphic type
+of `f` to `let f x = x` requires lots of key types. From:
+
+```ocaml
+let f x = x
+```
+
+to:
+
+```ocaml
+let f : 'a . 'a -> 'a = fun x -> x
+```
 
 What it does
 -------------------------------
