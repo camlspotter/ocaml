@@ -41,6 +41,9 @@ to:
 let f : 'a . 'a -> 'a = fun x -> x
 ```
 
+In addition to the type, you have to move the arguments 
+then add `fun` and `->`.
+
 What it does
 -------------------------------
 
