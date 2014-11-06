@@ -2216,26 +2216,32 @@ payload:
 
 open Ast_mapper
 
-let mapper = ref default_mapper
-
-let extend_mapper e = mapper := e !mapper
-
 let implementation f lexbuf = 
-  !mapper.structure !mapper @@ implementation f lexbuf
+  let mapper = get_builtin_mapper () in
+  mapper.structure mapper @@ implementation f lexbuf
 
 let interface f lexbuf = 
-  !mapper.signature !mapper @@ interface f lexbuf
+  let mapper = get_builtin_mapper () in
+  mapper.signature mapper @@ interface f lexbuf
 
 let top = function
-  | Ptop_def s -> Ptop_def (!mapper.structure !mapper s)
+  | Ptop_def s -> 
+      let mapper = get_builtin_mapper () in
+      Ptop_def (mapper.structure mapper s)
   | (Ptop_dir _ as p) -> p
 
 let toplevel_phrase f lexbuf = top @@ toplevel_phrase f lexbuf
 
 let use_file f lexbuf = List.map top @@ use_file f lexbuf
 
-let parse_core_type f lexbuf = !mapper.typ !mapper @@ parse_core_type f lexbuf
+let parse_core_type f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.typ mapper @@ parse_core_type f lexbuf
 
-let parse_expression f lexbuf = !mapper.expr !mapper @@ parse_expression f lexbuf
+let parse_expression f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.expr mapper @@ parse_expression f lexbuf
 
-let parse_pattern f lexbuf = !mapper.pat !mapper @@ parse_pattern f lexbuf
+let parse_pattern f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.pat mapper @@ parse_pattern f lexbuf

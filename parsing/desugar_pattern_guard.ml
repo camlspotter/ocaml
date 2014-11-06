@@ -161,4 +161,4 @@ let extend super =
   let expr self e = super.expr self & desugar_expr e in 
   { super with expr }
 
-let () = Parser.extend_mapper extend
+let () = Ast_mapper.extend_builtin_mapper extend
