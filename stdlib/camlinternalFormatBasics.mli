@@ -32,7 +32,6 @@ type prec_option = int option
 type block_type = Pp_hbox | Pp_vbox | Pp_hvbox | Pp_hovbox | Pp_box | Pp_fits
 
 type formatting_lit =
-  | Open_box of string * block_type * int
   | Close_box
   | Close_tag
   | Break of string * int * int
@@ -46,6 +45,8 @@ type formatting_lit =
 
 type ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen =
   | Open_tag : ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
+    ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen
+  | Open_box : ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
     ('a, 'b, 'c, 'd, 'e, 'f) formatting_gen
 
 and ('a, 'b, 'c, 'd, 'e, 'f) fmtty =
@@ -224,6 +225,11 @@ and ('a, 'b, 'c, 'd, 'e, 'f) fmt =
 | Scan_get_counter :                                       (* %[nlNL] *)
     counter * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
       (int -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+| Scan_next_char :                                         (* %0c *)
+    ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+    (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  (* %0c behaves as %c for printing, but when scanning it does not
+     consume the character from the input stream *)
 | Ignored_param :                                          (* %_ *)
     ('a, 'b, 'c, 'd, 'y, 'x) ignored * ('x, 'b, 'c, 'y, 'e, 'f) fmt ->
       ('a, 'b, 'c, 'd, 'e, 'f) fmt
@@ -264,6 +270,8 @@ and ('a, 'b, 'c, 'd, 'e, 'f) ignored =
       pad_option * char_set -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
   | Ignored_scan_get_counter :
       counter -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_scan_next_char :
+      ('a, 'b, 'c, 'd, 'd, 'a) ignored
 
 and ('a, 'b, 'c, 'd, 'e, 'f) format6 =
   Format of ('a, 'b, 'c, 'd, 'e, 'f) fmt * string
