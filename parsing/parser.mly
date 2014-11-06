@@ -1318,11 +1318,8 @@ label_ident:
     LIDENT   { ($1, mkexp(Pexp_ident(mkrhs (Lident $1) 1))) }
 ;
 let_bindings:
-    let_bindings_ { Desugar_haskellish_type.desugar_let_bindings $1 }
-;
-let_bindings_:
     let_binding                                 { [$1] }
-  | let_bindings_ AND let_binding                { $3 :: $1 }
+  | let_bindings AND let_binding                { $3 :: $1 }
 ;
 let_bindings_no_attrs:
    let_bindings {
@@ -1345,12 +1342,13 @@ let_binding:
       let (p, e) = $1 in Vb.mk ~loc:(symbol_rloc()) ~attrs:$2 p e
     }
   | let_binding_haskellish post_item_attributes {
+      (* let f : ty => let f : ty = [%val] *)
+      let loc = symbol_rloc () in
       let (p, ty) = $1 in 
       { pvb_pat = ghpat(Ppat_constraint(p, ty));
-        pvb_expr = mkexp (Pexp_constant (Const_string ("haskellish", None))); (* dummy *)
-        pvb_attributes = ( ({ txt = "haskellish"; loc = symbol_gloc() },
-                            PStr []) :: $2);
-        pvb_loc = symbol_rloc()
+        pvb_expr = Exp.extension ~loc ( {txt= "val"; loc }, PStr []);
+        pvb_loc = loc;
+        pvb_attributes = [] 
       }
     }
 ;
@@ -2208,3 +2206,37 @@ payload:
   | QUESTION pattern WHEN seq_expr { PPat ($2, Some $4) }
 ;
 %%
+
+(* Make sure that parse results go through the base mapper *)
+
+open Ast_mapper
+
+let implementation f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.structure mapper @@ implementation f lexbuf
+
+let interface f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.signature mapper @@ interface f lexbuf
+
+let top = function
+  | Ptop_def s -> 
+      let mapper = get_builtin_mapper () in
+      Ptop_def (mapper.structure mapper s)
+  | (Ptop_dir _ as p) -> p
+
+let toplevel_phrase f lexbuf = top @@ toplevel_phrase f lexbuf
+
+let use_file f lexbuf = List.map top @@ use_file f lexbuf
+
+let parse_core_type f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.typ mapper @@ parse_core_type f lexbuf
+
+let parse_expression f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.expr mapper @@ parse_expression f lexbuf
+
+let parse_pattern f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.pat mapper @@ parse_pattern f lexbuf
