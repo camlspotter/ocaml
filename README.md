@@ -1,7 +1,7 @@
 Haskellish value : type declaration
 ======================================
 
-With this patch, you can write Haskell like value-type declaration
+In +type_at_let, you can write Haskell like value-type declaration
 in let bindings:
 
 ```ocaml
@@ -14,8 +14,8 @@ in
 or without its syntax extension,
 
 ```ocaml
-let f x 
-    [@has_type f : 'a . 'a -> 'a] = x
+let f : 'a . 'a -> 'a = [%val]
+and f x = x
 in
 ...
 ```
@@ -28,21 +28,8 @@ in
 ...
 ```
 
-which makes some people feel lousy, since adding a polymorphic type
-of `f` to `let f x = x` requires lots of key types. From:
-
-```ocaml
-let f x = x
-```
-
-to:
-
-```ocaml
-let f : 'a . 'a -> 'a = fun x -> x
-```
-
-In addition to the type, you have to move the arguments 
-then add `fun` and `->`.
+which makes some people feel lousy, since adding the polymorphic type
+to `let f x = x` requires lots of key types and cursor moves.
 
 What it does
 -------------------------------

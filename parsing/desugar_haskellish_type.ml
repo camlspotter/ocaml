@@ -86,8 +86,17 @@ let desugar_expr exp =
       { exp with pexp_desc = Pexp_let (rf, desugar_value_bindings vbs, e) }
   | _ -> exp
 
+let desugar_structure_item i = 
+  match i.pstr_desc with
+  | Pstr_value (rf, vbs) ->
+      { i with pstr_desc = Pstr_value (rf, desugar_value_bindings vbs) }
+  | _ -> i
+
 let extend super =
   let expr self e = super.expr self & desugar_expr e in
-  { super with expr }
+  let structure_item self i = 
+    super.structure_item self & desugar_structure_item i 
+  in
+  { super with expr; structure_item }
 
 let () = Ast_mapper.extend_builtin_mapper extend
