@@ -289,6 +289,10 @@ let mkcf_attrs d attrs =
 let mkctf_attrs d attrs =
   Ctf.mk ~loc:(symbol_rloc()) ~attrs d
 
+let in_poly_record e =
+  let loc = symbol_rloc () in
+  mkexp @@ Pexp_extension ({ txt = "poly_record"; loc }, PStr [mkstrexp e []])
+
 %}
 
 /* Tokens */
@@ -1186,6 +1190,9 @@ expr:
       { unclosed "object" 1 "end" 4 }
   | expr attribute
       { Exp.attr $1 $2 }
+
+  | simple_expr DOTDOT label_longident LESSMINUS expr
+      { in_poly_record @@ mkexp(Pexp_setfield($1, mkrhs $3 3, $5)) }
 ;
 simple_expr:
     val_longident
@@ -1291,6 +1298,14 @@ simple_expr:
       { unclosed "(" 3 ")" 7 }
   | extension
       { mkexp (Pexp_extension $1) }
+
+  | simple_expr DOTDOT label_longident
+      { in_poly_record @@ mkexp(Pexp_field($1, mkrhs $3 3)) }
+  | LBRACE DOT record_expr RBRACE
+      { let (exten, fields) = $3 in 
+        in_poly_record @@ mkexp (Pexp_record(fields, exten)) }
+  | LBRACE DOT record_expr error
+      { unclosed "{." 2 "}" 4 }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
@@ -2189,3 +2204,37 @@ payload:
   | QUESTION pattern WHEN seq_expr { PPat ($2, Some $4) }
 ;
 %%
+
+(* Make sure that parse results go through the base mapper *)
+
+open Ast_mapper
+
+let implementation f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.structure mapper @@ implementation f lexbuf
+
+let interface f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.signature mapper @@ interface f lexbuf
+
+let top = function
+  | Ptop_def s -> 
+      let mapper = get_builtin_mapper () in
+      Ptop_def (mapper.structure mapper s)
+  | (Ptop_dir _ as p) -> p
+
+let toplevel_phrase f lexbuf = top @@ toplevel_phrase f lexbuf
+
+let use_file f lexbuf = List.map top @@ use_file f lexbuf
+
+let parse_core_type f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.typ mapper @@ parse_core_type f lexbuf
+
+let parse_expression f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.expr mapper @@ parse_expression f lexbuf
+
+let parse_pattern f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.pat mapper @@ parse_pattern f lexbuf
