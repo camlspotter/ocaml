@@ -70,7 +70,7 @@ let prepare_error = function
         "Error: The type of variable '%s' is declared more than once" v
 
   | Desugar_declaration_is_never_used (loc, v) ->
-      Location.errorf ~loc "Error: varable-type declaration of '%s' lacks definition" v 
+      Location.errorf ~loc "Error: Variable-type declaration of '%s' lacks definition" v 
 
 let () =
   Location.register_error_of_exn
