@@ -51,9 +51,9 @@ parsing/ast_mapper.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx utils/config.cmx \
     utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
     parsing/ast_mapper.cmi
-parsing/desugar.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
+parsing/desugar_type_at_let.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
     parsing/asttypes.cmi parsing/ast_mapper.cmi
-parsing/desugar.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
+parsing/desugar_type_at_let.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
     parsing/asttypes.cmi parsing/ast_mapper.cmx
 parsing/desugar_local_structure.cmo : parsing/syntaxerr.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
@@ -90,12 +90,12 @@ parsing/parse.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
 parsing/parser.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
     parsing/longident.cmi parsing/location.cmi \
     parsing/desugar_pattern_guard.cmo parsing/desugar_local_structure.cmo \
-    parsing/desugar.cmo utils/clflags.cmi parsing/asttypes.cmi \
+    parsing/desugar_type_at_let.cmo utils/clflags.cmi parsing/asttypes.cmi \
     parsing/ast_helper.cmi parsing/parser.cmi
 parsing/parser.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
     parsing/longident.cmx parsing/location.cmx \
     parsing/desugar_pattern_guard.cmx parsing/desugar_local_structure.cmx \
-    parsing/desugar.cmx utils/clflags.cmx parsing/asttypes.cmi \
+    parsing/desugar_type_at_let.cmx utils/clflags.cmx parsing/asttypes.cmi \
     parsing/ast_helper.cmx parsing/parser.cmi
 parsing/pprintast.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
