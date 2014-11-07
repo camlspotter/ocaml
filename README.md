@@ -1,4 +1,4 @@
-Haskellish value : type declaration
+Haskellish `value : type` declaration
 ======================================
 
 In +type_at_let, you can write Haskell like value-type declaration
@@ -74,4 +74,4 @@ but `'a . 'a -> int -> 'a`.
 Example
 -------------------------
 
-You can find some examples in `testsuite/haskellish/test.ml`.
+You can find some examples in `testsuite/type_at_let/test.ml`.
