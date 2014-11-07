@@ -191,3 +191,11 @@ val drop_ppx_context_sig: restore:bool -> Parsetree.signature -> Parsetree.signa
 
 val set_cookie: string -> Parsetree.expression -> unit
 val get_cookie: string -> Parsetree.expression option
+
+(** {2 Built-in mapper} *)
+
+val get_builtin_mapper : unit -> mapper
+(** Get compiler built-in mapper for compiler modification by Ast_mapper *)
+
+val extend_builtin_mapper : (mapper -> mapper) -> unit
+(** Extend compiler built-in mapper *)

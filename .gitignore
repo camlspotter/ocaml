@@ -2758,6 +2758,6 @@
 /yacc/version.h
 /yacc/.gdb_history
 
-/*/*.cmt
-/*/*.cmti
+#
+*/*.cmt*
 

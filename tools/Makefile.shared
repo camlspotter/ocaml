@@ -39,9 +39,12 @@ CAMLDEP_OBJ=depend.cmo ocamldep.cmo
 CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   warnings.cmo location.cmo longident.cmo \
   syntaxerr.cmo ast_helper.cmo ast_mapper.cmo \
-  ppxx.cmo desugar_pattern_guard.cmo desugar.cmo desugar_local_structure.cmo \
-  parser.cmo indent.cmo lexer.cmo parse.cmo \
-  ccomp.cmo pparse.cmo compenv.cmo
+  desugar_local_structure.cmo \
+  parser.cmo \
+  indent.cmo \
+  lexer.cmo parse.cmo \
+  ccomp.cmo pparse.cmo compenv.cmo \
+  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo
 
 ocamldep: depend.cmi $(CAMLDEP_OBJ)
 	$(CAMLC) $(LINKFLAGS) -compat-32 -o ocamldep $(CAMLDEP_IMPORTS) $(CAMLDEP_OBJ)
@@ -70,7 +73,10 @@ install::
 CSLPROF=ocamlprof.cmo
 CSLPROF_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   warnings.cmo location.cmo longident.cmo \
-  syntaxerr.cmo ast_helper.cmo ast_mapper.cmo ppxx.cmo desugar_pattern_guard.cmo desugar.cmo desugar_local_structure.cmo parser.cmo lexer.cmo indent.cmo parse.cmo
+  syntaxerr.cmo ast_helper.cmo ast_mapper.cmo desugar_local_structure.cmo parser.cmo lexer.cmo \
+  indent.cmo \
+  parse.cmo \
+  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo
 
 ocamlprof: $(CSLPROF) profiling.cmo
 	$(CAMLC) $(LINKFLAGS) -o ocamlprof $(CSLPROF_IMPORTS) $(CSLPROF)

@@ -900,3 +900,8 @@ let run_main mapper =
 
 let register_function = ref (fun _name f -> run_main f)
 let register name f = !register_function name f
+
+let builtin_mapper = ref default_mapper
+let get_builtin_mapper () = !builtin_mapper
+let extend_builtin_mapper e = builtin_mapper := e !builtin_mapper
+

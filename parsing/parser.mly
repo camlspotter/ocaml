@@ -1186,22 +1186,22 @@ expr:
   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_function(List.rev $4)) $2 }
+      { mkexp_attrs (Pexp_function(List.rev $4)) $2 }
   | FUNCTION BEGIN ext_attributes opt_bar match_cases END
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_function(List.rev $5)) $3 }
+      { mkexp_attrs (Pexp_function(List.rev $5)) $3 }
   | FUN ext_attributes labeled_simple_pattern fun_def
       { let (l,o,p) = $3 in
         mkexp_attrs (Pexp_fun(l, o, p, $4)) $2 }
   | FUN ext_attributes LPAREN TYPE LIDENT RPAREN fun_def
       { mkexp_attrs (Pexp_newtype($5, $7)) $2 }
   | MATCH ext_attributes seq_expr WITH opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
+      { mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
   | MATCH ext_attributes seq_expr WITH BEGIN opt_bar match_cases END
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_match($3, List.rev $7)) $2 }
+      { mkexp_attrs (Pexp_match($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH opt_bar match_cases
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
+      { mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
   | TRY ext_attributes seq_expr WITH BEGIN opt_bar match_cases END
-      { Desugar_pattern_guard.desugar_expr @@ mkexp_attrs (Pexp_try($3, List.rev $7)) $2 }
+      { mkexp_attrs (Pexp_try($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH error
       { syntax_error() }
   | expr_comma_list %prec below_COMMA
@@ -2398,3 +2398,37 @@ payload:
   | QUESTION pattern WHEN seq_expr { PPat ($2, Some $4) }
 ;
 %%
+
+(* Make sure that parse results go through the base mapper *)
+
+open Ast_mapper
+
+let implementation f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.structure mapper @@ implementation f lexbuf
+
+let interface f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.signature mapper @@ interface f lexbuf
+
+let top = function
+  | Ptop_def s -> 
+      let mapper = get_builtin_mapper () in
+      Ptop_def (mapper.structure mapper s)
+  | (Ptop_dir _ as p) -> p
+
+let toplevel_phrase f lexbuf = top @@ toplevel_phrase f lexbuf
+
+let use_file f lexbuf = List.map top @@ use_file f lexbuf
+
+let parse_core_type f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.typ mapper @@ parse_core_type f lexbuf
+
+let parse_expression f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.expr mapper @@ parse_expression f lexbuf
+
+let parse_pattern f lexbuf = 
+  let mapper = get_builtin_mapper () in
+  mapper.pat mapper @@ parse_pattern f lexbuf
