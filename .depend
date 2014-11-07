@@ -52,10 +52,10 @@ parsing/ast_mapper.cmx : parsing/parsetree.cmi utils/misc.cmx \
     utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
     parsing/ast_mapper.cmi
 parsing/desugar_poly_record.cmo : parsing/ppxx.cmo parsing/parsetree.cmi \
-    parsing/parser.cmi parsing/location.cmi parsing/asttypes.cmi \
+    parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
     parsing/ast_mapper.cmi parsing/ast_helper.cmi
 parsing/desugar_poly_record.cmx : parsing/ppxx.cmx parsing/parsetree.cmi \
-    parsing/parser.cmx parsing/location.cmx parsing/asttypes.cmi \
+    parsing/longident.cmx parsing/location.cmx parsing/asttypes.cmi \
     parsing/ast_mapper.cmx parsing/ast_helper.cmx
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
     parsing/location.cmi parsing/lexer.cmi
