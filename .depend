@@ -51,6 +51,12 @@ parsing/ast_mapper.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx utils/config.cmx \
     utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
     parsing/ast_mapper.cmi
+parsing/desugar_type_at_let.cmo : parsing/ppxx.cmo parsing/parsetree.cmi \
+    parsing/parser.cmi parsing/location.cmi parsing/asttypes.cmi \
+    parsing/ast_mapper.cmi parsing/ast_helper.cmi
+parsing/desugar_type_at_let.cmx : parsing/ppxx.cmx parsing/parsetree.cmi \
+    parsing/parser.cmx parsing/location.cmx parsing/asttypes.cmi \
+    parsing/ast_mapper.cmx parsing/ast_helper.cmx
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
     parsing/location.cmi parsing/lexer.cmi
 parsing/lexer.cmx : utils/warnings.cmx parsing/parser.cmx utils/misc.cmx \
@@ -67,16 +73,24 @@ parsing/parse.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
     parsing/location.cmx parsing/lexer.cmx parsing/parse.cmi
 parsing/parser.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
     parsing/longident.cmi parsing/location.cmi utils/clflags.cmi \
-    parsing/asttypes.cmi parsing/ast_helper.cmi parsing/parser.cmi
+    parsing/asttypes.cmi parsing/ast_mapper.cmi parsing/ast_helper.cmi \
+    parsing/parser.cmi
 parsing/parser.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
     parsing/longident.cmx parsing/location.cmx utils/clflags.cmx \
-    parsing/asttypes.cmi parsing/ast_helper.cmx parsing/parser.cmi
+    parsing/asttypes.cmi parsing/ast_mapper.cmx parsing/ast_helper.cmx \
+    parsing/parser.cmi
 parsing/pprintast.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
     parsing/pprintast.cmi
 parsing/pprintast.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx parsing/asttypes.cmi \
     parsing/pprintast.cmi
+parsing/ppxx.cmo : parsing/parsetree.cmi parsing/parser.cmi \
+    parsing/longident.cmi parsing/location.cmi parsing/lexer.cmi \
+    parsing/asttypes.cmi parsing/ast_helper.cmi
+parsing/ppxx.cmx : parsing/parsetree.cmi parsing/parser.cmx \
+    parsing/longident.cmx parsing/location.cmx parsing/lexer.cmx \
+    parsing/asttypes.cmi parsing/ast_helper.cmx
 parsing/printast.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
     parsing/printast.cmi

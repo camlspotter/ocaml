@@ -42,7 +42,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
   parsing/ast_mapper.cmo \
   parsing/syntaxerr.cmo \
-  parsing/desugar_haskellish_type.cmo \
+  parsing/desugar_type_at_let.cmo \
   parsing/parser.cmo \
   parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo
