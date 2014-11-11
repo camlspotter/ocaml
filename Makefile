@@ -49,11 +49,11 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_mapper.cmo \
   parsing/desugar_local_structure.cmo parsing/indent.cmo \
   parsing/parser.cmo parsing/parse.cmo parsing/printast.cmo \
-  parsing/pprintast.cmo
+  parsing/pprintast.cmo \
   parsing/syntaxerr.cmo parsing/ast_mapper.cmo parsing/parser.cmo \
   parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo \
-  parsing/ppxx.cmo parsing/desugar_pattern_guard.cmo parsing/desugar_type_at_let.cmo
+  parsing/ppxx.cmo parsing/desugar_pattern_guard.cmo parsing/desugar_type_at_let.cmo parsing/desugar_poly_record.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \

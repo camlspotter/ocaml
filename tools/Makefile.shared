@@ -44,7 +44,7 @@ CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   indent.cmo \
   lexer.cmo parse.cmo \
   ccomp.cmo pparse.cmo compenv.cmo \
-  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo
+  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo desugar_poly_record.cmo desugar_leopard.cmo
 
 ocamldep: depend.cmi $(CAMLDEP_OBJ)
 	$(CAMLC) $(LINKFLAGS) -compat-32 -o ocamldep $(CAMLDEP_IMPORTS) $(CAMLDEP_OBJ)
@@ -76,7 +76,7 @@ CSLPROF_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   syntaxerr.cmo ast_helper.cmo ast_mapper.cmo desugar_local_structure.cmo parser.cmo lexer.cmo \
   indent.cmo \
   parse.cmo \
-  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo
+  ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo desugar_poly_record.cmo desugar_leopard.cmo
 
 ocamlprof: $(CSLPROF) profiling.cmo
 	$(CAMLC) $(LINKFLAGS) -o ocamlprof $(CSLPROF_IMPORTS) $(CSLPROF)

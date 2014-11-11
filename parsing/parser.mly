@@ -307,6 +307,10 @@ let mk_per_fun loc = Exp.extension ~loc (mkloc "fun" loc, PStr [])
  let mk_per_fun_app loc e = 
   Exp.apply ~loc: (symbol_rloc ()) (mk_per_fun loc) ["", e]
 
+let in_poly_record e =
+  let loc = symbol_rloc () in
+  mkexp @@ Pexp_extension ({ txt = "poly_record"; loc }, PStr [mkstrexp e []])
+
 %}
 
 /* Tokens */
@@ -1323,6 +1327,9 @@ expr:
       { unclosed "object" 1 "end" 4 }
   | expr attribute
       { Exp.attr $1 $2 }
+
+  | simple_expr DOTDOT label_longident LESSMINUS expr
+      { in_poly_record @@ mkexp(Pexp_setfield($1, mkrhs $3 3, $5)) }
 ;
 simple_expr:
     val_longident
@@ -1432,6 +1439,7 @@ simple_expr:
       { unclosed "(" 3 ")" 7 }
   | extension
       { mkexp (Pexp_extension $1) }
+
   | LPAREN COLONCOLON RPAREN
       { 
         mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None))
@@ -1454,6 +1462,14 @@ simple_expr:
         mkexp(Pexp_fun("", None, x_pat, name_x))
 *)
       }
+
+  | simple_expr DOTDOT label_longident
+      { in_poly_record @@ mkexp(Pexp_field($1, mkrhs $3 3)) }
+  | LBRACE DOT record_expr RBRACE
+      { let (exten, fields) = $3 in 
+        in_poly_record @@ mkexp (Pexp_record(fields, exten)) }
+  | LBRACE DOT record_expr error
+      { unclosed "{." 2 "}" 4 }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr

@@ -118,7 +118,7 @@ module Cstr = struct
   let mk ?(self= Pat.any ()) fields = Cstr.mk self fields
 end
 
-let ppx_name = ref "ppx name is not set"
+let ppx_name = ref "desugar"
 
 let ppx_errorf ?(loc = Location.none) ?(sub = []) ?(if_highlight = "") =
   Printf.ksprintf (fun msg ->
