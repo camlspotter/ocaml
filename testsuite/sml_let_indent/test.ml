@@ -1,9 +1,6 @@
 let () =
   let: (* let: is only for local, for now *)
-    x = 1  (* val is mandatory in this branch. 
-                  but it can be omitted by indentation rule,
-                  once sml_let marries with indent branch.
-               *)
+    x = 1
     y = 2
 
     val x = x + 1   (* x = 2 *)

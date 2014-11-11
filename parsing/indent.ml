@@ -375,3 +375,5 @@ let preprocess lexer lexbuf =
   let t = preprocess lexer lexbuf in
   if debug then prerr_endline @@ to_string t;
   t
+
+let () = Lexer.set_preprocessor init preprocess

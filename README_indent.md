@@ -9,8 +9,8 @@ This small patch provides Python like indentation rules to OCaml:
 Example
 ====================================
 
-Special keywords ends with `:` introduces implicit blocks automatically
-based on the code indentation.
+Special keywords end with `:` introduce implicit blocks based on 
+the code indentation.
 
 The following program using two special keywords `then:` and `else:`:
 
@@ -50,7 +50,7 @@ without the corresponding closings such as `match .. with`, `try .. with`,
 
 ```ocaml
 for i = 1 to 100 do:
-  print_int i;
+  print_int i;                   (* you still need to type ; *)
 print_endline "printed 100"      (* lowering indent implicitly closes do: *)
 ```
 
@@ -116,7 +116,7 @@ the indentation level where the special keyword is introduced:
 ```ocaml
 for i = 0 to 100 do:         (* indent level 0 *)
   print_int i;               (* level 2 *)
-print_endline "printed 100!" (* back to 0 *)
+print_endline "printed 100!" (* back to 0, we must close the do: *)
 ```
 
 is equivalent to
@@ -168,7 +168,7 @@ let rec f x =
   | 0, _ -> print_string "fiz"    (* level 2. *)
   | _, 0 -> print_string "buz"    (* level 2. *)
   | _ -> print_int x;             (* level 2. *)
-  f (x+1)                         (* level 2. Start not with | *)
+  f (x+1)                         (* level 2. Start not with |. with: must be closed *)
 ```
 
 is equivalent to
