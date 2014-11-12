@@ -29,7 +29,7 @@ let is_poly_record () = match !poly_record with
   | [] -> false
   | b::_ -> b
 
-let poly_record ?loc x = lid ?loc & "CamlinternalPolyRecord." ^ x
+let poly_record ?loc x = lid ?loc & "PolyRecord." ^ x
 
 let error_field_with_module loc =
   ppx_errorf ~loc "Polymorphic record fields cannot take module names"
