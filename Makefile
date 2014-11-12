@@ -64,7 +64,8 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/stypes.cmo typing/typecore.cmo \
   typing/typedecl.cmo typing/typeclass.cmo \
-  typing/typemod.cmo
+  typing/mod_overload.cmo \
+  typing/typemod.cmo 
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
