@@ -289,12 +289,14 @@ let mkcf_attrs d attrs =
 let mkctf_attrs d attrs =
   Ctf.mk ~loc:(symbol_rloc()) ~attrs d
 
-(* make [[%fun]] *)
-let mk_per_fun loc = Exp.extension ~loc (mkloc "fun" loc, PStr [])
+(* make [(!)] *)
+let mk_bang loc = Exp.ident ~loc (mkloc (Lident "!") loc)
 
-(* make [[%fun] e] *)
- let mk_per_fun_app loc e = 
-  Exp.apply ~loc: (symbol_rloc ()) (mk_per_fun loc) ["", e]
+let mk_bang_lessminus loc = Exp.ident ~loc (mkloc (Lident "!<-") loc)
+
+(* make [(!) e] *)
+ let mk_bang_app loc e = 
+  Exp.apply ~loc: (symbol_rloc ()) (mk_bang loc) ["", e]
 
 %}
 
@@ -1131,31 +1133,21 @@ expr:
 */
   | LPAREN DOT label_longident RPAREN
       { 
-        (* (.l) => (fun x -> x.l) *)
-        let loc = symbol_rloc () in
-        mkexp(Pexp_field(mk_per_fun loc, mkrhs $3 3))
-(*
-        let noloc txt = {txt; loc=Location.none} in
-        let x = "x" in
-        let x_pat = mkpat(Ppat_var (noloc x)) in
-        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
-        let x_l = mkexp(Pexp_field(x_exp, mkrhs $3 3)) in
-        mkexp(Pexp_fun("", None, x_pat, x_l))
-*)
+        (* (.l) => (!).l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_field(mk_bang loc, mkrhs $3 3))
+      }
+  | LPAREN DOT label_longident LESSMINUS RPAREN
+      { 
+        (* (.l<-) => (!<-).l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_field(mk_bang_lessminus loc, mkrhs $3 3))
       }
   | LPAREN SHARP label RPAREN
       { 
-        (* (#l) => (fun x -> x#l) *)
-        let loc = symbol_rloc () in
-        mkexp(Pexp_send(mk_per_fun loc, $3))
-(*
-        let noloc txt = {txt; loc=Location.none} in
-        let x = "x" in
-        let x_pat = mkpat(Ppat_var (noloc x)) in
-        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
-        let x_l = mkexp(Pexp_send(x_exp, $3)) in
-        mkexp(Pexp_fun("", None, x_pat, x_l))
-*)
+        (* (#l) => (!)#l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_send(mk_bang loc, $3))
       }
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
@@ -1233,9 +1225,9 @@ simple_expr:
       { mkexp(Pexp_construct(mkrhs $1 1, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
-  | LPAREN constr_longident DOTDOT RPAREN /* (Some ..) for fun x -> Some x */
-      { let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
+  | LPAREN constr_longident DOTDOT RPAREN /* (Cstr ..) => !Cstr */
+      { let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
       }
   | LPAREN seq_expr RPAREN
       { reloc_exp $2 }
@@ -1336,15 +1328,15 @@ simple_expr:
       { 
         mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None))
       }
-  | LPAREN COLONCOLON DOTDOT RPAREN
+  | LPAREN COLONCOLON DOTDOT RPAREN /* (::..) => !(::) */
       { 
-        let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
+        let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
       }
-  | LPAREN name_tag DOTDOT RPAREN
+  | LPAREN name_tag DOTDOT RPAREN /* (F..) => !F */
       { 
-        let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_variant($2, None)))
+        let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_variant($2, None)))
 (*
         let noloc txt = {txt; loc=Location.none} in
         let x = "x" in

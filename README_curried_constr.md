@@ -16,26 +16,26 @@ Foo
 is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 ```ocaml
-(Foo ..)
-[%fun] Foo
+(Foo ..)        (* This is not valid in the vanilla OCaml *)
+!Foo
 ```
 
 is equal to `fun x y -> Foo (x,y)`.
 
-It works for list cons operator too:
+It works for list cons constructor too:
 
 ```ocaml
 (::) : ('a * 'a list) -> 'a list
-(:: ..) : 'a -> 'a list -> 'a list
-[%fun] (::) : 'a -> 'a list -> 'a list
+(:: ..) : 'a -> 'a list -> 'a list  (* This is not valid in the vanilla OCaml *)
+!(::) : 'a -> 'a list -> 'a list
 ```
 
 Polymorphic variants as functions
 ---------------------------------------------
 
 ```ocaml
-(`Foo ..)
-[%fun] `Foo
+(`Foo ..)         (* This is not valid in the vanilla OCaml *)
+!`Foo
 ```
 
 is equivalent to 
@@ -44,13 +44,14 @@ is equivalent to
 fun x -> `Foo x
 ```
 
-Note that the polymorphic variant constructors can take at most 
-one argument and it is determined purely syntactically. 
-Therefore ``(`Foo ..)`` can take only one argument:
+Note that ``(`Foo ..)`` can take only one argument:
+the arity of the polymorphic variant constructors is at most one
+and  it is determined purely syntactically. 
+
 
 ```ocaml
-`(`Foo..) (1,2,3)  (* `Foo (1,2,3) *)
-`(`Foo..) 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
+(`Foo..) (1,2,3)  (* `Foo (1,2,3) *)
+(`Foo..) 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
 ```
 
 Code ``(`Foo)`` has no special meaning. It is just equivalent to `` `Foo``.
@@ -63,21 +64,47 @@ This patch also provides the following new syntax construct:
 Record fields as functions:
 
 ```ocaml
-(.label)
-[%fun].label
+(.label)       (* This is not valid in the vanilla OCaml *)
+(!).label
 ```
 
-is equvalient to 
+are equvalient to 
 
 ```ocaml
 fun x -> x.label
 ```
 
+Record field modifications as functions:
+
+```ocaml
+(.label) <- e       (* This is not valid in the vanilla OCaml *)
+(!).label <- e
+```
+
+are equvalient to 
+
+```ocaml
+fun x -> x.label <- e
+```
+
+Full record field modifications as functions:
+
+```ocaml
+(.label<-)       (* This is not valid in the vanilla OCaml *)
+(!<-).label
+```
+
+are equvalient to 
+
+```ocaml
+fun x e -> x.label <- e
+```
+
 Class methods as functions:
 
 ```ocaml
-(#m)
-[%fun]#m
+(#m)                 (* This is not valid in the vanilla OCaml *)
+(!)#m
 ```
 
 is equivalent with
