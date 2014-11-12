@@ -1467,6 +1467,13 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     (Cmt_format.Partial_structure str :: previous_saved_types);
   str, sg, final_env
 
+(* type_structure must be wrapped here
+   for overload resolution for type_toplevel_phrase and type_implementation
+*)
+let type_structure ?toplevel funct_body anchor env sstr scope =
+  let str, sg, env = type_structure ?toplevel funct_body anchor env sstr scope in
+  Mod_overload.resolve str, sg, env
+
 let type_toplevel_phrase env s =
   Env.reset_required_globals ();
   type_structure ~toplevel:true false None env s Location.none
