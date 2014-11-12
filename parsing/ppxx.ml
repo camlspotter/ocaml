@@ -49,6 +49,8 @@ module Location = struct
           loc_end = end_.loc_end; 
           loc_ghost = t1.loc_ghost || t2.loc_ghost }
     | _ -> none
+
+  let ghost l = { l with loc_ghost = true }
 end
 
 module Typ = struct
