@@ -41,8 +41,8 @@ CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   syntaxerr.cmo ast_helper.cmo ast_mapper.cmo \
   desugar_local_structure.cmo \
   parser.cmo \
-  indent.cmo \
   lexer.cmo parse.cmo \
+  indent.cmo \
   ccomp.cmo pparse.cmo compenv.cmo \
   ppxx.cmo desugar_pattern_guard.cmo desugar_type_at_let.cmo desugar_poly_record.cmo desugar_leopard.cmo
 

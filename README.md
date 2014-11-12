@@ -1,8 +1,18 @@
 OCamleopard / 大麒麟 
 ==================================
 
-OCamleopard / 大麒麟 (or simply "+leopard") is a collection of small modifications 
-to OCaml. Currently it includes:
+OCamleopard / 大麒麟 (or simply "+leopard") is a collection of small modifications to OCaml. Currently it includes:
+
+* Variant constructor as curried/uncurried functions
+* Haskell style value-type declaration
+* Python like indentation rule
+* Line comment
+* Pattern guards
+* Functions as infix operator
+* SML style local name space
+* η-expansion syntax sugar
+* SML# style polymorphic records
+* SML style user definable overloading
 
 Variant constructor as functions
 ----------------------------------
@@ -103,6 +113,43 @@ let id2 = & id id   (* is for let id2 x = id id x *)
 ```
 
 See README_eta.md
+
+Polymorphic records
+-----------------------------
+
+SML# style polymorphic record:
+
+```ocaml
+let r = {. x = 1; y = ref 2 }   (* without type definition of the record *)
+let () = print_int r..x
+let () = r..y <- 3
+```
+
+See README_poly_record.md.
+
+SML style overloading
+-----------------------------
+
+User definable overloaded values.
+
+```ocaml
+module Loaded = struct
+  external (+) : 'a -> 'a -> 'a = "%OVERLOADED"
+  module Int = struct
+    let (+) = Pervasives.(+)
+  end
+  module Float = struct
+    let (+) = Pervasives.(+.)
+  end
+end
+
+open Loaded
+let _ = 
+  assert (1 + 2 = 3);
+  assert (1.2 + 3.4 = 4.6) (* See it is not +. but + !!! *)
+```
+
+See README_overload.md.
 
 Trivia of giraffes
 ============================
