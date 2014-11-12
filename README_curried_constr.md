@@ -22,7 +22,7 @@ is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 is equal to `fun x y -> Foo (x,y)`.
 
-It works for list cons operator too:
+It works for list cons constructor too:
 
 ```ocaml
 (::) : ('a * 'a list) -> 'a list
@@ -44,9 +44,10 @@ is equivalent to
 fun x -> `Foo x
 ```
 
-Note that the polymorphic variant constructors can take at most 
-one argument and it is determined purely syntactically. 
-Therefore ``(`Foo ..)`` can take only one argument:
+Note that ``(`Foo ..)`` can take only one argument:
+the arity of the polymorphic variant constructors is at most one
+and  it is determined purely syntactically. 
+
 
 ```ocaml
 `(`Foo..) (1,2,3)  (* `Foo (1,2,3) *)
