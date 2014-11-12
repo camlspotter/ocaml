@@ -79,4 +79,6 @@ Including all the features above, ocaml+poly_record supports the following speci
 {. e with x = 1 }   (* update *)
 r..l                (* access *)
 r..l <- 2           (* modification *)
+(..l)               (* equiv. with fun r -> r..l *)
+(..l<-)             (* equiv. with fun r x -> r..l <- x *)
 ```

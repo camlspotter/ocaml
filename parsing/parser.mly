@@ -290,7 +290,7 @@ let mkctf_attrs d attrs =
   Ctf.mk ~loc:(symbol_rloc()) ~attrs d
 
 let in_poly_record e =
-  let loc = symbol_rloc () in
+  let loc = symbol_gloc () in
   mkexp @@ Pexp_extension ({ txt = "poly_record"; loc }, PStr [mkstrexp e []])
 
 %}
@@ -1306,6 +1306,27 @@ simple_expr:
         in_poly_record @@ mkexp (Pexp_record(fields, exten)) }
   | LBRACE DOT record_expr error
       { unclosed "{." 2 "}" 4 }
+  | LPAREN DOTDOT label RPAREN 
+      /* (..x) => [%poly_record fun r -> r.x ] */
+      { let open Exp in
+        let loc = symbol_gloc () in
+        in_poly_record 
+          (fun_ ~loc "" None (Pat.var ~loc (mkloc "r" loc)) 
+             (field ~loc (ident ~loc (mkloc (Lident "r") loc))
+                (mkrhs (Lident $3) 3)))
+      }    
+  | LPAREN DOTDOT label LESSMINUS RPAREN
+      /* (..x<-) => [%poly_record fun r e -> r.x <- e ] */
+      { let open Exp in
+        let loc = symbol_gloc () in
+        in_poly_record 
+          (fun_ ~loc "" None (Pat.var ~loc (mkloc "r" loc)) 
+             (fun_ ~loc "" None (Pat.var ~loc (mkloc "e" loc)) 
+                (setfield ~loc 
+                   (ident ~loc (mkloc (Lident "r") loc))
+                   (mkrhs (Lident $3) 3)
+                   (ident ~loc (mkloc (Lident "e") loc)))))
+      }    
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
