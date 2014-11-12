@@ -96,15 +96,17 @@ let extend super =
           (Poly_record.copy_with [| ($l1_hash, Obj.repr $v1); ... |] (None | Some (e : 'a Poly_record.t)) : 'a Poly_record.t)
         *)
         let open Exp in
-        with_default_loc e.pexp_loc & fun () ->
-          let fields = List.mapi (fun i ({txt; loc},e) ->
+        with_default_loc (Location.ghost e.pexp_loc) & fun () ->
+          let fields = List.mapi (fun i ({txt; loc}, e) ->
             match txt with
             | Longident.Lident l -> 
+                let eloc = Location.ghost e.pexp_loc in
+                let loc = Location.ghost loc in
                 let name = "v" ^ string_of_int i in
-                (Pat.var ~loc:e.pexp_loc name,
-                 Exp.var ~loc:e.pexp_loc name,
+                (Pat.var ~loc:eloc name,
+                 Exp.var ~loc:eloc name,
                  l, 
-                 int ~loc:loc (hash l), 
+                 int ~loc (hash l), 
                  e)
             | _ -> error_field_with_module loc) fields
           in
@@ -141,9 +143,9 @@ let extend super =
               None
           in
           let array = 
-            array ~loc:e.pexp_loc ~attrs:e.pexp_attributes
+            array ~loc:(Location.ghost e.pexp_loc) ~attrs:e.pexp_attributes
             & List.map (fun (_,_,_,hash,e) -> 
-              tuple ~loc:hash.pexp_loc 
+              tuple ~loc:(Location.ghost hash.pexp_loc)
                 [hash; 
                  apply (id "Obj.repr") ["",e]]) fields 
           in
@@ -165,7 +167,8 @@ let extend super =
            (Poly_record.get ($e' : < $l : 'a; ..> Poly_record.t) $l_hash : 'a)
         *)
         let open Exp in
-        with_default_loc e.pexp_loc & fun () ->
+        with_default_loc (Location.ghost e.pexp_loc) & fun () ->
+          let loc' = Location.ghost loc' in
           let hash = int ~loc:loc' (hash l) in
           let tvar = Typ.new_var "poly_record" in
           let obj_poly_record_t =
@@ -185,7 +188,8 @@ let extend super =
            Poly_record.set ($e' : < $l : 'a ref; ..> Poly_record.t) $l_hash (e'' : 'a)
         *)
         let open Exp in
-        with_default_loc e.pexp_loc & fun () ->
+        with_default_loc (Location.ghost e.pexp_loc) & fun () ->
+          let loc' = Location.ghost loc' in
           let hash = int ~loc:loc' (hash l) in
           let tvar = Typ.new_var "poly_record" in
           let tvar_ref = Typ.ref_ tvar in
