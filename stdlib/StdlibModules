@@ -65,4 +65,4 @@ STDLIB_MODULES=\
   stringLabels \
   sys \
   weak \
-  camlinternalPolyRecord
+  polyRecord

@@ -33,6 +33,7 @@ obj.cmi : int32.cmi
 oo.cmi : camlinternalOO.cmi
 parsing.cmi : obj.cmi lexing.cmi
 pervasives.cmi : camlinternalFormatBasics.cmi
+polyRecord.cmi : obj.cmi
 printexc.cmi :
 printf.cmi : buffer.cmi
 queue.cmi :
@@ -136,6 +137,8 @@ parsing.cmo : obj.cmi lexing.cmi array.cmi parsing.cmi
 parsing.cmx : obj.cmx lexing.cmx array.cmx parsing.cmi
 pervasives.cmo : camlinternalFormatBasics.cmi pervasives.cmi
 pervasives.cmx : camlinternalFormatBasics.cmx pervasives.cmi
+polyRecord.cmo : obj.cmi hashtbl.cmi array.cmi polyRecord.cmi
+polyRecord.cmx : obj.cmx hashtbl.cmx array.cmx polyRecord.cmi
 printexc.cmo : printf.cmi pervasives.cmi obj.cmi buffer.cmi array.cmi \
     printexc.cmi
 printexc.cmx : printf.cmx pervasives.cmx obj.cmx buffer.cmx array.cmx \
@@ -266,6 +269,8 @@ parsing.cmo : obj.cmi lexing.cmi array.cmi parsing.cmi
 parsing.p.cmx : obj.p.cmx lexing.p.cmx array.p.cmx parsing.cmi
 pervasives.cmo : camlinternalFormatBasics.cmi pervasives.cmi
 pervasives.p.cmx : camlinternalFormatBasics.p.cmx pervasives.cmi
+polyRecord.cmo : obj.cmi hashtbl.cmi array.cmi polyRecord.cmi
+polyRecord.p.cmx : obj.p.cmx hashtbl.p.cmx array.p.cmx polyRecord.cmi
 printexc.cmo : printf.cmi pervasives.cmi obj.cmi buffer.cmi array.cmi \
     printexc.cmi
 printexc.p.cmx : printf.p.cmx pervasives.p.cmx obj.p.cmx buffer.p.cmx array.p.cmx \

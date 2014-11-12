@@ -14,3 +14,5 @@ let g r = [%poly_record r.x <- 1]
 let r3 = [%poly_record { x = ref 0 }]
 let () = g r3 ; assert(![%poly_record r3.x] = 1)
 
+let _ = (..x)
+let _ = (..x<-)
