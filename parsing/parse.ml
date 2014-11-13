@@ -68,7 +68,7 @@ open Ast_mapper
 open Parsetree
 
 let mapper = List.fold_right (fun f st -> f st) 
-  [ ]
+  [ Desugar_fields.extend ]
   default_mapper
 
 let implementation lexbuf = 
