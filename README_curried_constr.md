@@ -17,17 +17,21 @@ is equal to `fun (x,y) -> Foo (x,y)`. And,
 
 ```ocaml
 (Foo ..)        (* This is not valid in the vanilla OCaml *)
-!Foo
 ```
 
-is equal to `fun x y -> Foo (x,y)`.
+and
+```
+!Foo            (* If you keep the vanilla syntax *)
+```
+
+are equal to `fun x y -> Foo (x,y)`.
 
 It works for list cons constructor too:
 
 ```ocaml
-(::) : ('a * 'a list) -> 'a list
-(:: ..) : 'a -> 'a list -> 'a list  (* This is not valid in the vanilla OCaml *)
-!(::) : 'a -> 'a list -> 'a list
+(::)    : ('a * 'a list) -> 'a list
+(:: ..) : 'a -> 'a list -> 'a list
+!(::)   : 'a -> 'a list -> 'a list
 ```
 
 Polymorphic variants as functions
@@ -38,13 +42,13 @@ Polymorphic variants as functions
 !`Foo
 ```
 
-is equivalent to 
+are equivalent to 
 
 ```ocaml
 fun x -> `Foo x
 ```
 
-Note that ``(`Foo ..)`` can take only one argument:
+Note that ``(`Foo ..)`` always take only one argument:
 the arity of the polymorphic variant constructors is at most one
 and  it is determined purely syntactically. 
 
@@ -65,7 +69,7 @@ Record fields as functions:
 
 ```ocaml
 (.label)       (* This is not valid in the vanilla OCaml *)
-(!).label
+(!).label      (* If you like to keep within the vanilla *)
 ```
 
 are equvalient to 
