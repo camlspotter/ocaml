@@ -60,3 +60,37 @@ and use_file = wrap Parser.use_file
 and core_type = wrap Parser.parse_core_type
 and expression = wrap Parser.parse_expression
 and pattern = wrap Parser.parse_pattern
+
+
+(* Desugaring *)
+
+open Ast_mapper
+open Parsetree
+
+let mapper = List.fold_right (fun f st -> f st) 
+  [ Desugar_poly_record.extend ]
+  default_mapper
+
+let implementation lexbuf = 
+  mapper.structure mapper @@ implementation lexbuf
+
+let interface lexbuf = 
+  mapper.signature mapper @@ interface lexbuf
+
+let top = function
+  | Ptop_def s -> 
+      Ptop_def (mapper.structure mapper s)
+  | (Ptop_dir _ as p) -> p
+
+let toplevel_phrase lexbuf = top @@ toplevel_phrase lexbuf
+
+let use_file lexbuf = List.map top @@ use_file lexbuf
+
+let core_type lexbuf = 
+  mapper.typ mapper @@ core_type lexbuf
+
+let expression lexbuf = 
+  mapper.expr mapper @@ expression lexbuf
+
+let pattern lexbuf = 
+  mapper.pat mapper @@ pattern lexbuf
