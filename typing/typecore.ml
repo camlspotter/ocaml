@@ -67,6 +67,7 @@ type error =
   | Invalid_for_loop_index
   | No_value_clauses
   | Exception_pattern_below_toplevel
+  | Other of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -3965,6 +3966,9 @@ let report_error env ppf = function
   | Exception_pattern_below_toplevel ->
       fprintf ppf
         "@[Exception patterns must be at the top level of a match case.@]"
+  | Other s ->
+      fprintf ppf
+        "@[%s@]" s
 
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
