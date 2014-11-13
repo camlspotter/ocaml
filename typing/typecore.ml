@@ -1883,7 +1883,7 @@ and type_expect_ ?in_function env sexp ty_expected =
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
 
-  (* (F ..) 1 2 3 ==> ([%fun] F) 1 2 3 
+  (* (F ..) 1 2 3 ==> (!F) 1 2 3 
      
      We here to try contract applications as possible...
   *)
@@ -1894,16 +1894,16 @@ and type_expect_ ?in_function env sexp ty_expected =
         { sexp with pexp_desc = Pexp_apply (x, xs @ ys) }
         ty_expected
 
-  | Pexp_apply({ pexp_desc = Pexp_extension({txt="fun"; loc=loc'}, _) }, 
+  | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
                ("", ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) ->
-      (* [%fun] C a b    i.e.   (C..) a b *)
+      (* ! C a b    i.e.   (C..) a b *)
       type_construct_curried ?in_function env loc ty_expected 
         sexp.pexp_attributes
         con loc' xs
 
-  | Pexp_apply({ pexp_desc = Pexp_extension({txt="fun"; loc=loc'}, _) }, 
+  | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
                ("", ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) ->
-      (* [%fun] `F a b    i.e.    (`F..) a b *)
+      (* ! `F a b    i.e.    (`F..) a b *)
       let open Ast_helper in
       begin match xs with
       | ("",x)::xs -> (* (`A..) a b => (`A a) b *)
@@ -2161,15 +2161,6 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
 
-  | Pexp_field( { pexp_desc= Pexp_extension ({txt="fun"; loc=loc'}, _) }, lid) -> (* [%fun].label  =>  fun x -> x.label *)
-      let open Ast_helper in
-      let p = Pat.var ~loc:loc' {txt="x"; loc=loc'} in
-      let e = Exp.ident ~loc:loc' {txt=Longident.Lident "x"; loc=loc'} in
-      let sexp = 
-        Exp.fun_  ~loc:loc' "" None p { sexp with pexp_desc = Pexp_field (e, lid) }
-      in
-      type_expect_ ?in_function env sexp ty_expected
-
   | Pexp_field(srecord, lid) ->
       let (record, label, _) = type_label_access env loc srecord lid in
       let (_, ty_arg, ty_res) = instance_label false label in
@@ -2378,15 +2369,6 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_extra = (Texp_coerce (cty, cty'), loc, sexp.pexp_attributes) ::
                        arg.exp_extra;
       }
-
-  | Pexp_send( { pexp_desc= Pexp_extension ({txt="fun"; loc=loc'}, _) }, met) -> (* [%fun]#label  =>  fun x -> x#label *)
-      let open Ast_helper in
-      let p = Pat.var ~loc:loc' {txt="x"; loc=loc'} in
-      let e = Exp.ident ~loc:loc' {txt=Longident.Lident "x"; loc=loc'} in
-      let sexp = 
-        Exp.fun_  ~loc:loc' "" None p { sexp with pexp_desc = Pexp_send (e, met) }
-      in
-      type_expect_ ?in_function env sexp ty_expected
 
   | Pexp_send (e, met) ->
       if !Clflags.principal then begin_def ();
@@ -3460,18 +3442,6 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
     wrap_disambiguate "This variant expression is expected to have" ty_expected
       (Constructor.disambiguate lid env opath) constrs in
   Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
-
-(*
-  let open Ast_helper in
-  let app sexp = match args with
-    | [] -> sexp
-    | _ -> Exp.apply sexp args
-  in
-  let mark_desugared sexp = 
-    { sexp with sexp.pexp_attribute = 
-        ({txt="fun_desugared"; loc=Location.none}, PStr []) :: sexp.pexp_attribute }
-  in
-*)
 
   match constr.cstr_arity with
   | 0 ->
