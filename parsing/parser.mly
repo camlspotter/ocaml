@@ -300,12 +300,14 @@ let mketa locopt e =
       fun_ ~loc:gloc "" None (var ~loc { txt="&"; loc })
         (apply ~loc e ["", ident ~loc { txt= Lident "&"; loc } ])
 
-(* make [[%fun]] *)
-let mk_per_fun loc = Exp.extension ~loc (mkloc "fun" loc, PStr [])
+(* make [(!)] *)
+let mk_bang loc = Exp.ident ~loc (mkloc (Lident "!") loc)
 
-(* make [[%fun] e] *)
- let mk_per_fun_app loc e = 
-  Exp.apply ~loc: (symbol_rloc ()) (mk_per_fun loc) ["", e]
+let mk_bang_lessminus loc = Exp.ident ~loc (mkloc (Lident "!<-") loc)
+
+(* make [(!) e] *)
+ let mk_bang_app loc e = 
+  Exp.apply ~loc: (symbol_rloc ()) (mk_bang loc) ["", e]
 
 let in_poly_record e =
   let loc = symbol_gloc () in
@@ -1229,34 +1231,6 @@ expr:
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
 */
-  | LPAREN DOT label_longident RPAREN
-      { 
-        (* (.l) => (fun x -> x.l) *)
-        let loc = symbol_rloc () in
-        mkexp(Pexp_field(mk_per_fun loc, mkrhs $3 3))
-(*
-        let noloc txt = {txt; loc=Location.none} in
-        let x = "x" in
-        let x_pat = mkpat(Ppat_var (noloc x)) in
-        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
-        let x_l = mkexp(Pexp_field(x_exp, mkrhs $3 3)) in
-        mkexp(Pexp_fun("", None, x_pat, x_l))
-*)
-      }
-  | LPAREN SHARP label RPAREN
-      { 
-        (* (#l) => (fun x -> x#l) *)
-        let loc = symbol_rloc () in
-        mkexp(Pexp_send(mk_per_fun loc, $3))
-(*
-        let noloc txt = {txt; loc=Location.none} in
-        let x = "x" in
-        let x_pat = mkpat(Ppat_var (noloc x)) in
-        let x_exp = mkexp(Pexp_ident (noloc (Lident x))) in
-        let x_l = mkexp(Pexp_send(x_exp, $3)) in
-        mkexp(Pexp_fun("", None, x_pat, x_l))
-*)
-      }
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
@@ -1340,9 +1314,9 @@ simple_expr:
       { mkexp(Pexp_construct(mkrhs $1 1, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
-  | LPAREN constr_longident DOTDOT RPAREN /* (Some ..) for fun x -> Some x */
-      { let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
+  | LPAREN constr_longident DOTDOT RPAREN /* (Cstr ..) => !Cstr */
+      { let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
       }
   | LPAREN seq_expr RPAREN
       { reloc_exp $2 }
@@ -1444,15 +1418,15 @@ simple_expr:
       { 
         mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None))
       }
-  | LPAREN COLONCOLON DOTDOT RPAREN
+  | LPAREN COLONCOLON DOTDOT RPAREN /* (::..) => !(::) */
       { 
-        let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
+        let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)))
       }
-  | LPAREN name_tag DOTDOT RPAREN
+  | LPAREN name_tag DOTDOT RPAREN /* (F..) => !F */
       { 
-        let loc = symbol_rloc () in
-        mk_per_fun_app loc (mkexp(Pexp_variant($2, None)))
+        let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_variant($2, None)))
 (*
         let noloc txt = {txt; loc=Location.none} in
         let x = "x" in
@@ -2433,37 +2407,3 @@ payload:
   | QUESTION pattern WHEN seq_expr { PPat ($2, Some $4) }
 ;
 %%
-
-(* Make sure that parse results go through the base mapper *)
-
-open Ast_mapper
-
-let implementation f lexbuf = 
-  let mapper = get_builtin_mapper () in
-  mapper.structure mapper @@ implementation f lexbuf
-
-let interface f lexbuf = 
-  let mapper = get_builtin_mapper () in
-  mapper.signature mapper @@ interface f lexbuf
-
-let top = function
-  | Ptop_def s -> 
-      let mapper = get_builtin_mapper () in
-      Ptop_def (mapper.structure mapper s)
-  | (Ptop_dir _ as p) -> p
-
-let toplevel_phrase f lexbuf = top @@ toplevel_phrase f lexbuf
-
-let use_file f lexbuf = List.map top @@ use_file f lexbuf
-
-let parse_core_type f lexbuf = 
-  let mapper = get_builtin_mapper () in
-  mapper.typ mapper @@ parse_core_type f lexbuf
-
-let parse_expression f lexbuf = 
-  let mapper = get_builtin_mapper () in
-  mapper.expr mapper @@ parse_expression f lexbuf
-
-let parse_pattern f lexbuf = 
-  let mapper = get_builtin_mapper () in
-  mapper.pat mapper @@ parse_pattern f lexbuf

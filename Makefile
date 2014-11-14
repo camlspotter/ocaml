@@ -44,13 +44,11 @@ UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
-  parsing/syntaxerr.cmo \
-  parsing/lexer.cmo \
-  parsing/ast_mapper.cmo \
-  parsing/desugar_local_structure.cmo parsing/indent.cmo \
-  parsing/parser.cmo parsing/parse.cmo parsing/printast.cmo \
-  parsing/pprintast.cmo \
-  parsing/ppxx.cmo parsing/desugar_pattern_guard.cmo parsing/desugar_type_at_let.cmo parsing/desugar_poly_record.cmo parsing/desugar_leopard.cmo
+  parsing/syntaxerr.cmo parsing/parser.cmo \
+  parsing/lexer.cmo parsing/ast_mapper.cmo \
+  parsing/ppxx.cmo parsing/desugar_pattern_guard.cmo parsing/desugar_type_at_let.cmo parsing/desugar_poly_record.cmo parsing/desugar_leopard.cmo \
+  parsing/parse.cmo parsing/printast.cmo \
+  parsing/pprintast.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
