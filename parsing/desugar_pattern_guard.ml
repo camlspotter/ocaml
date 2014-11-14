@@ -160,5 +160,3 @@ open Ast_mapper
 let extend super =
   let expr self e = super.expr self & desugar_expr e in 
   { super with expr }
-
-let () = Ast_mapper.extend_builtin_mapper extend
