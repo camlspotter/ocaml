@@ -44,10 +44,10 @@ UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
-  parsing/ast_mapper.cmo \
-  parsing/desugar.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
-  parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
+  parsing/lexer.cmo parsing/ast_mapper.cmo \
+  parsing/ppxx.cmo parsing/desugar_type_at_let.cmo \
+  parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
