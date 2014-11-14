@@ -98,5 +98,3 @@ let extend super =
     super.structure_item self & desugar_structure_item i 
   in
   { super with expr; structure_item }
-
-let () = Ast_mapper.extend_builtin_mapper extend
