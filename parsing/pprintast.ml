@@ -76,8 +76,8 @@ let protect_ident ppf txt =
 let protect_longident ppf print_longident longprefix txt =
   let format : (_, _, _) format =
     if not (needs_parens txt) then "%a.%s"
-    else if needs_spaces txt then  "(@;%a.%s@;)"
-    else "(%a.%s)" in
+    else if needs_spaces txt then  "%a.(@;%s@;)"
+    else "%a.(%s)" in
   fprintf ppf format print_longident longprefix txt
 
 type space_formatter = (unit, Format.formatter, unit) format
@@ -351,7 +351,7 @@ class printer  ()= object(self:'self)
       | p -> self#pattern1 f p in
     if x.ppat_attributes <> [] then self#pattern f x
     else match x.ppat_desc with
-    | Ppat_variant (l, Some p) ->  pp f "@[<2>`%s@;%a@]" l self#pattern1 p (*RA*)
+    | Ppat_variant (l, Some p) ->  pp f "@[<2>`%s@;%a@]" l self#simple_pattern p
     | Ppat_construct (({txt=Lident("()"|"[]");_}), _) -> self#simple_pattern f x
     | Ppat_construct (({txt;_} as li), po) -> (* FIXME The third field always false *)
         if txt = Lident "::" then

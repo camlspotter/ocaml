@@ -693,8 +693,8 @@ let should_extend ext env = match ext with
 
 (* complement constructor tags *)
 let complete_tags nconsts nconstrs tags =
-  let seen_const = Array.create nconsts false
-  and seen_constr = Array.create nconstrs false in
+  let seen_const = Array.make nconsts false
+  and seen_constr = Array.make nconstrs false in
   List.iter
     (function
       | Cstr_constant i -> seen_const.(i) <- true
@@ -1809,7 +1809,11 @@ let do_check_partial ?pred exhaust loc casel pss = match pss with
           None -> Total
         | Some v ->
             let errmsg =
-              try
+              match v.pat_desc with
+                Tpat_construct (_, {cstr_name="*extension*"}, _) ->
+                  "_\nMatching over values of open types must include\n\
+                   a wild card pattern in order to be exhaustive."  
+              | _ -> try
                 let buf = Buffer.create 16 in
                 let fmt = formatter_of_buffer buf in
                 top_pretty fmt v;
@@ -1825,9 +1829,11 @@ let do_check_partial ?pred exhaust loc casel pss = match pss with
                 end ;
                 Buffer.contents buf
               with _ ->
-                "" in
+                ""
+            in
             Location.prerr_warning loc (Warnings.Partial_match errmsg) ;
-            Partial end
+            Partial
+        end
     | _ ->
         fatal_error "Parmatch.check_partial"
     end
