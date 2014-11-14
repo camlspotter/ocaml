@@ -296,6 +296,7 @@ type pers_struct =
     ps_sig: signature;
     ps_comps: module_components;
     ps_crcs: (string * Digest.t option) list;
+    mutable ps_crcs_checked: bool;
     ps_filename: string;
     ps_flags: pers_flags list }
 
@@ -305,25 +306,31 @@ let persistent_structures =
 (* Consistency between persistent structures *)
 
 let crc_units = Consistbl.create()
-let imported_units = ref ([] : string list)
+
+module StringSet =
+  Set.Make(struct type t = string let compare = String.compare end)
+
+let imported_units = ref StringSet.empty
+
+let add_import s =
+  imported_units := StringSet.add s !imported_units
 
 let clear_imports () =
   Consistbl.clear crc_units;
-  imported_units := []
-
-let add_imports ps =
-  List.iter
-    (fun (name, _) -> imported_units := name :: !imported_units)
-    ps.ps_crcs
+  imported_units := StringSet.empty
 
 let check_consistency ps =
+  if not ps.ps_crcs_checked then
   try
     List.iter
       (fun (name, crco) ->
          match crco with
             None -> ()
-          | Some crc -> Consistbl.check crc_units name crc ps.ps_filename)
-      ps.ps_crcs
+          | Some crc ->
+              add_import name;
+              Consistbl.check crc_units name crc ps.ps_filename)
+      ps.ps_crcs;
+    ps.ps_crcs_checked <- true;
   with Consistbl.Inconsistency(name, source, auth) ->
     error (Inconsistent_import(name, auth, source))
 
@@ -345,11 +352,12 @@ let read_pers_struct modname filename =
              ps_comps = comps;
              ps_crcs = crcs;
              ps_filename = filename;
-             ps_flags = flags } in
+             ps_flags = flags;
+             ps_crcs_checked = false;
+           } in
   if ps.ps_name <> modname then
     error (Illegal_renaming(modname, ps.ps_name, filename));
-  add_imports ps;
-  check_consistency ps;
+  add_import name;
   List.iter
     (function Rectypes ->
       if not !Clflags.recursive_types then
@@ -358,23 +366,27 @@ let read_pers_struct modname filename =
   Hashtbl.add persistent_structures modname (Some ps);
   ps
 
-let find_pers_struct name =
+let find_pers_struct ?(check=true) name =
   if name = "*predef*" then raise Not_found;
   let r =
     try Some (Hashtbl.find persistent_structures name)
     with Not_found -> None
   in
-  match r with
-  | Some None -> raise Not_found
-  | Some (Some sg) -> sg
-  | None ->
-      let filename =
-        try find_in_path_uncap !load_path (name ^ ".cmi")
-        with Not_found ->
-          Hashtbl.add persistent_structures name None;
-          raise Not_found
-      in
-      read_pers_struct name filename
+  let ps =
+    match r with
+    | Some None -> raise Not_found
+    | Some (Some sg) -> sg
+    | None ->
+        let filename =
+          try find_in_path_uncap !load_path (name ^ ".cmi")
+          with Not_found ->
+            Hashtbl.add persistent_structures name None;
+            raise Not_found
+        in
+        read_pers_struct name filename
+  in
+  if check then check_consistency ps;
+  ps
 
 let reset_cache () =
   current_unit := "";
@@ -654,11 +666,11 @@ and lookup_module ~load lid env : Path.t =
         p
       with Not_found ->
         if s = !current_unit then raise Not_found;
-	if !Clflags.transparent_modules && not load then
-	  try ignore (find_in_path_uncap !load_path (s ^ ".cmi"))
+        if !Clflags.transparent_modules && not load then
+          try ignore (find_pers_struct ~check:false s)
           with Not_found ->
 	    Location.prerr_warning Location.none (Warnings.No_cmi_file s)
-	else ignore (find_pers_struct s);
+        else ignore (find_pers_struct s);
         Pident(Ident.create_persistent s)
       end
   | Ldot(l, s) ->
@@ -1577,6 +1589,7 @@ let open_signature ?(loc = Location.none) ?(toplevel = false) ovf root sg env =
 
 let read_signature modname filename =
   let ps = read_pers_struct modname filename in
+  check_consistency ps;
   ps.ps_sig
 
 (* Return the CRC of the interface of the given compilation unit *)
@@ -1596,7 +1609,7 @@ let crc_of_unit name =
 (* Return the list of imported interfaces with their CRCs *)
 
 let imports() =
-  Consistbl.extract !imported_units crc_units
+  Consistbl.extract (StringSet.elements !imported_units) crc_units
 
 (* Save a signature to a file *)
 
@@ -1627,10 +1640,12 @@ let save_signature_with_imports sg modname filename imports =
         ps_comps = comps;
         ps_crcs = (cmi.cmi_name, Some crc) :: imports;
         ps_filename = filename;
-        ps_flags = cmi.cmi_flags } in
+        ps_flags = cmi.cmi_flags;
+        ps_crcs_checked = false;
+      } in
     Hashtbl.add persistent_structures modname (Some ps);
     Consistbl.set crc_units modname crc filename;
-    imported_units := modname :: !imported_units;
+    add_import modname;
     sg
   with exn ->
     close_out oc;

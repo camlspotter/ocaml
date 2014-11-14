@@ -18,7 +18,6 @@ let ppf = Format.err_formatter
 
 type file_kind = ML | MLI;;
 
-let include_dirs = ref []
 let load_path = ref ([] : (string * string array) list)
 let ml_synonyms = ref [".ml"]
 let mli_synonyms = ref [".mli"]
@@ -57,18 +56,21 @@ let readdir dir =
     dirs := StringMap.add dir contents !dirs;
     contents
 
+let add_to_list li s =
+  li := s :: !li
+
 let add_to_load_path dir =
   try
     let dir = Misc.expand_directory Config.standard_library dir in
     let contents = readdir dir in
-    load_path := (dir, contents) :: !load_path
+    add_to_list load_path (dir, contents)
   with Sys_error msg ->
     Format.fprintf Format.err_formatter "@[Bad -I option: %s@]@." msg;
     error_occurred := true
 
 let add_to_synonym_list synonyms suffix =
   if (String.length suffix) > 1 && suffix.[0] = '.' then
-    synonyms := suffix :: !synonyms
+    add_to_list synonyms suffix
   else begin
     Format.fprintf Format.err_formatter "@[Bad suffix: '%s'@]@." suffix;
     error_occurred := true
@@ -213,14 +215,22 @@ let report_err exn =
               Location.report_error err
         | None -> raise x
 
+let tool_name = "ocamldep"
+
 let read_parse_and_extract parse_function extract_function magic source_file =
   Depend.free_structure_names := Depend.StringSet.empty;
   try
     let input_file = Pparse.preprocess source_file in
     begin try
       let ast =
-        Pparse.file Format.err_formatter input_file parse_function magic in
-      extract_function Depend.StringSet.empty ast;
+        Pparse.file ~tool_name Format.err_formatter
+		    input_file parse_function magic
+      in
+      let bound_vars = Depend.StringSet.empty in
+      List.iter (fun modname ->
+	Depend.open_module bound_vars (Longident.Lident modname)
+      ) !Clflags.open_modules;
+      extract_function bound_vars ast;
       Pparse.remove_preprocessed input_file;
       !Depend.free_structure_names
     with x ->
@@ -295,7 +305,7 @@ let file_dependencies_as kind source_file =
   load_path := [];
   List.iter add_to_load_path (
       (!Compenv.last_include_dirs @
-       !include_dirs @
+       !Clflags.include_dirs @
        !Compenv.first_include_dirs
       ));
   Location.input_name := source_file;
@@ -404,14 +414,14 @@ let print_version_num () =
 
 let _ =
   Clflags.classic := false;
-  first_include_dirs := Filename.current_dir_name :: !first_include_dirs;
+  add_to_list first_include_dirs Filename.current_dir_name;
   Compenv.readenv ppf Before_args;
   Arg.parse [
      "-absname", Arg.Set Location.absname,
         " Show absolute filenames in error messages";
      "-all", Arg.Set all_dependencies,
         " Generate dependencies on all files";
-     "-I", Arg.String (fun s -> include_dirs := s :: !include_dirs),
+     "-I", Arg.String (add_to_list Clflags.include_dirs),
         "<dir>  Add <dir> to the list of include directories";
      "-impl", Arg.String (file_dependencies_as ML),
         "<f>  Process <f> as a .ml file";
@@ -427,9 +437,11 @@ let _ =
         " Generate dependencies for native-code only (no .cmo files)";
      "-one-line", Arg.Set one_line,
         " Output one line per file, regardless of the length";
+     "-open", Arg.String (add_to_list Clflags.open_modules),
+        "<module>  Opens the module <module> before typing";
      "-pp", Arg.String(fun s -> Clflags.preprocessor := Some s),
          "<cmd>  Pipe sources through preprocessor <cmd>";
-     "-ppx", Arg.String(fun s -> first_ppx := s :: !first_ppx),
+     "-ppx", Arg.String (add_to_list first_ppx),
          "<cmd>  Pipe abstract syntax trees through preprocessor <cmd>";
      "-slash", Arg.Set Clflags.force_slash,
          " (Windows) Use forward slash / instead of backslash \\ in file paths";
