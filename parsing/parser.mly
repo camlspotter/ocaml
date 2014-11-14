@@ -1231,6 +1231,26 @@ expr:
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
 */
+
+  | LPAREN DOT label_longident RPAREN
+      { 
+        (* (.l) => (!).l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_field(mk_bang loc, mkrhs $3 3))
+      }
+  | LPAREN DOT label_longident LESSMINUS RPAREN
+      { 
+        (* (.l<-) => (!<-).l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_field(mk_bang_lessminus loc, mkrhs $3 3))
+      }
+  | LPAREN SHARP label RPAREN
+      { 
+        (* (#l) => (!)#l *)
+        let loc = symbol_gloc () in
+        mkexp(Pexp_send(mk_bang loc, $3))
+      }
+
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
@@ -1314,10 +1334,6 @@ simple_expr:
       { mkexp(Pexp_construct(mkrhs $1 1, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
-  | LPAREN constr_longident DOTDOT RPAREN /* (Cstr ..) => !Cstr */
-      { let loc = symbol_gloc () in
-        mk_bang_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
-      }
   | LPAREN seq_expr RPAREN
       { reloc_exp $2 }
   | LPAREN seq_expr error
