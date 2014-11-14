@@ -210,5 +210,3 @@ let extend super =
   { super with expr }
 
 let mapper = extend default_mapper
-
-let () = Ast_mapper.extend_builtin_mapper extend
