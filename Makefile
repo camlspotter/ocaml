@@ -45,9 +45,11 @@ UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
-  parsing/lexer.cmo parsing/indent.cmo parsing/parse.cmo parsing/printast.cmo \
-  parsing/pprintast.cmo \
-  parsing/ast_mapper.cmo
+  parsing/lexer.cmo parsing/ast_mapper.cmo \
+  parsing/indent.cmo \
+  parsing/ppxx.cmo \
+  parsing/parse.cmo parsing/printast.cmo \
+  parsing/pprintast.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
@@ -366,6 +368,13 @@ installoptopt:
 	   $(INSTALL_COMPLIBDIR)
 	cd $(INSTALL_COMPLIBDIR) && $(RANLIB) ocamlcommon.a ocamlbytecomp.a \
 	   ocamloptcomp.a
+
+# Run all tests
+
+tests: opt.opt
+	cd testsuite; $(MAKE) clean && $(MAKE) all
+
+# The clean target
 
 clean:: partialclean
 

@@ -67,6 +67,7 @@ type error =
   | Invalid_for_loop_index
   | No_value_clauses
   | Exception_pattern_below_toplevel
+  | Other of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error
@@ -2905,6 +2906,8 @@ and type_format loc str env =
           mk_constr "Ignored_scan_get_counter" [
             mk_counter counter
           ]
+        | Ignored_scan_next_char ->
+          mk_constr "Ignored_scan_next_char" []
       and mk_padding : type x y . (x, y) padding -> Parsetree.expression =
       fun pad -> match pad with
         | No_padding         -> mk_constr "No_padding" []
@@ -2970,6 +2973,8 @@ and type_format loc str env =
             mk_int_opt width_opt; mk_string char_set; mk_fmt rest ]
         | Scan_get_counter (cnt, rest) ->
           mk_constr "Scan_get_counter" [ mk_counter cnt; mk_fmt rest ]
+        | Scan_next_char rest ->
+          mk_constr "Scan_next_char" [ mk_fmt rest ]
         | Ignored_param (ign, rest) ->
           mk_constr "Ignored_param" [ mk_ignored ign; mk_fmt rest ]
         | End_of_format ->
@@ -3961,6 +3966,9 @@ let report_error env ppf = function
   | Exception_pattern_below_toplevel ->
       fprintf ppf
         "@[Exception patterns must be at the top level of a match case.@]"
+  | Other s ->
+      fprintf ppf
+        "@[%s@]" s
 
 let report_error env ppf err =
   wrap_printing_env env (fun () -> report_error env ppf err)
