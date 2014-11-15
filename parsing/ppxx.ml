@@ -94,6 +94,7 @@ module Exp = struct
   let raise_ name argopt = 
     apply (pervasives "raise") [ "", construct (lid name) argopt  ]
 
+  let with_desc e desc = { e with pexp_desc = desc }
 end
 
 module Pat = struct
@@ -127,40 +128,3 @@ let ppx_errorf ?(loc = Location.none) ?(sub = []) ?(if_highlight = "") =
     let e = { Location.loc; msg; sub; if_highlight } in
     Format.eprintf "Error at %s: %a@." !ppx_name Location.report_error e;
     exit 1)
-
-(*
-open Ast_mapper
-
-let test mapper fname = 
-  try
-    if Filename.check_suffix fname ".ml" then (* .mlt ? *)
-      let str = Pparse.parse_implementation ~tool_name:"ppx" Format.err_formatter fname in
-      let str = mapper.structure mapper str in
-      Pprintast.structure Format.std_formatter str
-    else if Filename.check_suffix fname ".mli" then 
-      let sg = Pparse.parse_interface ~tool_name:"ppx" Format.err_formatter fname in
-      let sg = mapper.signature mapper sg in
-      Pprintast.signature Format.std_formatter sg
-    else assert false;
-    Format.fprintf Format.std_formatter "@."
-  with
-  | Syntaxerr.Error e ->
-      !!% "%a@." Syntaxerr.report_error e
-
-let run name mapper = 
-  ppx_name := name;
-  let debug = ref false in
-  let rev_files = ref [] in 
-  Arg.parse 
-    [ "-debug", Arg.Set debug, "debug mode which can take .ml/.mli then print the result"
-    ]
-    (fun s -> rev_files := s :: !rev_files) (* will be handled by [Ast_mapper.apply] *)
-    name;
-  match !debug, List.rev !rev_files with
-  | true, files ->
-      List.iter (test mapper) files
-  | false, [infile; outfile] ->
-      Ast_mapper.apply ~source:infile ~target:outfile mapper
-  | _ -> 
-      failwith @@ name ^ " infile outfile"
-*)

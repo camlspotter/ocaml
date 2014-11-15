@@ -38,9 +38,9 @@ opt.opt: ocamldep.opt read_cmt.opt
 CAMLDEP_OBJ=depend.cmo ocamldep.cmo
 CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   warnings.cmo location.cmo longident.cmo \
-  syntaxerr.cmo ast_helper.cmo parser.cmo lexer.cmo \
-  ppxx.cmo \
-  ast_mapper.cmo parse.cmo \
+  syntaxerr.cmo ast_helper.cmo ast_mapper.cmo parser.cmo lexer.cmo \
+  ppxx.cmo desugar_fields.cmo \
+  parse.cmo \
   ccomp.cmo ast_mapper.cmo pparse.cmo compenv.cmo
 
 ocamldep: depend.cmi $(CAMLDEP_OBJ)
@@ -71,8 +71,9 @@ CSLPROF=ocamlprof.cmo
 CSLPROF_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   warnings.cmo location.cmo longident.cmo \
   syntaxerr.cmo ast_helper.cmo parser.cmo lexer.cmo \
-  ppxx.cmo \
-  ast_mapper.cmo parse.cmo
+  ast_mapper.cmo \
+  ppxx.cmo desugar_fields.cmo \
+  parse.cmo
 
 ocamlprof: $(CSLPROF) profiling.cmo
 	$(CAMLC) $(LINKFLAGS) -o ocamlprof $(CSLPROF_IMPORTS) $(CSLPROF)
