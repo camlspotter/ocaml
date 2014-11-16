@@ -2012,7 +2012,12 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_type = newty (Ttuple (List.map (fun e -> e.exp_type) expl));
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
-  | Pexp_construct(lid, sarg) ->
+  | Pexp_construct(lid, None) -> 
+      (* None  or   (Some) *)
+      (* type_construct env loc lid sarg ty_expected sexp.pexp_attributes *)
+      type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid
+  | Pexp_construct(lid, sarg) -> 
+      (* Some e *)
       type_construct env loc lid sarg ty_expected sexp.pexp_attributes
   | Pexp_variant(l, sarg) ->
       (* Keep sharing *)

@@ -1332,6 +1332,10 @@ simple_expr:
       { mkexp(Pexp_construct(mkrhs $1 1, None)) }
   | name_tag %prec prec_constant_constructor
       { mkexp(Pexp_variant($1, None)) }
+  | LPAREN constr_longident DOTDOT RPAREN /* (Cstr ..) => !Cstr */
+      { let loc = symbol_gloc () in
+        mk_bang_app loc (mkexp(Pexp_construct(mkrhs $2 1, None)))
+      }
   | LPAREN seq_expr RPAREN
       { reloc_exp $2 }
   | LPAREN seq_expr error
