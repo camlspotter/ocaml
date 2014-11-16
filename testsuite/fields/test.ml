@@ -6,5 +6,3 @@ let w = (!)#meth
 let x' = (.contents)
 let y' = (.contents<-)
 let w' = (#meth)
-
-

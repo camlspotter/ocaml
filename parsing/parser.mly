@@ -1231,7 +1231,6 @@ expr:
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
 */
-
   | LPAREN DOT label_longident RPAREN
       { 
         (* (.l) => (!).l *)
@@ -1250,7 +1249,6 @@ expr:
         let loc = symbol_gloc () in
         mkexp(Pexp_send(mk_bang loc, $3))
       }
-
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
