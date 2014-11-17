@@ -1,21 +1,23 @@
 Polymorphic record in OCaml
 =====================================
 
-This ppx adds polymorphic record.
+Polymorphic records by this extension uses OCaml object types, 
+but does not use OCaml object values. Therefore, the polymorphic records 
+are safely comparable and marshalable.
 
 `[%poly_record <exp>]`
 -------------------------------------
 
 In side the extension `[%poly_record ...]`, 
-the record syntax is are changed from the normal (monomorphic) records
-to polymorphic records whose type is `_ Ppx_poly_record.Poly_record.t`.
+the record syntax is changed from the normal (monomorphic) records
+to polymorphic records whose type is `_ Poly_record.t`.
 
 Record creation `{ l = e; .. }`
 --------------------------------------
 
 ```ocaml
 # [%poly_record { x = 1; y = 1.0 }];;
-- : < x : int; y : float > Ppx_poly_record.Poly_record.t = <abstr>
+- : < x : int; y : float > Poly_record.t = <abstr>
 ```
 
 Unlike the normal monomorphic records, it is not required to declare
@@ -30,7 +32,7 @@ Accessing fields of the polymorphic records is by `r.x` inside
 
 ```ocaml
 # [%poly_record fun r -> r.x];;
-- : < x : 'tvar_1; .. > Ppx_poly_record.Poly_record.t -> 'tvar_1 = <fun>
+- : < x : 'tvar_1; .. > Poly_record.t -> 'tvar_1 = <fun>
 ```
 
 Record copy with field updates: `{ r with l = e; .. }`
@@ -40,18 +42,18 @@ The syntax of record copy `{ r with x = e }` works for polymorphic records too:
 
 ```ocaml
 # [%poly_record fun r -> { r with x = 1 }];;
-- : (< x : int; .. > as 'a) Ppx_poly_record.Poly_record.t 
-    -> 'a Ppx_poly_record.Poly_record.t
+- : (< x : int; .. > as 'a) Poly_record.t 
+    -> 'a Poly_record.t
 ```
 
 Field mutation `r.l <- e`
 --------------------------------
 
-Field mutation `r.x <- e` works in `[%poly_record ..]`, too, but a bit differently from the monomorphic record, since the polymorphic record has no type declaration to specify a field is mutable. In `[%poly_record ..]`, `r.x <- e` works when the field `x` is a reference:
+Field mutation `r.x <- e` works in `[%poly_record ..]`, too, but a bit differently from the monomorphic record, since the polymorphic record has no type declaration to specify a field is mutable. In `[%poly_record ..]`, `r.x <- e` works only when the field `x` is a reference:
 
 ```ocaml
 # [%poly_record let r = { x = ref 0 } in r.x <- 1; r];;
-- : < x : int ref; .. > Ppx_poly_record.Poly_record.t = <abstr>
+- : < x : int ref; .. > Poly_record.t = <abstr>
 ```
 
 `[%mono_record ..]`
@@ -67,12 +69,10 @@ Todo
 * let [%poly_record] = true in ... or something equivalent
 * Patterns: `{ x = p }`. This is diffcult and probably requires ppx_pattern_guard
 
-+poly_record
++poly_record syntax
 ====================
 
-ocaml+poly_record is an integration of ppx_poly_record into the OCaml compiler internal.
-
-Including all the features above, ocaml+poly_record supports the following special syntax for polymorphic records:
+ocaml+poly_record provides special syntax constructs for the polymorphic records. Including all the features above, +poly_record supports the following:
 
 ```ocaml
 {. x = 1; y = 2 }   (* creation *)
@@ -82,3 +82,6 @@ r..l <- 2           (* modification *)
 (..l)               (* equiv. with fun r -> r..l *)
 (..l<-)             (* equiv. with fun r x -> r..l <- x *)
 ```
+
+"**P**eriod for **P**olymorphic records."
+
