@@ -63,6 +63,19 @@ More generally,
 
 where `x`'s are fresh variables.
 
+Within the vanilla syntax
+----------------------------------
+
+`&` is an extension of OCaml syntax. If you prefer being within the vanilla syntax, use `[%eta]`:
+
+```ocaml
+let id8 = [%eta] id id
+```
+
+which is equivalent with `let id8 = & id id`.
+
+Actually `[%eta] e es` is a syntax sugar which is converted to `fun x -> e es x`.
+
 How to remember
 ---------------------------------------------
 
