@@ -293,6 +293,8 @@ let mketa locopt e =
   match locopt with
   | None -> e
   | Some loc ->
+      (* Oh we immediately desugar it here. Maybe it is fun to have
+         [%eta] instead and let Desugar_eta do the job. *)
       let open Pat in
       let open Exp in
       let gloc = { loc with loc_ghost = true } in

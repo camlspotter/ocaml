@@ -72,6 +72,7 @@ let mapper = List.fold_right (fun f st -> f st)
   ; Desugar_poly_record.extend
   ; Desugar_type_at_let.extend
   ; Desugar_fields.extend
+  ; Desugar_eta.extend
   ]
   default_mapper
 
