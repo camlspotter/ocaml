@@ -78,10 +78,6 @@ let extend super =
 
     (* is_poly_record () *)
 
-    | _ -> 
-
-    let e = super.expr self e in
-    match e.pexp_desc with
     | Pexp_record (fields, eopt) ->
         (*
           { l1 = v1; l2 = v2 }
@@ -212,7 +208,7 @@ let extend super =
         (* [x.M.l <- e'] is error *)
         error_field_with_module f_loc
                   
-    | _ -> e
+    | _ -> super.expr self e
   in
   { super with expr }
 
