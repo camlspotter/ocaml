@@ -78,6 +78,10 @@ let extend super =
 
     (* is_poly_record () *)
 
+    | _ -> 
+
+    let e = super.expr self e in
+    match e.pexp_desc with
     | Pexp_record (fields, eopt) ->
         (*
           { l1 = v1; l2 = v2 }
@@ -107,7 +111,7 @@ let extend super =
                  Exp.var ~loc:eloc name,
                  l, 
                  int ~loc (hash l), 
-                 e)
+                 self.expr self e)
             | _ -> error_field_with_module loc) fields
           in
           check_fields fields;
@@ -167,6 +171,7 @@ let extend super =
            (Poly_record.get ($e' : < $l : 'a; ..> Poly_record.t) $l_hash : 'a)
         *)
         let open Exp in
+        let e' = self.expr self e' in
         with_default_loc (Location.ghost e.pexp_loc) & fun () ->
           let loc' = Location.ghost loc' in
           let hash = int ~loc:loc' (hash l) in
@@ -188,6 +193,8 @@ let extend super =
            Poly_record.set ($e' : < $l : 'a ref; ..> Poly_record.t) $l_hash (e'' : 'a)
         *)
         let open Exp in
+        let e' = self.expr self e' in
+        let e'' = self.expr self e'' in
         with_default_loc (Location.ghost e.pexp_loc) & fun () ->
           let loc' = Location.ghost loc' in
           let hash = int ~loc:loc' (hash l) in
@@ -205,7 +212,7 @@ let extend super =
         (* [x.M.l <- e'] is error *)
         error_field_with_module f_loc
                   
-    | _ -> super.expr self e
+    | _ -> e
   in
   { super with expr }
 
