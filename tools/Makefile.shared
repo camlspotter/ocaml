@@ -42,7 +42,7 @@ CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   indent.cmo \
   ppxx.cmo \
   ast_mapper.cmo parse.cmo \
-  ccomp.cmo ast_mapper.cmo pparse.cmo compenv.cmo
+  ccomp.cmo pparse.cmo compenv.cmo
 
 ocamldep: depend.cmi $(CAMLDEP_OBJ)
 	$(CAMLC) $(LINKFLAGS) -compat-32 -o ocamldep $(CAMLDEP_IMPORTS) $(CAMLDEP_OBJ)
