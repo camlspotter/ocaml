@@ -33,7 +33,8 @@ let f e =
   if e then begin              (* <- begin inserted *)
     print_endline "true!";
     42
-  end else begin               (* <- end and begin inserted *)
+  end                          (* <- end and begin inserted *)
+  else begin                   (* <- begin inserted *)
     print_endline "false!";
     -1
   end                          (* <- end inserted *)  
@@ -42,11 +43,11 @@ in
 ```
 
 This Python style `xxx:` keywords are introduced all the paired keywords
-like `do` and `done`, `object` and `end`, etc. and all the open keywords
+like `do` and `done`, `object` and `end`, etc. and all the open end keywords
 without the corresponding closings such as `match .. with`, `try .. with`,
 `funciton`.
 
-`do:` does not require the paired `done`:
+For example, `do:` does not require the paired `done`:
 
 ```ocaml
 for i = 1 to 100 do:
@@ -92,7 +93,7 @@ match xs with
   | B -> 5
   end
 ```
-You can see more samples at `testsuite/indent/indent_test.ml`.
+You can see more samples at `testsuite/indent/test.ml`.
 
 Special keywords
 ====================================
@@ -124,7 +125,7 @@ is equivalent to
 ```ocaml
 for i = 0 to 100 do
   print_int i;
-done;
+done;           (* done is inserted looking at the indent back to 0 *)
 print_endline "printed 100!"
 ```
 
@@ -168,7 +169,7 @@ let rec f x =
   | 0, _ -> print_string "fiz"    (* level 2. *)
   | _, 0 -> print_string "buz"    (* level 2. *)
   | _ -> print_int x;             (* level 2. *)
-  f (x+1)                         (* level 2. Start not with | *)
+  f (x+1)                         (* level 2. Starting not with |, we have to close the implicit begin *)
 ```
 
 is equivalent to

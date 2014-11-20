@@ -2,124 +2,124 @@ open Lexing
 open Parser
 
 let to_string = function
-  | AMPERAMPER -> "AMPERAMPER"
-  | AMPERSAND -> "AMPERSAND"
-  | AND -> "AND"
-  | AS -> "AS"
-  | ASSERT -> "ASSERT"
-  | BACKQUOTE -> "BACKQUOTE"
-  | BANG -> "BANG"
-  | BAR -> "BAR"
-  | BARBAR -> "BARBAR"
-  | BARRBRACKET -> "BARRBRACKET"
-  | BEGIN -> "BEGIN"
-  | CHAR c -> "CHAR " ^ Printf.sprintf "%c" c
-  | CLASS -> "CLASS"
-  | COLON -> "COLON"
-  | COLONCOLON -> "COLONCOLON"
-  | COLONEQUAL -> "COLONEQUAL"
-  | COLONGREATER -> "COLONGREATER"
-  | COMMA -> "COMMA"
-  | CONSTRAINT -> "CONSTRAINT"
-  | DO -> "DO"
-  | DONE -> "DONE"
-  | DOT -> "DOT"
-  | DOTDOT -> "DOTDOT"
-  | DOWNTO -> "DOWNTO"
-  | ELSE -> "ELSE"
-  | END -> "END"
-  | EOF -> "EOF"
-  | EQUAL -> "EQUAL"
-  | EXCEPTION -> "EXCEPTION"
-  | EXTERNAL -> "EXTERNAL"
-  | FALSE -> "FALSE"
-  | FLOAT s -> "FLOAT " ^ s
-  | FOR -> "FOR"
-  | FUN -> "FUN"
-  | FUNCTION -> "FUNCTION"
-  | FUNCTOR -> "FUNCTOR"
-  | GREATER -> "GREATER"
-  | GREATERRBRACE -> "GREATERRBRACE"
-  | GREATERRBRACKET -> "GREATERRBRACKET"
-  | IF -> "IF"
-  | IN -> "IN"
-  | INCLUDE -> "INCLUDE"
-  | INFIXOP0 s -> "INFIXOP0 " ^ s
-  | INFIXOP1 s -> "INFIXOP1 " ^ s
-  | INFIXOP2 s -> "INFIXOP2 " ^ s
-  | INFIXOP3 s -> "INFIXOP3 " ^ s
-  | INFIXOP4 s -> "INFIXOP4 " ^ s
-  | INHERIT -> "INHERIT"
-  | INITIALIZER -> "INITIALIZER"
-  | INT _ -> "INT of (int)"
-  | INT32 i -> "INT32 " ^ Int32.to_string i
-  | INT64 i -> "INT64 " ^ Int64.to_string i
-  | LABEL s -> "LABEL " ^ s
-  | LAZY -> "LAZY"
-  | LBRACE -> "LBRACE"
-  | LBRACELESS -> "LBRACELESS"
-  | LBRACKET -> "LBRACKET"
-  | LBRACKETBAR -> "LBRACKETBAR"
-  | LBRACKETLESS -> "LBRACKETLESS"
-  | LBRACKETGREATER -> "LBRACKETGREATER"
-  | LBRACKETPERCENT -> "LBRACKETPERCENT"
+  | AMPERAMPER             -> "AMPERAMPER"
+  | AMPERSAND              -> "AMPERSAND"
+  | AND                    -> "AND"
+  | AS                     -> "AS"
+  | ASSERT                 -> "ASSERT"
+  | BACKQUOTE              -> "BACKQUOTE"
+  | BANG                   -> "BANG"
+  | BAR                    -> "BAR"
+  | BARBAR                 -> "BARBAR"
+  | BARRBRACKET            -> "BARRBRACKET"
+  | BEGIN                  -> "BEGIN"
+  | CHAR c                 -> "CHAR " ^ Printf.sprintf "%c" c
+  | CLASS                  -> "CLASS"
+  | COLON                  -> "COLON"
+  | COLONCOLON             -> "COLONCOLON"
+  | COLONEQUAL             -> "COLONEQUAL"
+  | COLONGREATER           -> "COLONGREATER"
+  | COMMA                  -> "COMMA"
+  | CONSTRAINT             -> "CONSTRAINT"
+  | DO                     -> "DO"
+  | DONE                   -> "DONE"
+  | DOT                    -> "DOT"
+  | DOTDOT                 -> "DOTDOT"
+  | DOWNTO                 -> "DOWNTO"
+  | ELSE                   -> "ELSE"
+  | END                    -> "END"
+  | EOF                    -> "EOF"
+  | EQUAL                  -> "EQUAL"
+  | EXCEPTION              -> "EXCEPTION"
+  | EXTERNAL               -> "EXTERNAL"
+  | FALSE                  -> "FALSE"
+  | FLOAT s                -> "FLOAT " ^ s
+  | FOR                    -> "FOR"
+  | FUN                    -> "FUN"
+  | FUNCTION               -> "FUNCTION"
+  | FUNCTOR                -> "FUNCTOR"
+  | GREATER                -> "GREATER"
+  | GREATERRBRACE          -> "GREATERRBRACE"
+  | GREATERRBRACKET        -> "GREATERRBRACKET"
+  | IF                     -> "IF"
+  | IN                     -> "IN"
+  | INCLUDE                -> "INCLUDE"
+  | INFIXOP0 s             -> "INFIXOP0 " ^ s
+  | INFIXOP1 s             -> "INFIXOP1 " ^ s
+  | INFIXOP2 s             -> "INFIXOP2 " ^ s
+  | INFIXOP3 s             -> "INFIXOP3 " ^ s
+  | INFIXOP4 s             -> "INFIXOP4 " ^ s
+  | INHERIT                -> "INHERIT"
+  | INITIALIZER            -> "INITIALIZER"
+  | INT _                  -> "INT of (int)"
+  | INT32 i                -> "INT32 " ^ Int32.to_string i
+  | INT64 i                -> "INT64 " ^ Int64.to_string i
+  | LABEL s                -> "LABEL " ^ s
+  | LAZY                   -> "LAZY"
+  | LBRACE                 -> "LBRACE"
+  | LBRACELESS             -> "LBRACELESS"
+  | LBRACKET               -> "LBRACKET"
+  | LBRACKETBAR            -> "LBRACKETBAR"
+  | LBRACKETLESS           -> "LBRACKETLESS"
+  | LBRACKETGREATER        -> "LBRACKETGREATER"
+  | LBRACKETPERCENT        -> "LBRACKETPERCENT"
   | LBRACKETPERCENTPERCENT -> "LBRACKETPERCENTPERCENT"
-  | LESS -> "LESS"
-  | LESSMINUS -> "LESSMINUS"
-  | LET -> "LET"
-  | LIDENT s -> "LIDENT " ^ s
-  | LPAREN -> "LPAREN"
-  | LBRACKETAT -> "LBRACKETAT"
-  | LBRACKETATAT -> "LBRACKETATAT"
-  | LBRACKETATATAT -> "LBRACKETATATAT"
-  | MATCH -> "MATCH"
-  | METHOD -> "METHOD"
-  | MINUS -> "MINUS"
-  | MINUSDOT -> "MINUSDOT"
-  | MINUSGREATER -> "MINUSGREATER"
-  | MODULE -> "MODULE"
-  | MUTABLE -> "MUTABLE"
-  | NATIVEINT v -> "NATIVEINT " ^ Nativeint.to_string v
-  | NEW -> "NEW"
-  | OBJECT -> "OBJECT"
-  | OF -> "OF"
-  | OPEN -> "OPEN"
-  | OPTLABEL s -> "OPTLABEL " ^ s
-  | OR -> "OR"
-  | PERCENT -> "PERCENT"
-  | PLUS -> "PLUS"
-  | PLUSDOT -> "PLUSDOT"
-  | PLUSEQ -> "PLUSEQ"
-  | PREFIXOP s -> "PREFIXOP " ^ s
-  | PRIVATE -> "PRIVATE"
-  | QUESTION -> "QUESTION"
-  | QUOTE -> "QUOTE"
-  | RBRACE -> "RBRACE"
-  | RBRACKET -> "RBRACKET"
-  | REC -> "REC"
-  | RPAREN -> "RPAREN"
-  | SEMI -> "SEMI"
-  | SEMISEMI -> "SEMISEMI"
-  | SHARP -> "SHARP"
-  | SIG -> "SIG"
-  | STAR -> "STAR"
-  | STRING (s, _) -> "STRING " ^ s
-  | STRUCT -> "STRUCT"
-  | THEN -> "THEN"
-  | TILDE -> "TILDE"
-  | TO -> "TO"
-  | TRUE -> "TRUE"
-  | TRY -> "TRY"
-  | TYPE -> "TYPE"
-  | UIDENT s -> "UIDENT " ^ s
-  | UNDERSCORE -> "UNDERSCORE"
-  | VAL -> "VAL"
-  | VIRTUAL -> "VIRTUAL"
-  | WHEN -> "WHEN"
-  | WHILE -> "WHILE"
-  | WITH -> "WITH"
-  | COMMENT _ -> "COMMENT"
-  | EOL -> "EOL"
+  | LESS                   -> "LESS"
+  | LESSMINUS              -> "LESSMINUS"
+  | LET                    -> "LET"
+  | LIDENT s               -> "LIDENT " ^ s
+  | LPAREN                 -> "LPAREN"
+  | LBRACKETAT             -> "LBRACKETAT"
+  | LBRACKETATAT           -> "LBRACKETATAT"
+  | LBRACKETATATAT         -> "LBRACKETATATAT"
+  | MATCH                  -> "MATCH"
+  | METHOD                 -> "METHOD"
+  | MINUS                  -> "MINUS"
+  | MINUSDOT               -> "MINUSDOT"
+  | MINUSGREATER           -> "MINUSGREATER"
+  | MODULE                 -> "MODULE"
+  | MUTABLE                -> "MUTABLE"
+  | NATIVEINT v            -> "NATIVEINT " ^ Nativeint.to_string v
+  | NEW                    -> "NEW"
+  | OBJECT                 -> "OBJECT"
+  | OF                     -> "OF"
+  | OPEN                   -> "OPEN"
+  | OPTLABEL s             -> "OPTLABEL " ^ s
+  | OR                     -> "OR"
+  | PERCENT                -> "PERCENT"
+  | PLUS                   -> "PLUS"
+  | PLUSDOT                -> "PLUSDOT"
+  | PLUSEQ                 -> "PLUSEQ"
+  | PREFIXOP s             -> "PREFIXOP " ^ s
+  | PRIVATE                -> "PRIVATE"
+  | QUESTION               -> "QUESTION"
+  | QUOTE                  -> "QUOTE"
+  | RBRACE                 -> "RBRACE"
+  | RBRACKET               -> "RBRACKET"
+  | REC                    -> "REC"
+  | RPAREN                 -> "RPAREN"
+  | SEMI                   -> "SEMI"
+  | SEMISEMI               -> "SEMISEMI"
+  | SHARP                  -> "SHARP"
+  | SIG                    -> "SIG"
+  | STAR                   -> "STAR"
+  | STRING (s, _)          -> "STRING " ^ s
+  | STRUCT                 -> "STRUCT"
+  | THEN                   -> "THEN"
+  | TILDE                  -> "TILDE"
+  | TO                     -> "TO"
+  | TRUE                   -> "TRUE"
+  | TRY                    -> "TRY"
+  | TYPE                   -> "TYPE"
+  | UIDENT s               -> "UIDENT " ^ s
+  | UNDERSCORE             -> "UNDERSCORE"
+  | VAL                    -> "VAL"
+  | VIRTUAL                -> "VIRTUAL"
+  | WHEN                   -> "WHEN"
+  | WHILE                  -> "WHILE"
+  | WITH                   -> "WITH"
+  | COMMENT _              -> "COMMENT"
+  | EOL                    -> "EOL"
 
 
 (** state *)
@@ -149,10 +149,12 @@ let init () =
   stack := []
   
 let in_the_same_line p1 p2 =
-  p1.pos_fname = p2.pos_fname && p1.pos_lnum = p2.pos_lnum
+  p1.pos_fname = p2.pos_fname 
+  && p1.pos_lnum = p2.pos_lnum
 
-let update_indent p t =
-  match t with
+(* If the token [t] is at a new line, 
+   update [indent] then returns its position *)
+let update_indent p t = match t with
   | EOL ->
       (* ignore EOL! *)
       None
@@ -176,7 +178,7 @@ let rec preprocess lexer lexbuf =
 
       let token = lexer lexbuf in
       let start_p = lexeme_start_p lexbuf in
-      let end_p =   lexeme_end_p   lexbuf in
+      let end_p   = lexeme_end_p   lexbuf in
 
       (* If we see a newline, check the stack and insert closing tokens
          if necessary! *)
@@ -186,14 +188,19 @@ let rec preprocess lexer lexbuf =
 
           (* Insert implicit closing keywords *)
 
+          let need_close token p_of_token p_of_opening =
+            let i_of_token   = indentation p_of_token in
+            let i_of_opening = indentation p_of_opening in
+            if token = BAR then i_of_token < i_of_opening
+            else i_of_token <= i_of_opening
+          in
+
           let rec close ever_closed = function
             | [] -> ever_closed, []
             | ((p', t') :: is as stack) ->
-                if 
-                  (if token = BAR then (<) else (<=))
-                    (indentation p)
-                    (indentation p')
-                then begin 
+                if not (need_close token p p') then
+                  ever_closed, stack
+                else begin 
                   if debug then 
                     Format.eprintf "Closing %s(%d) by %s(%d)@." 
                       (to_string t')
@@ -213,8 +220,8 @@ let rec preprocess lexer lexbuf =
                     | LAZY     -> DONE
                     | _ -> assert false
                     end queue;
-                  close true is
-                end else ever_closed, stack
+                  close true is (* maybe we have more to close *)
+                end
           in
           let closed, stack' = close false !stack in
           stack := stack';
@@ -234,12 +241,7 @@ let rec preprocess lexer lexbuf =
       let tokens = 
         match !previous_token, token with
         | _, COMMENT _ -> [ token ]
-        | _, EOL -> 
-            [] (* Oh, if preprocessor is here, the original creates EOL! *)
-  
-        | `None, _ -> 
-            previous_token := `Some token;
-            [ token ]
+        | _, EOL -> [] (* Parser does not understand EOL! *)
   
         (* We need to check the line against colon_pos. This can be different
            from the last token because of COMMENTs *)
@@ -249,10 +251,6 @@ let rec preprocess lexer lexbuf =
                                                  loc_end= end_p;
                                                  loc_ghost = false },
                                                "newline")))
-  
-        | `Colon _, _ -> 
-            previous_token := `Some token;
-            [ token ]
   
         | `Some t, COLON ->
             begin match t with
@@ -267,8 +265,9 @@ let rec preprocess lexer lexbuf =
             | THEN
             | WITH 
             | LAZY ->
-                (* special colon *)
+                (* This is a special colon! *)
                 begin match !indent with
+                | None -> assert false (* impossible *)
                 | Some p -> 
                     previous_token := `Colon (p, t);
                     stack := (p, t) :: !stack;
@@ -290,14 +289,17 @@ let rec preprocess lexer lexbuf =
                            which is a valid expression in OCaml and is not
                            equivalent with
                              lazy [@x] begin e end
+                           Therefore, we introduce a special syntax
+                           for indent desugaring:
+                             lazy do ... done
                         *)   
                         [ DO ]
                     | _ -> []
                     end
-                | None -> assert false
                 end
   
             | _ -> 
+                (* normal colon probably for [e : t] *)
                 previous_token := `Some COLON;
                 [ COLON ]
             end
