@@ -1883,7 +1883,7 @@ and type_expect_ ?in_function env sexp ty_expected =
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
 
-  (* (F ..) 1 2 3 ==> (!F) 1 2 3 
+  (* ((!F) 1) 2 3  == !F 1 2 3
      
      We here to try contract applications as possible...
   *)
@@ -1896,14 +1896,14 @@ and type_expect_ ?in_function env sexp ty_expected =
 
   | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
                ("", ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) ->
-      (* ! C a b    i.e.   (C..) a b *)
+      (* ! C a b *)
       type_construct_curried ?in_function env loc ty_expected 
         sexp.pexp_attributes
         con loc' xs
 
   | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
                ("", ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) ->
-      (* ! `F a b    i.e.    (`F..) a b *)
+      (* ! `F a b *)
       let open Ast_helper in
       begin match xs with
       | ("",x)::xs -> (* (`A..) a b => (`A a) b *)
@@ -2160,7 +2160,6 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_type = instance env ty_expected;
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
-
   | Pexp_field(srecord, lid) ->
       let (record, label, _) = type_label_access env loc srecord lid in
       let (_, ty_arg, ty_res) = instance_label false label in
@@ -2369,7 +2368,6 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_extra = (Texp_coerce (cty, cty'), loc, sexp.pexp_attributes) ::
                        arg.exp_extra;
       }
-
   | Pexp_send (e, met) ->
       if !Clflags.principal then begin_def ();
       let obj = type_exp env e in

@@ -46,7 +46,6 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/ast_helper.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
   parsing/lexer.cmo parsing/ast_mapper.cmo \
-  parsing/ppxx.cmo \
   parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo
 

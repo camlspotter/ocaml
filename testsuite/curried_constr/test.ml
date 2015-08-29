@@ -8,9 +8,17 @@ let x = (None)
 type t = Foo of int * float
 let x : t = (Foo) (1,1.0)
 
-let x : t = (Foo..) 1 1.0
-let x : int -> float -> t = !Foo (* equivalent with (Foo..) *)
-let x : t = (Foo..) 1 1.0
-let x : float -> t = (Foo..) 1
+let x : t = !Foo 1 1.0
+let x : int -> float -> t = !Foo
+let x : float -> t = !Foo 1
 let x : (int * float) -> t = Foo
 let x : (int * float) -> t = fun x -> (Foo) x
+
+(* (::)(x,xs) has a special parsing rule. We can handle it but requires parser.mly modificaiton *)
+let cons0 = (::)(1,[])
+(*
+let cons1 = ((::)) (1,[])
+let cons2 = !(::) 1 []
+*)
+
+  
