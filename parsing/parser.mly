@@ -1118,7 +1118,6 @@ expr:
       { mkexp_attrs(Pexp_for($3, $5, $7, $6, $9)) $2 }
   | expr COLONCOLON expr
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$1;$3])) (symbol_rloc()) }
-/* This is (::)(x,xs). Not good for curried constructors */      
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
   | expr INFIXOP0 expr
