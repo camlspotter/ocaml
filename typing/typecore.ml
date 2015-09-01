@@ -3452,17 +3452,17 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
 
   match constr.cstr_arity with
   | 0 ->
-      (* (None..) must be rejected *)
+      (* !None must be rejected *)
       raise (Error(loc, env, Other "Nullary constructor cannot be curried."))
   | 1 ->
-      (* (Some..) must be rejected *)
+      (* !Some must be rejected *)
       raise (Error(loc, env, Other "Unary constructor cannot be curried."))
   | n ->
       (* Format.eprintf "Debug: applied args: %d@." (List.length xs); *)
       (* Unlike (Some) x, here we should optimize partial applications *)
-      (* (C..) a1          =>  (fun a2 a3 -> C (a1,a2,a3)) *)
-      (* (C..) a1 a2 a3    =>  C (a1,a2,a3) *)
-      (* (C..) a1 a2 a3 a4 =>  C (a1,a2,a3) a4 *)
+      (* !C a1          =>  (fun a2 a3 -> C (a1,a2,a3)) *)
+      (* !C a1 a2 a3    =>  C (a1,a2,a3) *)
+      (* !C a1 a2 a3 a4 =>  C (a1,a2,a3) a4 *)
       let open Ast_helper in
       let patterns, sarg, remain = 
         let xi i = Exp.ident {txt=Longident.Lident ("x" ^ string_of_int i); loc=Location.none} in
