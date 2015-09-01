@@ -1,5 +1,4 @@
-Variant constructors as functions
-==================================
+# Variant constructors as functions
 
 Suppose we have:
 
@@ -15,52 +14,43 @@ Foo
 
 is equal to `fun (x,y) -> Foo (x,y)`. And,
 
-```ocaml
-(Foo ..)        (* This is not valid in the vanilla OCaml *)
+```
+!Foo
 ```
 
-and
-```
-!Foo            (* If you keep the vanilla syntax *)
-```
+is equal to `fun x y -> Foo (x,y)`.
 
-are equal to `fun x y -> Foo (x,y)`.
-
-It works for list cons constructor too:
+# Polymorphic variants as functions
 
 ```ocaml
-(::)    : ('a * 'a list) -> 'a list
-(:: ..) : 'a -> 'a list -> 'a list
-!(::)   : 'a -> 'a list -> 'a list
-```
-
-Polymorphic variants as functions
----------------------------------------------
-
-```ocaml
-(`Foo ..)         (* This is not valid in the vanilla OCaml *)
 !`Foo
 ```
 
-are equivalent to 
+is equivalent to 
 
 ```ocaml
 fun x -> `Foo x
 ```
 
-Note that ``(`Foo ..)`` always take only one argument:
+Note that ``!`Foo`` always take only one argument:
 the arity of the polymorphic variant constructors is at most one
 and  it is determined purely syntactically. 
 
 
 ```ocaml
-(`Foo..) (1,2,3)  (* `Foo (1,2,3) *)
-(`Foo..) 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
+!`Foo (1,2,3)  (* `Foo (1,2,3) *)
+!`Foo 1 2 3    (* (`Foo 1) 2 3  which ends in a type error *)
 ```
 
 Code ``(`Foo)`` has no special meaning. It is just equivalent to `` `Foo``.
 
-Samples
----------------------------------------------
+# Samples
 
 You can try examples at `testsuite/curried_constr/test.ml`.
+
+# Limitations
+
+## Cons constructor
+
+Cons constructor `(::)` is specially handled in OCaml
+and it is outside of the support of `ppx_curried_constr`.
