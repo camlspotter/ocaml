@@ -39,12 +39,12 @@ let interface ppf sourcefile outputprefix =
     let tsg = Typemod.type_interface sourcefile initial_env ast in
     if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
     let sg = tsg.sig_type in
+    ignore (Includemod.signatures initial_env sg sg);
+    Typecore.force_delayed_checks ();
     if !Clflags.print_types then
       Printtyp.wrap_printing_env initial_env (fun () ->
           fprintf std_formatter "%a@."
             Printtyp.signature (Typemod.simplify_signature sg));
-    ignore (Includemod.signatures initial_env sg sg);
-    Typecore.force_delayed_checks ();
     Warnings.check_fatal ();
     if not !Clflags.print_types then begin
       let deprecated = Builtin_attributes.deprecated_of_sig ast in

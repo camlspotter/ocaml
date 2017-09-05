@@ -1601,6 +1601,12 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
     type_structure initial_env ast (Location.in_file sourcefile) in
   let simple_sg = simplify_signature sg in
   if !Clflags.print_types then begin
+    check_nongen_schemes finalenv sg;
+    normalize_signature finalenv simple_sg;
+    let _coercion =
+      Includemod.compunit initial_env sourcefile sg
+                          "(inferred signature)" simple_sg in
+    Typecore.force_delayed_checks ();
     Printtyp.wrap_printing_env initial_env
       (fun () -> fprintf std_formatter "%a@." Printtyp.signature simple_sg);
     (str, Tcoerce_none)   (* result is ignored by Compile.implementation *)
