@@ -243,7 +243,7 @@ let rec lexical_approximation lexbuf =
   *)
   try
     let rec process after_lident lexbuf =
-      match Lexer.token lexbuf with
+      match Indent.token lexbuf with
       | Parser.UIDENT name ->
           Depend.free_structure_names :=
             Depend.StringSet.add name !Depend.free_structure_names;
@@ -254,7 +254,7 @@ let rec lexical_approximation lexbuf =
       | Parser.EOF -> ()
       | _ -> process false lexbuf
     and skip_one lexbuf =
-      match Lexer.token lexbuf with
+      match Indent.token lexbuf with
       | Parser.DOT | Parser.BACKQUOTE -> skip_one lexbuf
       | Parser.EOF -> ()
       | _ -> process false lexbuf
