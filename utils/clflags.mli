@@ -205,6 +205,10 @@ val color : Misc.Color.setting option ref
 
 val unboxed_types : bool ref
 
+val as_pp : bool ref
+val as_pp_text : bool ref
+val no_retype : bool ref
+    
 val arg_spec : (string * Arg.spec * string) list ref
 
 (* [add_arguments __LOC__ args] will add the arguments from [args] at

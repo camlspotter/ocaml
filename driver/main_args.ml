@@ -751,6 +751,21 @@ let mk__ f =
   "<file>  Treat <file> as a file name (even if it starts with `-')"
 ;;
 
+let mk_as_pp f =
+  "-as-pp", Arg.Unit f,
+  " Work as a preprocessor"
+;;
+
+let mk_as_pp_text f =
+  "-as-pp-text", Arg.Unit f,
+  " Work as a preprocessor, outputing in text"
+;;
+
+let mk_no_retype f =
+  "-no-retype", Arg.Unit f,
+  " Retype to make the leopard safer"
+;;
+
 module type Common_options = sig
   val _absname : unit -> unit
   val _I : string -> unit
@@ -838,6 +853,10 @@ module type Compiler_options = sig
 
   val _args: string -> string array
   val _args0: string -> string array
+
+  val _as_pp: unit -> unit
+  val _as_pp_text: unit -> unit
+  val _no_retype: unit -> unit
 end
 ;;
 
@@ -852,6 +871,8 @@ module type Toplevel_options = sig
   val _stdin : unit -> unit
   val _args : string -> string array
   val _args0 : string -> string array
+
+  val _no_retype: unit -> unit
 end
 ;;
 
@@ -1063,6 +1084,10 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    mk_as_pp F._as_pp;
+    mk_as_pp_text F._as_pp_text;
+    mk_no_retype F._no_retype;
   ]
 end;;
 
@@ -1119,6 +1144,8 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    mk_no_retype F._no_retype;
   ]
 end;;
 
@@ -1255,6 +1282,10 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    mk_as_pp F._as_pp;
+    mk_as_pp_text F._as_pp_text;
+    mk_no_retype F._no_retype;
   ]
 end;;
 
@@ -1347,6 +1378,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dlinear F._dlinear;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
+
+    mk_no_retype F._no_retype;
   ]
 end;;
 

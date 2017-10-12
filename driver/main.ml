@@ -119,6 +119,10 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dinstr = set dump_instr
   let _dtimings = set print_timings
 
+  let _no_retype () = set no_retype ()
+  let _as_pp () = compile_only := true; _no_retype (); set as_pp ()
+  let _as_pp_text () = _as_pp (); set as_pp_text ()
+
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
 
@@ -146,6 +150,8 @@ let main () =
       end
     end;
     readenv ppf Before_link;
+    if !print_types && !as_pp then
+      fatal "Option -i is incompatible with -as-pp and -as-pp-text";
     if
       List.length (List.filter (fun x -> !x)
                       [make_archive;make_package;compile_only;output_c_object])

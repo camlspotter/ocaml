@@ -126,6 +126,11 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dflambda = option "-dflambda"
   let _dinstr = option "-dinstr"
   let _dtimings = option "-dtimings"
+
+  let _as_pp = option "-as-pp"
+  let _as_pp_text = option "-as-pp-text"
+  let _no_retype = option "-no-retype"
+
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0
   let anonymous = process_file

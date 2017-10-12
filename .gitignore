@@ -371,3 +371,10 @@
 /yacc/ocamlyacc
 /yacc/version.h
 /yacc/.gdb_history
+
+\#*
+.#*
+byterun/caml/m.h
+byterun/caml/s.h
+*.orig
+*~

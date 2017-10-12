@@ -46,6 +46,40 @@ let interface ppf sourcefile outputprefix =
     ignore (Includemod.signatures initial_env sg sg);
     Typecore.force_delayed_checks ();
     Warnings.check_fatal ();
+
+    (* retype *)
+    let tsg =
+      if !Clflags.no_retype then tsg
+      else begin
+        let ast = Untypeast.untype_signature tsg in
+        Compmisc.init_path false;
+        Env.set_unit_name modulename;
+        let initial_env = Compmisc.initial_env () in
+        let tsg = Typemod.type_interface sourcefile initial_env ast in
+        let sg = tsg.sig_type in
+        ignore (Includemod.signatures initial_env sg sg);
+        Typecore.force_delayed_checks ();
+        Warnings.check_fatal ();
+        tsg
+      end
+    in
+
+    (* -as-pp *)
+    if !Clflags.as_pp then begin
+      let sg = Untypeast.untype_signature tsg in
+      if !Clflags.as_pp_text then begin
+        Format.printf "%a@." Pprintast.signature sg
+      end else begin
+        let write_ast oc ast =
+          output_string oc Config.ast_intf_magic_number;
+          output_value oc !Location.input_name;
+          output_value oc ast;
+        in
+        write_ast stdout sg;
+      end;
+      close_out stdout
+    end else
+
     if not !Clflags.print_types then begin
       let deprecated = Builtin_attributes.deprecated_of_sig ast in
       let sg =
@@ -82,7 +116,41 @@ let implementation ppf sourcefile outputprefix =
     if !Clflags.print_types then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
-    end else begin
+    end else 
+
+    (* retype *)      
+    let (typedtree, coercion) =
+      if !Clflags.no_retype then (typedtree, coercion)
+      else begin
+        Leopard.without_leopard (fun () ->
+            Compmisc.init_path false;
+            Env.set_unit_name modulename;
+            let env = Compmisc.initial_env() in
+            Untypeast.untype_structure typedtree
+            ++ Timings.(time (Typing sourcefile))
+              (Typemod.type_implementation sourcefile outputprefix modulename env))
+      end
+    in
+
+    (* -as-pp *)
+    if !Clflags.as_pp then begin
+      Warnings.check_fatal ();
+      Stypes.dump (Some (outputprefix ^ ".annot"));
+      let str = Untypeast.untype_structure typedtree in
+      if !Clflags.as_pp_text then begin
+        Format.printf "%a@." Pprintast.structure str
+      end else begin
+        let write_ast oc ast =
+          output_string oc Config.ast_impl_magic_number;
+          output_value oc !Location.input_name;
+          output_value oc ast;
+        in
+        write_ast stdout str;
+      end;
+      close_out stdout
+    end else
+
+    begin
       let bytecode, required_globals =
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
