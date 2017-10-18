@@ -26,15 +26,32 @@ open Compenv
 
 let tool_name = "ocamlc"
 
+let pp_out = function
+  | `Structure str when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.structure str
+  | `Structure str ->
+      output_string stdout Config.ast_impl_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout str
+  | `Signature sg when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.signature sg
+  | `Signature sg ->
+      output_string stdout Config.ast_intf_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout sg
+
 let interface ppf sourcefile outputprefix =
   Compmisc.init_path false;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
   let initial_env = Compmisc.initial_env () in
   let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
-
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+
+  (* -no-trans *)
+  if !Clflags.no_trans then pp_out (`Signature ast) else
+
   Timings.(time_call (Typing sourcefile)) (fun () ->
     let tsg = Typemod.type_interface sourcefile initial_env ast in
     if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -65,20 +82,7 @@ let interface ppf sourcefile outputprefix =
     in
 
     (* -as-pp *)
-    if !Clflags.as_pp then begin
-      let sg = Untypeast.untype_signature tsg in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.signature sg
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_intf_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout sg;
-      end;
-      close_out stdout
-    end else
+    if !Clflags.as_pp then pp_out (`Signature (Untypeast.untype_signature tsg)) else
 
     if not !Clflags.print_types then begin
       let deprecated = Builtin_attributes.deprecated_of_sig ast in
@@ -104,6 +108,17 @@ let implementation ppf sourcefile outputprefix =
   Env.set_unit_name modulename;
   let env = Compmisc.initial_env() in
   try
+    (* -no-trans *)
+    if !Clflags.no_trans then begin
+      let str =
+        Pparse.parse_implementation ~tool_name ppf sourcefile
+        ++ print_if ppf Clflags.dump_parsetree Printast.implementation
+        ++ print_if ppf Clflags.dump_source Pprintast.structure
+      in
+      Warnings.check_fatal ();
+      pp_out (`Structure str) 
+    end else
+
     let (typedtree, coercion) =
       Pparse.parse_implementation ~tool_name ppf sourcefile
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
@@ -112,7 +127,7 @@ let implementation ppf sourcefile outputprefix =
           (Typemod.type_implementation sourcefile outputprefix modulename env)
       ++ print_if ppf Clflags.dump_typedtree
         Printtyped.implementation_with_coercion
-   in
+    in
     if !Clflags.print_types then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
@@ -136,18 +151,7 @@ let implementation ppf sourcefile outputprefix =
     if !Clflags.as_pp then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"));
-      let str = Untypeast.untype_structure typedtree in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.structure str
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_impl_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout str;
-      end;
-      close_out stdout
+      pp_out (`Structure (Untypeast.untype_structure typedtree))
     end else
 
     begin
