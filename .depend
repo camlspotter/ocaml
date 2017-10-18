@@ -102,6 +102,11 @@ parsing/docstrings.cmo : utils/warnings.cmi parsing/parsetree.cmi \
 parsing/docstrings.cmx : utils/warnings.cmx parsing/parsetree.cmi \
     parsing/location.cmx parsing/docstrings.cmi
 parsing/docstrings.cmi : parsing/parsetree.cmi parsing/location.cmi
+parsing/indent.cmo : parsing/syntaxerr.cmi parsing/parser.cmi \
+    parsing/location.cmi parsing/lexer.cmi parsing/indent.cmi
+parsing/indent.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
+    parsing/location.cmx parsing/lexer.cmx parsing/indent.cmi
+parsing/indent.cmi : parsing/parser.cmi
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
     parsing/location.cmi parsing/docstrings.cmi parsing/lexer.cmi
 parsing/lexer.cmx : utils/warnings.cmx parsing/parser.cmx utils/misc.cmx \
@@ -116,11 +121,11 @@ parsing/longident.cmo : utils/misc.cmi parsing/longident.cmi
 parsing/longident.cmx : utils/misc.cmx parsing/longident.cmi
 parsing/longident.cmi :
 parsing/parse.cmo : parsing/syntaxerr.cmi parsing/parser.cmi \
-    parsing/location.cmi parsing/lexer.cmi parsing/docstrings.cmi \
-    parsing/parse.cmi
+    parsing/location.cmi parsing/lexer.cmi parsing/indent.cmi \
+    parsing/docstrings.cmi parsing/parse.cmi
 parsing/parse.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
-    parsing/location.cmx parsing/lexer.cmx parsing/docstrings.cmx \
-    parsing/parse.cmi
+    parsing/location.cmx parsing/lexer.cmx parsing/indent.cmx \
+    parsing/docstrings.cmx parsing/parse.cmi
 parsing/parse.cmi : parsing/parsetree.cmi
 parsing/parser.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/docstrings.cmi \
