@@ -1,0 +1,8 @@
+name="leopard"
+version="4.05.0"
+description="Camleopard"
+requires=""
+
+archive(syntax,preprocessor,leopard) = "-as-pp"
+archive(syntax,preprocessor,leoparddep) = "-as-pp -no-trans"
+preprocessor="leopardc"

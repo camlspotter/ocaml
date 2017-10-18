@@ -362,9 +362,11 @@ let color = ref None ;; (* -color *)
 
 let unboxed_types = ref false
 
-let as_pp = ref false
+(* Camleopard *)
+let as_pp      = ref false
 let as_pp_text = ref false
-let no_retype = ref false
+let no_trans   = ref false
+let no_retype  = ref false
                 
 let arg_spec = ref []
 let arg_names = ref Misc.StringMap.empty

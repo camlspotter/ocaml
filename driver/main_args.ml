@@ -753,17 +753,22 @@ let mk__ f =
 
 let mk_as_pp f =
   "-as-pp", Arg.Unit f,
-  " Work as a preprocessor"
+  " Work as a Camleopard preprocessor"
 ;;
 
 let mk_as_pp_text f =
   "-as-pp-text", Arg.Unit f,
-  " Work as a preprocessor, outputing in text"
+  " Work as a Camleopard preprocessor with human readable output"
 ;;
 
 let mk_no_retype f =
   "-no-retype", Arg.Unit f,
-  " Retype to make the leopard safer"
+  " Omit retype which makes Camleopard safer"
+;;
+
+let mk_no_trans f =
+  "-no-trans", Arg.Unit f,
+  " Work as a Camleopard preprocessor without any transformation"
 ;;
 
 module type Common_options = sig
@@ -854,9 +859,11 @@ module type Compiler_options = sig
   val _args: string -> string array
   val _args0: string -> string array
 
-  val _as_pp: unit -> unit
-  val _as_pp_text: unit -> unit
-  val _no_retype: unit -> unit
+  (* Camleopard *)
+  val _as_pp      : unit -> unit
+  val _as_pp_text : unit -> unit
+  val _no_retype  : unit -> unit
+  val _no_trans   : unit -> unit
 end
 ;;
 
@@ -872,6 +879,7 @@ module type Toplevel_options = sig
   val _args : string -> string array
   val _args0 : string -> string array
 
+  (* Camleopard *)
   val _no_retype: unit -> unit
 end
 ;;
@@ -1085,9 +1093,11 @@ struct
     mk_args F._args;
     mk_args0 F._args0;
 
+    (* Camleopard *)
     mk_as_pp F._as_pp;
     mk_as_pp_text F._as_pp_text;
     mk_no_retype F._no_retype;
+    mk_no_trans F._no_trans
   ]
 end;;
 
@@ -1145,6 +1155,7 @@ struct
     mk_args F._args;
     mk_args0 F._args0;
 
+    (* Camleopard *)
     mk_no_retype F._no_retype;
   ]
 end;;
@@ -1283,9 +1294,11 @@ struct
     mk_args F._args;
     mk_args0 F._args0;
 
+    (* Camleopard *)
     mk_as_pp F._as_pp;
     mk_as_pp_text F._as_pp_text;
     mk_no_retype F._no_retype;
+    mk_no_trans F._no_trans
   ]
 end;;
 
@@ -1379,6 +1392,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
 
+    (* Camleopard *)
     mk_no_retype F._no_retype;
   ]
 end;;
