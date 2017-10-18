@@ -447,7 +447,7 @@ typing/typemod.cmo : utils/warnings.cmi typing/typetexp.cmi typing/types.cmi \
     typing/typedtree.cmi typing/typedecl.cmi typing/typecore.cmi \
     typing/typeclass.cmi typing/subst.cmi typing/stypes.cmi \
     typing/printtyp.cmi typing/path.cmi parsing/parsetree.cmi \
-    typing/mtype.cmi utils/misc.cmi parsing/longident.cmi \
+    typing/overload.cmi typing/mtype.cmi utils/misc.cmi parsing/longident.cmi \
     parsing/location.cmi typing/includemod.cmi typing/ident.cmi \
     typing/env.cmi typing/ctype.cmi utils/config.cmi typing/cmt_format.cmi \
     typing/cmi_format.cmi utils/clflags.cmi parsing/builtin_attributes.cmi \
@@ -457,7 +457,7 @@ typing/typemod.cmx : utils/warnings.cmx typing/typetexp.cmx typing/types.cmx \
     typing/typedtree.cmx typing/typedecl.cmx typing/typecore.cmx \
     typing/typeclass.cmx typing/subst.cmx typing/stypes.cmx \
     typing/printtyp.cmx typing/path.cmx parsing/parsetree.cmi \
-    typing/mtype.cmx utils/misc.cmx parsing/longident.cmx \
+    typing/overload.cmx typing/mtype.cmx utils/misc.cmx parsing/longident.cmx \
     parsing/location.cmx typing/includemod.cmx typing/ident.cmx \
     typing/env.cmx typing/ctype.cmx utils/config.cmx typing/cmt_format.cmx \
     typing/cmi_format.cmx utils/clflags.cmx parsing/builtin_attributes.cmx \
