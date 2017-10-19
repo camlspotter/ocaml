@@ -608,6 +608,43 @@ let anonymous filename = defer (action_of_file filename)
 let impl filename = defer (ProcessImplementation filename)
 let intf filename = defer (ProcessInterface filename)
 
+type source =
+  | Structure
+  | Signature
+
+let ppx_load fn = 
+  let ic = open_in_bin fn in
+  let magic =
+    really_input_string ic (String.length Config.ast_impl_magic_number)
+  in
+  close_in ic;
+  if magic = Config.ast_impl_magic_number then
+    Structure
+  else if magic = Config.ast_intf_magic_number then
+    Signature
+  else assert false
+
+let leopard_as_ppx (ppf, cimpl, cintf, _, _) =
+  output_name := None; (* XXX still builds cmi *)
+  match List.rev !deferred_actions with
+  | [ProcessImplementation s] -> cimpl ppf s (output_prefix s)
+  | [ProcessImplementation s; ProcessOtherFile y] ->
+      output_name := Some y;
+      cimpl ppf s (output_prefix s)
+  | [ProcessInterface s]      -> cintf ppf s (output_prefix s)
+  | [ProcessOtherFile s]      ->
+      begin match ppx_load s with
+      | Structure -> cimpl ppf s (output_prefix s) 
+      | Signature -> cintf ppf s (output_prefix s)
+      end
+  | [ProcessOtherFile s; ProcessOtherFile y]  ->
+      output_name := Some y;
+      begin match ppx_load s with
+      | Structure -> cimpl ppf s (output_prefix s) 
+      | Signature -> cintf ppf s (output_prefix s)
+      end
+  | _ -> assert false
+  
 let process_deferred_actions env =
   let final_output_name = !output_name in
   (* Make sure the intermediate products don't clash with the final one
@@ -634,5 +671,6 @@ let process_deferred_actions env =
       | ProcessOtherFile name -> Filename.check_suffix name ".cmxa"
       | _ -> false) !deferred_actions then
     fatal "Option -a cannot be used with .cmxa input files.";
+  if !Clflags.as_ppx then leopard_as_ppx env else
   List.iter (process_action env) (List.rev !deferred_actions);
   output_name := final_output_name;

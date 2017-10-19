@@ -120,8 +120,9 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dtimings = set print_timings
 
   let _no_retype () = set no_retype ()
-  let _as_pp () = compile_only := true; _no_retype (); set as_pp ()
-  let _as_pp_text () = _as_pp (); set as_pp_text ()
+  let _as_pp () = set as_pp ()
+  let _as_ppx () = compile_only := true; _no_retype (); set as_ppx ()
+  let _pp_text () = set pp_text ()
 
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0

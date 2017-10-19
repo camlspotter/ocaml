@@ -362,8 +362,10 @@ let color = ref None ;; (* -color *)
 
 let unboxed_types = ref false
 
-let as_pp = ref false
-let as_pp_text = ref false
+(* Camleopard *)
+let as_pp     = ref false
+let as_ppx    = ref false
+let pp_text   = ref false
 let no_retype = ref false
                 
 let arg_spec = ref []

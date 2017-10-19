@@ -28,6 +28,19 @@ open Compenv
 let tool_name = "ocamlopt"
 
 let interface ppf sourcefile outputprefix =
+  let pp_out sg =
+    if !Clflags.pp_text then begin
+      Format.printf "%a@." Pprintast.signature sg
+    end else begin
+      let write_ast oc ast =
+        output_string oc Config.ast_intf_magic_number;
+        output_value oc !Location.input_name;
+        output_value oc ast;
+      in
+      write_ast stdout sg;
+    end;
+    close_out stdout
+  in
   Compmisc.init_path false;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
@@ -35,6 +48,10 @@ let interface ppf sourcefile outputprefix =
   let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+
+  (* -as-pp *)
+  if !Clflags.as_pp then pp_out ast else
+
   Timings.(time_call (Typing sourcefile)) (fun () ->
     let tsg = Typemod.type_interface sourcefile initial_env ast in
     if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -64,20 +81,10 @@ let interface ppf sourcefile outputprefix =
       end
     in
 
-    (* -as-pp *)
-    if !Clflags.as_pp then begin
+    (* -as-ppx *)
+    if !Clflags.as_ppx then begin
       let sg = Untypeast.untype_signature tsg in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.signature sg
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_intf_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout sg;
-      end;
-      close_out stdout
+      pp_out sg
     end else
 
     if not !Clflags.print_types then begin
@@ -100,6 +107,19 @@ let (++) x f = f x
 let (+++) (x, y) f = (x, f y)
 
 let implementation ~backend ppf sourcefile outputprefix =
+  let pp_out str =
+    if !Clflags.pp_text then begin
+      Format.printf "%a@." Pprintast.structure str
+    end else begin
+      let write_ast oc ast =
+        output_string oc Config.ast_impl_magic_number;
+        output_value oc !Location.input_name;
+        output_value oc ast;
+      in
+      write_ast stdout str;
+    end;
+    close_out stdout
+  in
   let source_provenance = Timings.File sourcefile in
   Compmisc.init_path true;
   let modulename = module_of_filename ppf sourcefile outputprefix in
@@ -109,6 +129,12 @@ let implementation ~backend ppf sourcefile outputprefix =
   let cmxfile = outputprefix ^ ".cmx" in
   let objfile = outputprefix ^ ext_obj in
   let comp ast =
+    (* -as-pp *)
+    if !Clflags.as_pp then begin
+      Warnings.check_fatal ();
+      pp_out ast
+    end else
+
     let (typedtree, coercion) =
       ast
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
@@ -136,22 +162,12 @@ let implementation ~backend ppf sourcefile outputprefix =
       end
     in
 
-    (* -as-pp *)
-    if !Clflags.as_pp then begin
+    (* -as-ppx *)
+    if !Clflags.as_ppx then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"));
       let str = Untypeast.untype_structure typedtree in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.structure str
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_impl_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout str;
-      end;
-      close_out stdout
+      pp_out str
     end else
 
     if not !Clflags.print_types then begin

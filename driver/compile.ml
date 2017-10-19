@@ -27,14 +27,30 @@ open Compenv
 let tool_name = "ocamlc"
 
 let interface ppf sourcefile outputprefix =
+  let pp_out sg =
+    if !Clflags.pp_text then begin
+      Format.printf "%a@." Pprintast.signature sg
+    end else begin
+      let write_ast oc ast =
+        output_string oc Config.ast_intf_magic_number;
+        output_value oc !Location.input_name;
+        output_value oc ast;
+      in
+      write_ast stdout sg;
+    end;
+    close_out stdout
+  in
   Compmisc.init_path false;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
   let initial_env = Compmisc.initial_env () in
   let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
-
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+
+  (* -as-pp *)
+  if !Clflags.as_pp then pp_out ast else
+
   Timings.(time_call (Typing sourcefile)) (fun () ->
     let tsg = Typemod.type_interface sourcefile initial_env ast in
     if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -64,20 +80,10 @@ let interface ppf sourcefile outputprefix =
       end
     in
 
-    (* -as-pp *)
-    if !Clflags.as_pp then begin
+    (* -as-ppx *)
+    if !Clflags.as_ppx then begin
       let sg = Untypeast.untype_signature tsg in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.signature sg
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_intf_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout sg;
-      end;
-      close_out stdout
+      pp_out sg
     end else
 
     if not !Clflags.print_types then begin
@@ -99,11 +105,39 @@ let print_if ppf flag printer arg =
 let (++) x f = f x
 
 let implementation ppf sourcefile outputprefix =
+  let pp_out str =
+    if !Clflags.pp_text then begin
+      Format.printf "%a@." Pprintast.structure str
+    end else begin
+      let write_ast oc ast =
+        output_string oc Config.ast_impl_magic_number;
+        output_value oc !Location.input_name;
+        output_value oc ast;
+      in
+      let oc = match !Clflags.output_name with
+        | None -> prerr_endline "no output_name!"; stdout
+        | Some f -> open_out_bin f
+      in
+      write_ast oc str;
+      close_out oc
+    end
+  in
   Compmisc.init_path false;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
   let env = Compmisc.initial_env() in
   try
+    (* -as-pp *)
+    if !Clflags.as_pp then begin
+      let str = 
+        Pparse.parse_implementation ~tool_name ppf sourcefile
+        ++ print_if ppf Clflags.dump_parsetree Printast.implementation
+        ++ print_if ppf Clflags.dump_source Pprintast.structure
+      in
+      Warnings.check_fatal ();
+      pp_out str
+    end else
+
     let (typedtree, coercion) =
       Pparse.parse_implementation ~tool_name ppf sourcefile
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
@@ -112,7 +146,7 @@ let implementation ppf sourcefile outputprefix =
           (Typemod.type_implementation sourcefile outputprefix modulename env)
       ++ print_if ppf Clflags.dump_typedtree
         Printtyped.implementation_with_coercion
-   in
+    in
     if !Clflags.print_types then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"))
@@ -132,22 +166,12 @@ let implementation ppf sourcefile outputprefix =
       end
     in
 
-    (* -as-pp *)
-    if !Clflags.as_pp then begin
+    (* -as-ppx *)
+    if !Clflags.as_ppx then begin
       Warnings.check_fatal ();
       Stypes.dump (Some (outputprefix ^ ".annot"));
       let str = Untypeast.untype_structure typedtree in
-      if !Clflags.as_pp_text then begin
-        Format.printf "%a@." Pprintast.structure str
-      end else begin
-        let write_ast oc ast =
-          output_string oc Config.ast_impl_magic_number;
-          output_value oc !Location.input_name;
-          output_value oc ast;
-        in
-        write_ast stdout str;
-      end;
-      close_out stdout
+      pp_out str
     end else
 
     begin

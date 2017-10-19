@@ -753,17 +753,22 @@ let mk__ f =
 
 let mk_as_pp f =
   "-as-pp", Arg.Unit f,
-  " Work as a preprocessor"
+  " Work as a preprocessor to desugar Camleopard syntax extension"
 ;;
 
-let mk_as_pp_text f =
-  "-as-pp-text", Arg.Unit f,
-  " Work as a preprocessor, outputing in text"
+let mk_as_ppx f =
+  "-as-ppx", Arg.Unit f,
+  " Work as a PPX preprocessor with Camleopard program transformation"
+;;
+
+let mk_pp_text f =
+  "-pp-text", Arg.Unit f,
+  " Change Camleopard preprocessor output human readable"
 ;;
 
 let mk_no_retype f =
   "-no-retype", Arg.Unit f,
-  " Retype to make the leopard safer"
+  " Stop the retype which makes Camlleopard safer"
 ;;
 
 module type Common_options = sig
@@ -855,7 +860,8 @@ module type Compiler_options = sig
   val _args0: string -> string array
 
   val _as_pp: unit -> unit
-  val _as_pp_text: unit -> unit
+  val _as_ppx: unit -> unit
+  val _pp_text: unit -> unit
   val _no_retype: unit -> unit
 end
 ;;
@@ -1086,7 +1092,8 @@ struct
     mk_args0 F._args0;
 
     mk_as_pp F._as_pp;
-    mk_as_pp_text F._as_pp_text;
+    mk_as_ppx F._as_ppx;
+    mk_pp_text F._pp_text;
     mk_no_retype F._no_retype;
   ]
 end;;
@@ -1284,7 +1291,8 @@ struct
     mk_args0 F._args0;
 
     mk_as_pp F._as_pp;
-    mk_as_pp_text F._as_pp_text;
+    mk_as_ppx F._as_ppx;
+    mk_pp_text F._pp_text;
     mk_no_retype F._no_retype;
   ]
 end;;

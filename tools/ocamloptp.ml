@@ -175,7 +175,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _opaque = option "-opaque"
 
   let _as_pp = option "-as-pp"
-  let _as_pp_text = option "-as-pp-text"
+  let _as_ppx = option "-as-ppx"
+  let _pp_text = option "-pp-text"
   let _no_retype = option "-no-retype"
 
   let _args = Arg.read_arg
