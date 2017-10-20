@@ -362,7 +362,7 @@ let color = ref None ;; (* -color *)
 
 let unboxed_types = ref false
 
-(* Camleopard *)
+(* OCamleopard *)
 let as_pp      = ref false
 let as_pp_text = ref false
 let no_trans   = ref false

@@ -2,12 +2,14 @@ lib: [
   "META" {"META"}
 ]
 bin: [
-  "ocaml" {"leopard"}
-  "ocamlc" {"leopardc"}
-  "ocamlopt" {"leopardopt"}
-  "?ocamlc.opt" {"leopardc"}
+  "ocaml"	  {"leopard"}
+  "ocamlc"	  {"leopardc"}
+  "ocamlopt"	  {"leopardopt"}
+  "?ocamlc.opt"   {"leopardc"}
   "?ocamlopt.opt" {"leopardopt"}
-  "tools/ocamldep" {"leoparddep"}
+
+  "tools/ocamldep"	{"leoparddep"}
   "?tools/ocamldep.opt" {"leoparddep"}
+
   "ocamldoc/ocamldoc" {"leoparddoc"}
 ]

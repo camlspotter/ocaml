@@ -119,7 +119,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dinstr = set dump_instr
   let _dtimings = set print_timings
 
-  (* Camleopard *)
+  (* OCamleopard *)
   let _no_retype () = set no_retype ()
   let _as_pp () = compile_only := true; _no_retype (); set as_pp ()
   let _no_trans () = _as_pp (); set no_trans ()
