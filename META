@@ -1,6 +1,6 @@
 name="leopard"
 version="4.05.0"
-description="Camleopard"
+description="OCamleopard"
 requires=""
 
 archive(syntax,preprocessor,leopard) = "-as-pp"

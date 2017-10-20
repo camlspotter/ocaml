@@ -127,7 +127,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _dinstr = option "-dinstr"
   let _dtimings = option "-dtimings"
 
-  (* Camleopard *)
+  (* OCamleopard *)
   let _no_retype  = option "-no-retype"
   let _as_pp      = option "-as-pp"
   let _no_trans   = option "-no-trans"

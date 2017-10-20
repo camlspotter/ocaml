@@ -205,7 +205,7 @@ val color : Misc.Color.setting option ref
 
 val unboxed_types : bool ref
 
-(* Camleopard *)
+(* OCamleopard *)
 val as_pp      : bool ref
 val as_pp_text : bool ref
 val no_trans   : bool ref

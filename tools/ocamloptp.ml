@@ -174,7 +174,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _dtimings = option "-dtimings"
   let _opaque = option "-opaque"
 
-  (* Camleopard *)
+  (* OCamleopard *)
   let _no_retype  = option "-no-retype"
   let _as_pp      = option "-as-pp"
   let _no_trans   = option "-no-trans"
