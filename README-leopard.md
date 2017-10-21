@@ -516,27 +516,23 @@ You can try examples at `testsuite/tests/typing-curried-constr/test.ml` in OCaml
 
 # User definable SML style simple overloading
 
-SML style overloading is very simple way to overload things. Much simpler than Haskell type classes, so you cannot derive overloading from overloaded values. You can get the idea from my past [article](http://camlspotter.blogspot.sg/2011/09/small-patch-for-bizarre-but-user.html). Let's try to overload `(+)` here too.
+SML style overloading is very simple way to overload things. Much simpler than Haskell type classes, so you cannot derive overloading from overloaded values. For example, you cannot build an overloaded `double` function from an overloaded `(+)` like `let double x = x + x`.
 
-To start with, we need a seed of an overloaded value, with a polymorphic type, 
-but without any actual definition:
+Overloaded values are declared with `val %overload <name> : <type>` declaration.
+For example to declare an overloaded `(+)`:
 
 ```ocaml
 module Loaded = struct
-  external (+) : 'a -> 'a -> 'a = "%OVERLOADED"
+  val %overload (+) : 'a -> 'a -> 'a
 end
 ```
 
-Here we declare `Loaded.(+)` to be a polymorphic function whose implementation is by a primitive named `%OVERLODED`. 
-The name `%OVERLOADED` is just a mark for our overloading 
-and we do not give any deinition of the primitive. 
-Very luckily, we can have such a fake polymorphic value declaration in OCaml as far as it is never actually used.
-
-In this `Loaded` module, we stack sub-modules which provide overloaded instances for this `(+)`:
+The instances of an overloaded value must be defined in the sub modules of 
+the module defines it, with the same name:
 
 ```ocaml
 module Loaded = struct
-  external (+) : 'a -> 'a -> 'a = "%OVERLOADED"
+  val %overload (+) : 'a -> 'a -> 'a
   module Int = struct
     let (+) = Pervasives.(+)
   end
@@ -546,8 +542,7 @@ module Loaded = struct
 end
 ```
 
-Here we have `plus`es for `int` and `float`. 
-Now the preparation is done! Let's use `Loaded.(+)` as if it is overloaded by these two instances!:
+Now the uses of `Loaded.(+)` are resolved to one of these instances, depending on their type context:
 
 ```ocaml
 open Loaded

@@ -1,5 +1,5 @@
 module Loaded = struct
-  external (+) : 'a -> 'a -> 'a = "%OVERLOADED"
+  val %overload (+) : 'a -> 'a -> 'a
   module Int = struct
     let (+) = Pervasives.(+)
   end

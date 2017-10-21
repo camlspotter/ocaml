@@ -452,6 +452,12 @@ and print_out_sig_item ppf =
            | Orec_first -> "type"
            | Orec_next  -> "and")
           ppf td
+  | Osig_value vd when vd.oval_prims = ["%OVERLOADED"] ->
+      let kwd = "val %overload" in
+      fprintf ppf "@[<2>%s %a :@ %a%a@]" kwd value_ident vd.oval_name
+        !out_type vd.oval_type
+        (fun ppf -> List.iter (fun a -> fprintf ppf "@ [@@@@%s]" a.oattr_name))
+        vd.oval_attributes
   | Osig_value vd ->
       let kwd = if vd.oval_prims = [] then "val" else "external" in
       let pr_prims ppf =

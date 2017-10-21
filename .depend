@@ -107,6 +107,11 @@ parsing/indent.cmo : parsing/syntaxerr.cmi parsing/parser.cmi \
 parsing/indent.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
     parsing/location.cmx parsing/lexer.cmx parsing/indent.cmi
 parsing/indent.cmi : parsing/parser.cmi
+parsing/leopardppx.cmo : parsing/parsetree.cmi parsing/asttypes.cmi \
+    parsing/ast_mapper.cmi parsing/leopardppx.cmi
+parsing/leopardppx.cmx : parsing/parsetree.cmi parsing/asttypes.cmi \
+    parsing/ast_mapper.cmx parsing/leopardppx.cmi
+parsing/leopardppx.cmi : parsing/ast_mapper.cmi
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
     parsing/location.cmi parsing/docstrings.cmi parsing/lexer.cmi
 parsing/lexer.cmx : utils/warnings.cmx parsing/parser.cmx utils/misc.cmx \
