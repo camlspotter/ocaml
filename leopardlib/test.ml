@@ -1,4 +1,4 @@
-open Leopard
+open Leopard.Overload
 
 module String = struct:
   external get : 'a -> int -> 'b = "%OVERLOADED" 

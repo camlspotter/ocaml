@@ -1,11 +1,11 @@
 module DotBracket = struct:
-  module Array:
+  module Array = struct:
     let get = Array.get
     let set = Array.set
     let unsafe_get = Array.unsafe_get
     let unsafe_set = Array.unsafe_set
 
-  module String:
+  module String = struct:
     let get = String.get
     let set = String.set
     let unsafe_get = String.unsafe_get
