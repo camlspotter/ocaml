@@ -548,6 +548,7 @@ let loop ppf =
   if not !Clflags.noversion then
     fprintf ppf "        OCaml version %s - native toplevel@.@." Config.version;
   initialize_toplevel_env ();
+  Leopardtype.init !toplevel_env;
   let lb = Lexing.from_function refill_lexbuf in
   Location.init lb "//toplevel//";
   Location.input_name := "//toplevel//";

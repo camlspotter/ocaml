@@ -18,3 +18,11 @@ let without_leopard f =
   | res ->
       enable_leopard ();
       res
+
+let is_leopardlib_available env =
+  try
+    ignore @@ Env.lookup_module Longident.(Lident "Leopard") env; true
+  with
+  | _ -> false
+
+let init env = Leopardppx.with_leopardlib := is_leopardlib_available env 

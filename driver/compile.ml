@@ -49,6 +49,7 @@ let interface ppf sourcefile outputprefix =
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
 
+  Leopardtype.init initial_env;
   (* -no-trans *)
   if !Clflags.no_trans then pp_out (`Signature ast) else
 
@@ -108,6 +109,7 @@ let implementation ppf sourcefile outputprefix =
   Env.set_unit_name modulename;
   let env = Compmisc.initial_env() in
   try
+    Leopardtype.init env;
     (* -no-trans *)
     if !Clflags.no_trans then begin
       let str =
@@ -137,7 +139,7 @@ let implementation ppf sourcefile outputprefix =
     let (typedtree, coercion) =
       if !Clflags.no_retype then (typedtree, coercion)
       else begin
-        Leopard.without_leopard (fun () ->
+        Leopardtype.without_leopard (fun () ->
             Compmisc.init_path false;
             Env.set_unit_name modulename;
             let env = Compmisc.initial_env() in

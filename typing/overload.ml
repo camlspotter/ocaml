@@ -87,5 +87,5 @@ end
 
 module Map = TypedtreeMap.MakeMap(MapArg)
 
-let resolve str = if !Leopard.overload then Map.map_structure str else str
+let resolve str = if !Leopardtype.overload then Map.map_structure str else str
 

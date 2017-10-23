@@ -3,3 +3,7 @@ val without_leopard : (unit -> 'a) -> 'a
 
 val curried_constr : bool ref
 val overload : bool ref
+
+val is_leopardlib_available : Env.t -> bool
+
+val init : Env.t -> unit

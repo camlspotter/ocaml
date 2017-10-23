@@ -96,13 +96,15 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/lexer.cmo parsing/indent.cmo parsing/parse.cmo parsing/printast.cmo \
   parsing/pprintast.cmo \
   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
-  parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo
+  parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo \
+  parsing/leopardppx.cmo
 
-TYPING=typing/leopard.cmo typing/ident.cmo typing/path.cmo \
+TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
   typing/btype.cmo typing/oprint.cmo \
   typing/subst.cmo typing/predef.cmo \
   typing/datarepr.cmo typing/cmi_format.cmo typing/env.cmo \
+  typing/leopardtype.cmo \
   typing/typedtree.cmo typing/printtyped.cmo typing/ctype.cmo \
   typing/printtyp.cmo typing/includeclass.cmo \
   typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
