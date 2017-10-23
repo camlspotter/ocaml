@@ -25,4 +25,6 @@ let cons2 = !(::) 1 []
 
 let z = !`Foo @@ (1,2,3);;
 
+let x = (::);;
+        
 let () = prerr_endline "test done";;

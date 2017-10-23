@@ -1359,6 +1359,8 @@ expr:
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$1;$3])) (symbol_rloc()) }
   | LPAREN COLONCOLON RPAREN LPAREN expr COMMA expr RPAREN
       { mkexp_cons (rhs_loc 2) (ghexp(Pexp_tuple[$5;$7])) (symbol_rloc()) }
+  | LPAREN COLONCOLON RPAREN
+      { mkexp (Pexp_construct(mkloc (Lident "::") (rhs_loc 2), None)) }
   | expr INFIXOP0 expr
       { mkinfix $1 $2 $3 }
   | expr INFIXOP1 expr
