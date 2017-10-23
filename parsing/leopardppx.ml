@@ -2,7 +2,8 @@ open Asttypes
 open Ast_mapper
 open Parsetree
 
-
+let with_leopardlib = ref false
+    
 let overload_vdesc vdesc = 
   { vdesc with pval_prim = ["%OVERLOADED"] }
   

@@ -2126,21 +2126,21 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       We here to try contract applications as possible...
    *)
    | Pexp_apply ( { pexp_desc = Pexp_apply(x,xs);
-                    pexp_attributes = [] }, ys ) when !Leopard.curried_constr ->
+                    pexp_attributes = [] }, ys ) when !Leopardtype.curried_constr ->
  
        type_expect_ ?in_function env 
          { sexp with pexp_desc = Pexp_apply (x, xs @ ys) }
          ty_expected
  
    | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
-                (Nolabel, ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) when !Leopard.curried_constr ->
+                (Nolabel, ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) when !Leopardtype.curried_constr ->
        (* ! C a b *)
        type_construct_curried ?in_function env loc ty_expected 
          sexp.pexp_attributes
          con loc' xs
  
    | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
-                (Nolabel, ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) when !Leopard.curried_constr ->
+                (Nolabel, ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) when !Leopardtype.curried_constr ->
        (* ! `F a b *)
        let open Ast_helper in
        begin match xs with
@@ -2252,7 +2252,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env }
 (* ppx_curried_constr begin *)
 
-  | Pexp_construct(lid, None) when !Leopard.curried_constr -> 
+  | Pexp_construct(lid, None) when !Leopardtype.curried_constr -> 
       (* None  or   (Some) *)
       (* type_construct env loc lid sarg ty_expected sexp.pexp_attributes *)
       type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid
