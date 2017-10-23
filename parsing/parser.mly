@@ -152,6 +152,9 @@ let mkpat_opt_constraint p = function
 let array_function str name =
   ghloc (Ldot(Lident str, (if !Clflags.fast then "unsafe_" ^ name else name)))
 
+let array_val_ident str name =
+  "__" ^ str ^ (if !Clflags.fast then "unsafe_" else "_") ^ name
+  
 let syntax_error () =
   raise Syntaxerr.Escape_error
 
@@ -2371,6 +2374,13 @@ operator:
   | COLONEQUAL                                  { ":=" }
   | PLUSEQ                                      { "+=" }
   | PERCENT                                     { "%" }
+
+  | DOT LBRACKET RBRACKET { array_val_ident "string" "get" }
+  | DOT LPAREN RPAREN { array_val_ident "array" "get" }
+  | DOT LBRACKET RBRACKET LESSMINUS { array_val_ident "string" "set" }
+  | DOT LPAREN RPAREN LESSMINUS { array_val_ident "array" "set" }
+  | DOT LBRACE RBRACE { array_val_ident "bigarray" "get" }
+  | DOT LBRACE RBRACE LESSMINUS { array_val_ident "bigarray" "set" }
 ;
 constr_ident:
     UIDENT                                      { $1 }

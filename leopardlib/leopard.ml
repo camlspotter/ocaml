@@ -1,17 +1,13 @@
 [@@@ocaml.warning "-3"]
 
-module DotBracket = struct:
-  module Array = struct:
-    let get = Array.get
-    let set = Array.set
-    let unsafe_get = Array.unsafe_get
-    let unsafe_set = Array.unsafe_set
-
-  module String = struct:
-    let get = String.get
-    let set = String.set 
-    let unsafe_get = String.unsafe_get
-    let unsafe_set = String.unsafe_set
+let __array_get = Array.get
+let __array_set = Array.set
+let __array_unsafe_get = Array.unsafe_get
+let __array_unsafe_set = Array.unsafe_set
+let __string_get = String.get
+let __string_set = String.set 
+let __string_unsafe_get = String.unsafe_get
+let __string_unsafe_set = String.unsafe_set
 
 module Overload = struct:
 
@@ -34,26 +30,22 @@ module Overload = struct:
 
   module OrigString = String
 
-  module Leopard = struct:
-    module DotBracket = struct:
-      module String = struct:
-        val %overload get : 'a -> int -> 'b
-        val %overload set : 'a -> int -> 'b -> unit
-        val %overload unsafe_get : 'a -> int -> 'b
-        val %overload unsafe_set : 'a -> int -> 'b -> unit
-    
-        module String = struct:
-          let get = OrigString.get
-          let set = OrigString.set
-          let unsafe_get = OrigString.unsafe_get
-          let unsafe_set = OrigString.unsafe_set
-    
-        module Array = struct:
-          let get = Array.get
-          let set = Array.set
-          let unsafe_get = Array.unsafe_get
-          let unsafe_set = Array.unsafe_set
+  val %overload __string_get : 'a -> int -> 'b
+  val %overload __string_set : 'a -> int -> 'b -> unit
+  val %overload __string_unsafe_get : 'a -> int -> 'b
+  val %overload __string_unsafe_set : 'a -> int -> 'b -> unit
 
     
+  module String = struct:
+    let __string_get = OrigString.get
+    let __string_set = OrigString.set
+    let __string_unsafe_get = OrigString.unsafe_get
+    let __string_unsafe_set = OrigString.unsafe_set
+
+  module Array = struct:
+    let __string_get = Array.get
+    let __string_set = Array.set
+    let __string_unsafe_get = Array.unsafe_get
+    let __string_unsafe_set = Array.unsafe_set
 
   
