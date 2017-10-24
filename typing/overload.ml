@@ -24,14 +24,29 @@ let test env ty vdesc =
   Btype.backtrack snapshot;
   res
 
+(*
+let scrape_sg _path env mdecl = 
+  try
+    match Env.scrape_alias env @@ Mtype.scrape env mdecl.Types.md_type with
+    | Mty_signature sg -> sg
+    | Mty_functor _ -> [] (* We do not scan the internals of functors *)
+    | _ -> assert false
+  with
+  | e -> 
+      Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
+      raise e
+*)
+  
 let resolve_overloading exp lidloc path = 
+  Format.eprintf "resolve_overloading %a@." Printtyp.path path;
   let env = exp.exp_env in
 
   let name = get_name path in
 
   let rec find_candidates (path : Path.t) mty =
-    (* Format.eprintf "Find_candidates %a@." print_path path; *)
+    Format.eprintf "Find_candidates %a@." Printtyp.path path;
 
+    let env = Env.empty in
     let sg = 
       match Env.scrape_alias env @@ Mtype.scrape env mty with
       | Mty_signature sg -> sg
@@ -49,16 +64,18 @@ let resolve_overloading exp lidloc path =
         find_candidates path moddecl.Types.md_type @ st
     | _ -> st) sg []
   in
-  
+
   let lid_opt = match path with
     | Path.Pident _ -> None
     | Path.Pdot (p, _, _) -> Some (Untypeast.lident_of_path p)
     | Path.Papply _ -> assert false
   in
 
-  match 
+  match
+    (* Here Env.empty must be used! *)
     Env.fold_modules (fun _name path moddecl st -> 
-      find_candidates path moddecl.Types.md_type @ st) lid_opt env []
+        Format.eprintf "%s %a@." _name Printtyp.path path;
+        find_candidates path moddecl.Types.md_type @ st) lid_opt Env.empty []
   with
   | [] -> 
      Location.raise_errorf ~loc:lidloc.loc "Overload resolution failed: no match"

@@ -114,6 +114,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/stypes.cmo typing/typedecl.cmo typing/typecore.cmo \
   typing/typeclass.cmo \
+  typing/unshadow.cmo \
   typing/overload.cmo \
   typing/typemod.cmo
 

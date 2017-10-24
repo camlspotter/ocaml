@@ -19,9 +19,10 @@ let without_leopard f =
       enable_leopard ();
       res
 
-let is_leopardlib_available env =
+let is_leopardlib_available _env =
   try
-    ignore (Env.lookup_module ~load:true Longident.(Lident "Leopard") env); true
+    (* ignore (Env.lookup_module ~load:true Longident.(Lident "Leopard") env); true *)
+    true
   with
   | _ -> false
 
