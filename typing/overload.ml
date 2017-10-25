@@ -38,13 +38,13 @@ let scrape_sg _path env mdecl =
 *)
   
 let resolve_overloading exp lidloc path = 
-  Format.eprintf "resolve_overloading %a@." Printtyp.path path;
+  (* Format.eprintf "resolve_overloading %a@." Printtyp.path path; *)
   let env = exp.exp_env in
 
   let name = get_name path in
 
   let rec find_candidates (path : Path.t) mty =
-    Format.eprintf "Find_candidates %a@." Printtyp.path path;
+    (* Format.eprintf "Find_candidates %a@." Printtyp.path path; *)
 
     let env = Env.empty in
     let sg = 
@@ -74,7 +74,7 @@ let resolve_overloading exp lidloc path =
   match
     (* Here Env.empty must be used! *)
     Env.fold_modules (fun _name path moddecl st -> 
-        Format.eprintf "%s %a@." _name Printtyp.path path;
+        (* Format.eprintf "%s %a@." _name Printtyp.path path; *)
         find_candidates path moddecl.Types.md_type @ st) lid_opt Env.empty []
   with
   | [] -> 
@@ -83,9 +83,10 @@ let resolve_overloading exp lidloc path =
       (* Format.eprintf "RESOLVED: %a@." print_path path; *)
       let ity = Ctype.instance env vdesc.val_type in
       Ctype.unify env exp.exp_type ity; (* should succeed *)
-      { exp with 
-        exp_desc = Texp_ident (path, {lidloc with Asttypes.txt = Untypeast.lident_of_path path}, vdesc);
-        exp_type = exp.exp_type }
+      Unshadow.Replace.replace 
+        { exp with 
+          exp_desc = Texp_ident (path, {lidloc with Asttypes.txt = Untypeast.lident_of_path path}, vdesc);
+          exp_type = exp.exp_type }
   | _ -> 
      Location.raise_errorf ~loc:lidloc.loc "Overload resolution failed: too ambiguous"
 
@@ -104,5 +105,7 @@ end
 
 module Map = TypedtreeMap.MakeMap(MapArg)
 
-let resolve str = if !Leopardtype.overload then Map.map_structure str else str
-
+let resolve str =
+  if !Leopardtype.overload then
+    Unshadow.Alias.insert @@ Map.map_structure str
+  else str

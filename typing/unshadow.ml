@@ -3,6 +3,8 @@ open Ident
 open Path
 open Location
 
+(* tools *)
+
 let rev_filter_map f lst =
   fold_left (fun st x ->
     match f x with
@@ -13,7 +15,6 @@ let rev_filter_map f lst =
 let filter_map f lst = rev (rev_filter_map f lst)
 
 let flip f x y = f y x
-
   
 let conv_ident id = "__" ^ id.name ^ "__" ^ string_of_int id.stamp
 
@@ -58,9 +59,7 @@ module Replace = struct
           | Path.Pdot (p, n, i) ->
               begin match check_module_path env p with
               | `Accessible _ -> e
-              | `Not_found _p ->
-                  Format.eprintf "ppx_implicits: unshadow: module path %a not found in the env@." Printtyp.path p; 
-                  assert false (* impos *)
+              | `Not_found _p ->  assert false (* impos *)
               | `Shadowed (id, id', p) ->
                   aliases := (id, id') :: !aliases;
                   let p = Path.Pdot (p, n, i) in
@@ -74,7 +73,7 @@ module Replace = struct
                   let p', _ = Env.lookup_value lid env in
                   assert (p = p');
                   e
-                with Not_found -> e (* It is I guess __imp_function__ *)
+                with Not_found -> e
               end
           | _ -> assert false (* impos *)
           end
@@ -87,7 +86,30 @@ module Replace = struct
 end
   
 module Alias = struct
-  module MapArg(A : sig val aliases : (Ident.t * (Ident.t * Types.module_type)) list end) : TypedtreeMap.MapArgument = struct
+
+  open Typedtree
+      
+  let build_mexp env id mty =
+    let p = Pident id in
+    let lid = Untypeast.lident_of_path p in
+    { mod_desc = Tmod_ident (p, {txt=lid; loc= Location.none})
+    ; mod_loc = Location.none
+    ; mod_type = mty
+    ; mod_env = env
+    ; mod_attributes = []
+    }
+
+  let build_str_item env id' mexp =
+    { str_desc = Tstr_module { mb_id = id'
+                             ; mb_name = {txt=id'.Ident.name; loc=Location.none}
+                             ; mb_expr = mexp
+                             ; mb_attributes = []
+                             ; mb_loc = Location.none }
+    ; str_loc = Location.none
+    ; str_env = env
+    }  
+
+  module MapArg(A : sig val aliases : (Ident.t * Ident.t) list end) : TypedtreeMap.MapArgument = struct
   
     (* Introduce module aliases to avoid shadow
   
@@ -111,65 +133,58 @@ module Alias = struct
   
     open Typedtree
 
-    let build_mexp env id mty =
-      let p = Pident id in
-      let lid = Untypeast.lident_of_path p in
-      { mod_desc = Tmod_ident (p, {txt=lid; loc= Location.none})
-      ; mod_loc = Location.none
-      ; mod_type = mty
-      ; mod_env = env
-      ; mod_attributes = []
-      }
-
-    let build_str_item env id' mexp =
-      { str_desc = Tstr_module { mb_id = id'
-                               ; mb_name = {txt=id'.Ident.name; loc=Location.none}
-                               ; mb_expr = mexp
-                               ; mb_attributes = []
-                               ; mb_loc = Location.none }
-      ; str_loc = Location.none
-      ; str_env = env
-      }  
-
     let enter_expression e = match e.exp_desc with
       | Texp_letmodule (id, a, b, e') ->
           begin match assoc_opt id A.aliases with
           | None -> e
-          | Some (id', mty) ->
-              let mexp = build_mexp e.exp_env id mty in
-              { e with exp_desc = Texp_letmodule (id', {txt=id'.Ident.name; loc= Location.none}, mexp, e) }
+          | Some id' ->
+              let mexp = build_mexp e.exp_env id b.mod_type in
+              { e with exp_desc = Texp_letmodule (id, a, b,
+                { e with exp_desc = Texp_letmodule (id', {txt=id'.Ident.name; loc= Location.none}, mexp, e')})} 
           end
       | _ -> e
         
     let structure_item si = match si.str_desc with
       | Tstr_module mb ->
-  (*
-  Format.eprintf "module %a@." Ident.format mb.mb_id;
-  *)
+          (*
+            Format.eprintf "module %a@." Ident.format mb.mb_id;
+          *)
           si ::
           begin match assoc_opt mb.mb_id A.aliases with
           | None -> []
-          | Some (id', mty) -> 
-              let mexp = build_mexp si.str_env mb.mb_id mty in
+          | Some id' -> 
+              let mexp = build_mexp si.str_env mb.mb_id mb.mb_expr.mod_type in
               [ build_str_item si.str_env id' mexp ]
           end
       | Tstr_recmodule mbs ->
           si :: flip filter_map mbs (fun mb ->
             match assoc_opt mb.mb_id A.aliases with
             | None -> None
-            | Some (id', mty) -> 
-                let mexp = build_mexp si.str_env mb.mb_id mty in
+            | Some id' -> 
+                let mexp = build_mexp si.str_env mb.mb_id mb.mb_expr.mod_type in
                 Some (build_str_item si.str_env id' mexp))
       | _ -> [si]
   
     let enter_structure ({ str_items = sis } as s) =
       (* It ignores the correctness of type information *)
-      { s 
-        with str_items = fold_right (fun si st -> structure_item si @ st) sis [] }
+      { s with str_items = fold_right (fun si st -> structure_item si @ st) sis [] }
   end
   
   let insert str =
-    let module A = MapArg(struct let aliases = !aliases end) in
-    let module Map = TypedtreeMap.MakeMap(A) in
-    Map.map_structure str
+    match !aliases with
+    | [] -> str
+    | als ->
+        aliases := [];
+        let module A = MapArg(struct let aliases = als end) in
+        let module Map = TypedtreeMap.MakeMap(A) in
+        let add_persistent str =
+          List.fold_left (fun str (id,id') ->
+              if Ident.persistent id then
+                let env = str.str_final_env in
+                let md = Env.find_module (Path.Pident id) env in
+                let mexp = build_mexp env id md.Types.md_type in
+                { str with str_items = build_str_item env id' mexp :: str.str_items }
+              else str) str als
+        in
+        add_persistent @@ Map.map_structure str
 end
