@@ -51,7 +51,7 @@ let interface ppf sourcefile outputprefix =
   if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
   if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
 
-  Leopardtype.init ();
+  Leopardtype.init initial_env;
   (* -no-trans *)
   if !Clflags.no_trans then pp_out (`Signature ast) else
 
@@ -116,7 +116,7 @@ let implementation ~backend ppf sourcefile outputprefix =
   let cmxfile = outputprefix ^ ".cmx" in
   let objfile = outputprefix ^ ext_obj in
   let comp ast =
-    Leopardtype.init ();
+    Leopardtype.init env;
     (* -no-trans *)
     if !Clflags.no_trans then begin
       let ast =
@@ -145,7 +145,7 @@ let implementation ~backend ppf sourcefile outputprefix =
         Warnings.check_fatal ();
         Stypes.dump (Some (outputprefix ^ ".annot"));
 
-        Leopard.without_leopard (fun () ->
+        Leopardtype.without_leopard (fun () ->
             Compmisc.init_path false;
             Env.set_unit_name modulename;
             let env = Compmisc.initial_env() in
