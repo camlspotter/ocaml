@@ -6,9 +6,10 @@
 
 OCamleopard is a modified OCaml compiler with several enhancements in its parsing, typing and complation:
 
-* Syntax with Python style indentation rules
-* Variant constructors as functions in both uncurried and curried form
-* User definable SML style simple overloading
+* Syntax with Python style indentation rules.
+* Variant constructors as functions in both uncurried and curried form.
+* User definable SML style simple overloading.
+* `x.[i]` and `x.(i)` are easily overridable.
 
 Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml together:
 
@@ -552,6 +553,49 @@ let _ =
 ```
 
 The example of overloaded functions can be found at `testsuite/tests/overload/t01ok.ml` in OCamleopard source code.
+
+# Overridable `x.[i]` and `x.(i)`
+
+In vanilla OCaml, `x.[i]`, `x.(i)`, `x.[i] <- e` and `x.(i) <- e`
+are syntactic sugars of `String.get`, `Array.get`, `String.set`
+and `Array.set` respectively, or 
+their unsafe versions with `-unsafe` compiler option.
+You can override their behaviour by defining you own versions of
+these functions in the current scope.  For example,
+
+```
+module String = struct
+  let get a (x,y) = a.(x).(y)
+end
+```
+
+Then by `x.[1, 2]` is equivalent with `x.(1).(2)`.
+One downside of this methos is that you can no longer use the original
+versions of these functions.
+
+To make overriding these string and array accesses easily,
+OCamleopard `x.[i]`, `x.(i)`, `x.[i] <- e` and `x.(i) <- e` desugars to
+`Leopard.DotBracket.String.get`,
+`Leopard.DotBracket.Array.get`,
+`Leopard.DotBracket.String.set`,
+and `Leopard.DotBracket.Array.set`
+respectively.  You can change the behaviours of these accesses by
+overriding these names in the current scope, without changing 
+the behaviours of `String.get`, `Array.get` and so on:
+
+```
+module Leopard = struct
+  module Dotbracket = struct
+    module String = struct
+      let get a (x,y) = a.(x).(y)
+    end
+  end	
+end
+```
+
+To keep the backward compatibility, this special desugaring to
+`Leopard.DotBracket....` is activated only when the compiler can access
+module `Leopard` in its include path.
 
 # Trivia of giraffes
 
