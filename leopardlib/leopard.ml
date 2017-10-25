@@ -1,3 +1,5 @@
+[@@@ocaml.warning "-3"]
+
 module DotBracket = struct:
   module Array = struct:
     let get = Array.get
@@ -7,7 +9,7 @@ module DotBracket = struct:
 
   module String = struct:
     let get = String.get
-    let set = String.set
+    let set = String.set 
     let unsafe_get = String.unsafe_get
     let unsafe_set = String.unsafe_set
 
