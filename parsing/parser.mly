@@ -1551,6 +1551,14 @@ simple_expr:
       { unclosed "(" 3 ")" 8 }
   | extension
       { mkexp (Pexp_extension $1) }
+  | LPAREN DOT LBRACKET RBRACKET RPAREN
+      { ghexp (Pexp_ident(array_function "String" "get")) }
+  | LPAREN DOT LPAREN RPAREN RPAREN
+      { ghexp (Pexp_ident(array_function "Array" "get")) }
+  | LPAREN DOT LBRACKET RBRACKET LESSMINUS RPAREN
+      { ghexp (Pexp_ident(array_function "String" "set")) }
+  | LPAREN DOT LPAREN RPAREN LESSMINUS RPAREN
+      { ghexp (Pexp_ident(array_function "Array" "set")) }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
@@ -1805,6 +1813,16 @@ simple_pattern_not_ident:
       { unclosed "(" 1 ")" 7 }
   | extension
       { mkpat(Ppat_extension $1) }
+    /*
+  | LPAREN DOT LBRACKET RBRACKET RPAREN
+      { ghexp (Pexp_ident(array_function "String" "get")) }
+  | LPAREN DOT LPAREN RPAREN RPAREN
+      { ghexp (Pexp_ident(array_function "Array" "get")) }
+  | LPAREN DOT LBRACKET RBRACKET LESSMINUS RPAREN
+      { ghexp (Pexp_ident(array_function "String" "set")) }
+  | LPAREN DOT LPAREN RPAREN LESSMINUS RPAREN
+      { ghexp (Pexp_ident(array_function "Array" "set")) }
+*/
 ;
 
 simple_delimited_pattern:
