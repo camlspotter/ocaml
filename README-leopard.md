@@ -9,7 +9,7 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
 * Syntax with Python style indentation rules.
 * Variant constructors as functions in both uncurried and curried form.
 * User definable SML style simple overloading.
-* `x.[i]` and `x.(i)` are easily overridable.
+* Easily overridable array access operators such as `x.[i]` and `x.(i)`.
 
 Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml together:
 
@@ -211,6 +211,14 @@ However the output is often not compilable by the genuine OCaml compilers
 since it may contain OCamleopard extension points.
 
 The output of `-no-trans` can be compiled by OCamleopard compilers.
+
+# "Leopard" mode
+
+Some of the extensions of OCamleopard requires its library module named `Leopard`. 
+They are enabled only in "Leopard" mode, when the compiler finds the module in its loading path.
+
+In Leopard mode, the module `Leopard` is automatically opened and linked just like
+`Pervasives` of vanilla OCaml, unless `-nopervasives` option is given.
 
 # Syntax with Python style indentation rules
 
@@ -554,48 +562,42 @@ let _ =
 
 The example of overloaded functions can be found at `testsuite/tests/overload/t01ok.ml` in OCamleopard source code.
 
-# Overridable `x.[i]` and `x.(i)`
+# Enhanced array access expressions such as `x.[e]` and `x.(e)`
 
-In vanilla OCaml, `x.[i]`, `x.(i)`, `x.[i] <- e` and `x.(i) <- e`
-are syntactic sugars of `String.get`, `Array.get`, `String.set`
-and `Array.set` respectively, or 
-their unsafe versions with `-unsafe` compiler option.
-You can override their behaviour by defining you own versions of
-these functions in the current scope.  For example,
+In Leopard mode, OCamleopard changes the desugaring of array access expressions such as 
+`x.[e]` and `x.(e)` so that they can be easily overridden.
+
+* `x.[e]` is desugarred using `__string_get` or `__string_unsafe_get` 
+                   instead of `String.get` or `String.unsafe_get`.
+* `x.[e] <- e'` is desugarred using `__string_set` or `__string_unsafe_set` 
+                              instead of `String.set` or `String.unsafe_set`.
+* `x.(e)` is desugarred using `__array_get` or `__array_unsafe_get`
+              instead of `Array.get` or `Array.unsafe_get`.
+* `x.(e) <- e'` is desugarred using `__array_get` or `__array_unafe_get`
+              instead of `Array.set` or `Array.unsafe_set`.
+* The same applies to `x.{e}` and `x.{e} <- e'`: 
+  to `__bigarray_(genarray|array[123])_(unsafe_)?(get|set)` (please decypher the regular expression).
+
+The default definition of these `__(array|string)_(unsafe)?(get|set)`
+are defined in module `Leopard`, therefore available by default in Leopard mode.
+
+The following operator like syntax sugars are also introduced:
+
+* `(.[])` is desugarred to `__string_get` or `__string_unsafe_get`.
+* `(.[]<-)` is desugarred to `__string_set` or `__string_unsafe_set`.
+* `(.())` and `(.()<-)` are desugarred to `__array_(unsafe_)?(set|get)`.
+* `(.{})` and `(.{}<-)` are desugarred to `__bigarray_(unsafe_)?(set|get)`.
+
+They cannot be simple identifiers but syntax sugars because 
+we have to change the meaning of them from safe versions (`__xxx_(get|set)`) 
+to unsafe versions (`__xxx_unsafe_(get|set)`), if `-unsafe` compiler option is given.
+
+These sugars also apply to patterns, therefore if you want to redefine
+`(.[])`, you can do like:
 
 ```
-module String = struct
-  let get a (x,y) = a.(x).(y)
-end
+let (.[]) x y = ...    (* desugarred to  let __string_get x y = ... *)
 ```
-
-Then by `x.[1, 2]` is equivalent with `x.(1).(2)`.
-One downside of this methos is that you can no longer use the original
-versions of these functions.
-
-To make overriding these string and array accesses easily,
-OCamleopard `x.[i]`, `x.(i)`, `x.[i] <- e` and `x.(i) <- e` desugars to
-`Leopard.DotBracket.String.get`,
-`Leopard.DotBracket.Array.get`,
-`Leopard.DotBracket.String.set`,
-and `Leopard.DotBracket.Array.set`
-respectively.  You can change the behaviours of these accesses by
-overriding these names in the current scope, without changing 
-the behaviours of `String.get`, `Array.get` and so on:
-
-```
-module Leopard = struct
-  module Dotbracket = struct
-    module String = struct
-      let get a (x,y) = a.(x).(y)
-    end
-  end	
-end
-```
-
-To keep the backward compatibility, this special desugaring to
-`Leopard.DotBracket....` is activated only when the compiler can access
-module `Leopard` in its include path.
 
 # Trivia of giraffes
 

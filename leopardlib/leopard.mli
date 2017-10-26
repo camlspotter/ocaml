@@ -1,3 +1,9 @@
+(** OCamleopard runtime library
+
+    This module is opened and linked automatically, if OCamleopard compilers
+    find this module in its load path.
+*)
+
 val __array_get : 'a array -> int -> 'a
 val __array_set : 'a array -> int -> 'a -> unit
 val __array_unsafe_get : 'a array -> int -> 'a
@@ -25,6 +31,8 @@ module Overload : sig:
     val ( - ) : float -> float -> float
     val ( * ) : float -> float -> float
     val ( / ) : float -> float -> float
+
+  (** For overloading of x.[e], x.[e] <- e' *)
 
   val %overload __string_get : 'a -> int -> 'b
   val %overload __string_set : 'a -> int -> 'b -> unit
