@@ -1,8 +1,12 @@
 OCAMLC=../ocamlc
+OCAMLOPT=../ocamlopt
 OCAMLDEP=../tools/ocamldep
 
 .PHONY: all
 all: leopard.cmo test.exe
+
+.PHONY: opt
+opt: leopard.cmx 
 
 test.exe: leopard.cmo test.cmo 
 	$(OCAMLC) -o $@ leopard.cmo test.cmo
@@ -11,13 +15,16 @@ test.exe: leopard.cmo test.cmo
 clean:
 	rm -f *.cm*
 
-.SUFFIXES: .cmo .cmi .ml .mli
+.SUFFIXES: .ml .mli .cmo .cmi .cmx
 
 .ml.cmo:
 	$(OCAMLC) -c -o $@ $<
 
 .mli.cmi:
 	$(OCAMLC) -c -o $@ $<
+
+.ml.cmx:
+	$(OCAMLOPT) -c $<
 
 .PHONY: depend
 depend: .depend
@@ -26,3 +33,4 @@ depend: .depend
 	$(OCAMLDEP) *.ml *.mli > $@
 
 include .depend
+

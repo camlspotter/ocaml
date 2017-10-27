@@ -9,5 +9,7 @@ build: [
   ["./configure" "--prefix" "%{prefix}%"]        
   [make "core" "coreboot"]
   [make "world.opt"] {ocaml-native}
+  [make "-C" "leopardlib"]
+  [make "-C" "leopardlib" opt] {ocaml-native}
 ]
 available: [ocaml-version = "4.05.0"]

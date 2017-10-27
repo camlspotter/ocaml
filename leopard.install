@@ -1,5 +1,11 @@
 lib: [
   "META" {"META"}
+
+  "leopardlib/leopard.mli"
+  "leopardlib/leopard.cmi"
+  "leopardlib/leopard.cmo"
+  "?leopardlib/leopard.cmx"
+  "?leopardlib/leopard.cmt"
 ]
 bin: [
   "ocaml"	  {"leopard"}

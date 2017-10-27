@@ -6,3 +6,6 @@ requires=""
 archive(syntax,preprocessor,leopard) = "-as-pp"
 archive(syntax,preprocessor,leoparddep) = "-as-pp -no-trans"
 preprocessor="leopardc"
+
+archive(byte)=""
+archive(native)=""
