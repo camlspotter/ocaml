@@ -4,18 +4,22 @@
 >
 > Dio, Roman History (XLIII.23.1-2) (http://www.gutenberg.org/cache/epub/11607/pg11607-images.html)
 
-OCamleopard is a modified OCaml compiler with several enhancements in its parsing, typing and complation:
+OCamleopard is a modified OCaml compiler with several enhancements in its parsing, typing and complation front-end:
 
 * Syntax with Python style indentation rules.
 * Variant constructors as functions in both uncurried and curried form.
 * User definable SML style simple overloading.
 * Easily overridable array access operators such as `x.[i]` and `x.(i)`.
 
-Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml together:
+## Coexistable with vanilla OCaml
+
+Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml of the same version number together:
 
 * Even with the indentation rules, the syntax is still upper-compatible: it can parse the original OCaml code.
 * The existing OCaml PPX preprocessors can work with OCamleopard, since its parsed AST is identical to the one of OCaml.
-* Object files of OCaml and OCamleopard can be used together, since OCamleopard's middle and back end system is identical to those of OCaml.
+* Object files of OCaml and OCamleopard can be used together, since OCamleopard's compilation middle and back end systems are identical to those of OCaml.
+
+## Two phased typing to minimize extension bugs
 
 To minimize the compilation bugs caused by its extensions, 
 OCamleopard has a two phased type checking: 
@@ -76,7 +80,7 @@ Pros:
 Cons:
 
 * Need to set an environment varialbe for `ocamlfind`, which may be tricky for some build systems. (See details below)
-* If you are paranoiac, you are not happy since there is no type guarantee by the genuine OCaml compiler.
+* It has two phased typing, but if you are paranoiac, you are not happy since there is no type guarantee by the genuine OCaml compiler.
 
 ### Work with Findlib (i.e. `ocamlfind`)
 
