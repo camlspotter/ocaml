@@ -7,10 +7,37 @@
 OCamleopard is a modified OCaml compiler with several enhancements in its parsing, typing and complation front-end:
 
 * Syntax with Python style indentation rules.
+
+
+    ```ocaml
+    match xs with
+    | [] ->
+        match y with:
+        | A -> 2
+        | B -> 3
+    | x::xs ->
+        match y with:
+        | A -> 4
+        | B -> 5
+    ```
+
 * Variant constructors as functions in both uncurried and curried form.
+
+    ```ocaml
+	List.map Some xs
+	```
+
 * User definable SML style simple overloading.
+
+    ```ocaml
+	(1 + 2, 1.2 + 3.4)
+	```
+	
 * Easily overridable array access operators such as `x.[i]` and `x.(i)`.
 
+    ```ocaml
+	let (.[]) = Bytes.get
+	```
 ## Coexistable with vanilla OCaml
 
 Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml of the same version number together:
