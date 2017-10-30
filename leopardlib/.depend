@@ -1,0 +1,5 @@
+leopard.cmo : leopard.cmi
+leopard.cmx : leopard.cmi
+leopard.cmi :
+test.cmo : leopard.cmi
+test.cmx : leopard.cmx
