@@ -19,7 +19,7 @@
 
 let rec skip_phrase lexbuf =
   try
-    match Lexer.token lexbuf with
+    match Indent.token lexbuf with
       Parser.SEMISEMI | Parser.EOF -> ()
     | _ -> skip_phrase lexbuf
   with
@@ -39,7 +39,7 @@ let wrap parsing_fun lexbuf =
   try
     Docstrings.init ();
     Lexer.init ();
-    let ast = parsing_fun Lexer.token lexbuf in
+    let ast = parsing_fun Indent.token lexbuf in
     Parsing.clear_parser();
     Docstrings.warn_bad_docstrings ();
     ast

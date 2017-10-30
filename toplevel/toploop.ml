@@ -519,6 +519,7 @@ let loop ppf =
     with Env.Error _ | Typetexp.Error _ as exn ->
       Location.report_exception ppf exn; exit 2
   end;
+  toplevel_env := Compmisc.leopard_init !toplevel_env;
   let lb = Lexing.from_function refill_lexbuf in
   Location.init lb "//toplevel//";
   Location.input_name := "//toplevel//";

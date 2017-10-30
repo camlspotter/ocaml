@@ -27,6 +27,21 @@ open Compenv
 
 let tool_name = "ocamlopt"
 
+let pp_out = function
+  | `Structure str when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.structure str
+  | `Structure str ->
+      output_string stdout Config.ast_impl_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout str;
+      close_out stdout
+  | `Signature sg when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.signature sg
+  | `Signature sg ->
+      output_string stdout Config.ast_intf_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout sg
+
 let interface ppf sourcefile outputprefix =
   Profile.record_call sourcefile (fun () ->
     Compmisc.init_path false;
@@ -36,6 +51,11 @@ let interface ppf sourcefile outputprefix =
     let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
     if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+
+    let initial_env = Compmisc.leopard_init initial_env in
+    (* -no-trans *)
+    if !Clflags.no_trans then pp_out (`Signature ast) else
+
     Profile.(record_call typing) (fun () ->
       let tsg = Typemod.type_interface sourcefile initial_env ast in
       if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -47,6 +67,27 @@ let interface ppf sourcefile outputprefix =
       ignore (Includemod.signatures initial_env sg sg);
       Typecore.force_delayed_checks ();
       Warnings.check_fatal ();
+
+      (* retype *)
+      let tsg =
+        if !Clflags.no_retype then tsg
+        else begin
+          let ast = Untypeast.untype_signature tsg in
+          Compmisc.init_path false;
+          Env.set_unit_name modulename;
+          let initial_env = Compmisc.initial_env () in
+          let tsg = Typemod.type_interface sourcefile initial_env ast in
+          let sg = tsg.sig_type in
+          ignore (Includemod.signatures initial_env sg sg);
+          Typecore.force_delayed_checks ();
+          Warnings.check_fatal ();
+          tsg
+        end
+      in
+  
+      (* -as-pp *)
+      if !Clflags.as_pp then pp_out (`Signature (Untypeast.untype_signature tsg)) else
+
       if not !Clflags.print_types then begin
         let deprecated = Builtin_attributes.deprecated_of_sig ast in
         let sg =
@@ -77,6 +118,18 @@ let implementation ~backend ppf sourcefile outputprefix =
     let cmxfile = outputprefix ^ ".cmx" in
     let objfile = outputprefix ^ ext_obj in
     let comp ast =
+      let env = Compmisc.leopard_init env in
+      (* -no-trans *)
+      if !Clflags.no_trans then begin
+        let ast =
+          ast
+          ++ print_if ppf Clflags.dump_parsetree Printast.implementation
+          ++ print_if ppf Clflags.dump_source Pprintast.structure
+        in
+        Warnings.check_fatal ();
+        pp_out (`Structure ast) 
+      end else
+
       let (typedtree, coercion) =
         ast
         ++ print_if ppf Clflags.dump_parsetree Printast.implementation
@@ -86,6 +139,31 @@ let implementation ~backend ppf sourcefile outputprefix =
         ++ print_if ppf Clflags.dump_typedtree
             Printtyped.implementation_with_coercion
       in
+
+      (* retype *)      
+      let (typedtree, coercion) =
+        if !Clflags.no_retype then (typedtree, coercion)
+        else begin
+          Warnings.check_fatal ();
+          Stypes.dump (Some (outputprefix ^ ".annot"));
+  
+          Leopardtype.without_leopard (fun () ->
+              Compmisc.init_path false;
+              Env.set_unit_name modulename;
+              let env = Compmisc.initial_env() in
+              Untypeast.untype_structure typedtree
+              ++ Profile.(record typing)
+                (Typemod.type_implementation sourcefile outputprefix modulename env))
+        end
+      in
+  
+      (* -as-pp *)
+      if !Clflags.as_pp then begin
+        Warnings.check_fatal ();
+        Stypes.dump (Some (outputprefix ^ ".annot"));
+        pp_out (`Structure (Untypeast.untype_structure typedtree))
+      end else
+
       if not !Clflags.print_types then begin
         if Config.flambda then begin
           if !Clflags.classic_inlining then begin

@@ -127,6 +127,7 @@ type error =
   | Illegal_letrec_pat
   | Illegal_letrec_expr
   | Illegal_class_expr
+  | Other of string
 
 exception Error of Location.t * Env.t * error
 exception Error_forward of Location.error

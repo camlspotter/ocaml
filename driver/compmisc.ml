@@ -64,6 +64,22 @@ let initial_env () =
     open_implicit_module m env
   ) env (!implicit_modules @ List.rev !Clflags.open_modules)
 
+let is_leopardlib_available env =
+  try
+    ignore (Env.lookup_module ~load:true Longident.(Lident "Leopard") env); true
+  with
+  | _ -> false
+
+let leopard_init env =
+  begin match !Clflags.leopard_mode with
+  | Some _ -> ()
+  | None ->
+      let b = is_leopardlib_available env in
+      Clflags.leopard_mode := Some b
+  end;
+  match !Clflags.leopard_mode with
+  | Some true -> open_implicit_module "Leopard" env
+  | _ -> env
 
 let read_color_env ppf =
   try

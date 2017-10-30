@@ -1,0 +1,22 @@
+lib: [
+  "META" {"META"}
+
+  "leopardlib/leopard.mli"
+  "leopardlib/leopard.cmi"
+  "leopardlib/leopard.cmo"
+  "?leopardlib/leopard.cmx"
+  "?leopardlib/leopard.cmt"
+]
+bin: [
+  "ocaml"	  {"leopard"}
+  "ocamlc"	  {"leopardc"}
+  "ocamlopt"	  {"leopardopt"}
+  "?ocamlc.opt"   {"leopardc"}
+  "?ocamlopt.opt" {"leopardopt"}
+  "?ocamlnat"     {"leopardnat"}
+
+  "tools/ocamldep"	{"leoparddep"}
+  "?tools/ocamldep.opt" {"leoparddep"}
+
+  "ocamldoc/ocamldoc" {"leoparddoc"}
+]

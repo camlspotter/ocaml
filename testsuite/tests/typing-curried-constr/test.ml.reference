@@ -1,0 +1,17 @@
+
+#     val x : int option = Some 1
+# val x : int option = Some 1
+# val x : int option = Some 1
+#   val x : 'a option = None
+#     type t = Foo of int * float
+# val x : t = Foo (1, 1.)
+#   val x : t = Foo (1, 1.)
+# val x : int -> float -> t = <fun>
+# val x : float -> t = <fun>
+# val x : int * float -> t = <fun>
+# val x : int * float -> t = <fun>
+#     val cons0 : int list = [1]
+# * * *     val z : [> `Foo of int * int * int ] = `Foo (1, 2, 3)
+#   val x : 'a * 'a list -> 'a list = <fun>
+#   test done
+# 
