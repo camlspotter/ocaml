@@ -23,19 +23,43 @@ let scrape_sg env mdecl =
       Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
       raise e
   
-let fold_module env path =
+let fold_module env path init f =
   Format.eprintf "fold_module %a@." Printtyp.path path;
   let mdecl = Env.find_module path env in
   let mty = mdecl.Types.md_type in
   let sg : Types.signature = scrape_sg env mdecl in
   let id = Ident.create "Dummy" in
   let env' = Env.add_module id mty Env.empty in
-  List.fold_left (fun () -> function
-      | Sig_module (id, _mdecl, _rs) ->
-          let p = Env.lookup_module ~load:false Longident.(Ldot (Lident "Dummy", id.Ident.name)) env' in
-          Format.eprintf "SUBMOD: %a@." Printtyp.path p;
-          ()
-      | _ -> ()) () sg
+  let lid id = Longident.(Ldot (Lident "Dummy", id.Ident.name)) in
+  let pathfix p = match p with
+    | Path.Pdot (Path.Pident _, s, n) -> Path.(Pdot (path, s, n))
+    | _ -> assert false
+  in
+  List.fold_left (fun st i ->
+      let x = match i with
+        | Sig_value (id, _vdesc) ->
+            let p, vdesc = Env.lookup_value (lid id) env' in
+            `Value (id, pathfix p, vdesc)
+        | Sig_type (id, td, _) ->
+            let p = Env.lookup_type (lid id) env' in
+            `Type (id, pathfix p, td)
+        | Sig_typext (id, ec, _) ->
+            let p = Env.lookup_type (lid id) env' in
+            `Typext (id, pathfix p, ec)
+        | Sig_module (id, mdecl, _) ->
+            let p = Env.lookup_module ~load:false (lid id) env' in
+            `Module (id, pathfix p, mdecl)
+        | Sig_modtype (id, _) ->
+            let p, mdtd = Env.lookup_modtype (lid id) env' in
+            `Modtype (id, pathfix p, mdtd)
+        | Sig_class (id, _, _) ->
+            let p, cd = Env.lookup_class (lid id) env' in
+            `Class (id, pathfix p, cd)
+        | Sig_class_type (id, _, _) ->
+            let p, ctd = Env.lookup_cltype (lid id) env' in
+            `Cltype (id, pathfix p, ctd)
+      in
+      f st x) init sg
   
 let get_name = function
   | Path.Pident id -> Ident.name id
@@ -55,34 +79,14 @@ let resolve_overloading exp ({loc} as lidloc) path =
 
   let name = get_name path in
 
-  let rec find_candidates (path : Path.t) mty =
+  let rec find_candidates env (path : Path.t) =
     (* Format.eprintf "Find_candidates %a@." Printtyp.path path; *)
-
-(*
-    let env = Env.empty in
-*)
-    let sg = 
-      match Env.scrape_alias env @@ Mtype.scrape env mty with
-      | Mty_signature sg -> sg
-      | _ -> assert false
-    in
-    List.fold_right (fun sitem st -> match sitem with
-    | Sig_value (id, _vdesc) when Ident.name id = name -> 
-        let lident = Longident.Ldot (Untypeast.lident_of_path path, Ident.name id) in
-        let path, vdesc = Env.lookup_value lident env  in
+    fold_module env path [] @@ fun st -> function
+    | `Value (id, path, vdesc) when Ident.name id = name -> 
         if test env exp.exp_type vdesc then (path, vdesc) :: st else st
-    | Sig_module (id, _mty, _) -> 
-        let lident = Longident.Ldot (Untypeast.lident_of_path path, Ident.name id) in
-        let path = Env.lookup_module ~load:true (*?*) lident env  in
-        let moddecl = Env.find_module path env in
-        find_candidates path moddecl.Types.md_type @ st
-    | _ -> st) sg []
-  in
-
-  let lid_opt = match path with
-    | Path.Pident _ -> None
-    | Path.Pdot (p, _, _) -> Some (Untypeast.lident_of_path p)
-    | Path.Papply _ -> assert false
+    | `Module (_id, path, _moddecl) ->
+        find_candidates env path @ st
+    | _ -> st
   in
 
   let mpath = match path with
@@ -92,13 +96,12 @@ let resolve_overloading exp ({loc} as lidloc) path =
   in
 
   match
-    fold_module env mpath;
-    prerr_endline "ha";
     (* Here Env.empty must be used! ... Really!??!  How about local overloading? *)
-    Format.eprintf "%s@." (match lid_opt with None -> "none" | Some l -> String.concat "." (Longident.flatten l));
-    Env.fold_modules (fun _name path moddecl st -> 
-        Format.eprintf "%s %a@." _name Printtyp.path path;
-        find_candidates path moddecl.Types.md_type @ st) lid_opt env []
+    fold_module env mpath [] @@ fun st -> function
+    | `Module (_id, path, _) ->
+        Format.eprintf "%s %a@." name Printtyp.path path;
+        find_candidates env path @ st
+    | _ -> st
   with
   | [] -> 
      Location.raise_errorf ~loc:lidloc.loc "Overload resolution failed: no match"
