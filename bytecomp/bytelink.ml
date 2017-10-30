@@ -549,7 +549,7 @@ let fix_exec_name name =
 (* Main entry point (build a custom runtime if needed) *)
 
 let link ppf objfiles output_name =
-  let leopard = if !Leopardppx.with_leopardlib then ["leopard.cmo"] else [] in
+  let leopard = if !Clflags.leopard_mode = Some true then ["leopard.cmo"] else [] in
   let objfiles =
     if !Clflags.nopervasives then objfiles
     else if !Clflags.output_c_object then "stdlib.cma" :: leopard @ objfiles

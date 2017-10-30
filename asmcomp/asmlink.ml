@@ -317,8 +317,8 @@ let link ppf objfiles output_name =
     if !Clflags.gprofile then "stdlib.p.cmxa" else "stdlib.cmxa" in
   let stdexit =
     if !Clflags.gprofile then "std_exit.p.cmx" else "std_exit.cmx" in
-  let leopard = 
-    if !Leopardppx.with_leopardlib then
+  let leopard =
+    if !Clflags.leopard_mode = Some true then 
       [if !Clflags.gprofile then "leopard.p.cmx" else "leopard.cmx"]
     else []
   in

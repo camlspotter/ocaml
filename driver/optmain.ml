@@ -230,6 +230,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _as_pp () = compile_only := true; _no_retype (); set as_pp ()
   let _no_trans () = _as_pp (); set no_trans ()
   let _as_pp_text () = _as_pp (); set as_pp_text ()
+  let _leopard    () = leopard_mode := Some true
+  let _no_leopard () = leopard_mode := Some false
 
   let _args = Arg.read_arg
   let _args0 = Arg.read_arg0

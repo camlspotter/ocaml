@@ -70,9 +70,15 @@ let is_leopardlib_available env =
   | _ -> false
 
 let leopard_init env =
-  let b = is_leopardlib_available env in
-  Leopardppx.with_leopardlib := b;
-  if b then open_implicit_module "Leopard" env else env
+  begin match !Clflags.leopard_mode with
+  | Some _ -> ()
+  | None ->
+      let b = is_leopardlib_available env in
+      Clflags.leopard_mode := Some b
+  end;
+  match !Clflags.leopard_mode with
+  | Some true -> open_implicit_module "Leopard" env
+  | _ -> env
 
 let read_color_env ppf =
   try

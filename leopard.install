@@ -13,6 +13,7 @@ bin: [
   "ocamlopt"	  {"leopardopt"}
   "?ocamlc.opt"   {"leopardc"}
   "?ocamlopt.opt" {"leopardopt"}
+  "?ocamlnat"     {"leopardnat"}
 
   "tools/ocamldep"	{"leoparddep"}
   "?tools/ocamldep.opt" {"leoparddep"}

@@ -109,6 +109,8 @@ module type Compiler_options = sig
   val _as_pp_text : unit -> unit
   val _no_retype  : unit -> unit
   val _no_trans   : unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 
@@ -126,6 +128,8 @@ module type Toplevel_options = sig
 
   (* OCamleopard *)
   val _no_retype : unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 

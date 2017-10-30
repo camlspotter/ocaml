@@ -216,6 +216,11 @@ since it may contain OCamleopard extension points.
 
 The output of `-no-trans` can be compiled by OCamleopard compilers.
 
+## `-leopard`, `-no-leopard`
+
+Force "Leopard" mode enabled or disabled, 
+no matter whether module named `Leopard` is in the load path or not.
+
 # "Leopard" mode
 
 Some of the extensions of OCamleopard requires its library module named `Leopard`. 
@@ -569,7 +574,7 @@ The example of overloaded functions can be found at `testsuite/tests/overload/t0
 # Enhanced array access expressions such as `x.[e]` and `x.(e)`
 
 In Leopard mode, OCamleopard changes the desugaring of array access expressions such as 
-`x.[e]` and `x.(e)` so that they can be easily overridden.
+`x.[e]` and `x.(e)` so that they can be easily overridden, and more importantly, overloadable!
 
 * `x.[e]` is desugarred using `__string_get` or `__string_unsafe_get` 
                    instead of `String.get` or `String.unsafe_get`.

@@ -8,7 +8,7 @@ dev-repo: "git://github.com/camlspotter/ocaml#4.05.0+leopard"
 build: [
   ["./configure" "--prefix" "%{prefix}%"]        
   [make "core" "coreboot"]
-  [make "world.opt"] {ocaml-native}
+  [make "world.opt" "ocamlnat"] {ocaml-native}
   [make "-C" "leopardlib"]
   [make "-C" "leopardlib" opt] {ocaml-native}
 ]

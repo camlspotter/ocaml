@@ -210,6 +210,7 @@ val as_pp      : bool ref
 val as_pp_text : bool ref
 val no_trans   : bool ref
 val no_retype  : bool ref
+val leopard_mode : bool option ref (* None : auto *)
     
 val arg_spec : (string * Arg.spec * string) list ref
 

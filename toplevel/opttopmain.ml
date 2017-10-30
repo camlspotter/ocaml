@@ -235,6 +235,11 @@ module Options = Main_args.Make_opttop_options (struct
   let _open s = open_modules := s :: !open_modules
   let _plugin p = Compplugin.load p
 
+  (* OCamleopard *)
+  let _no_retype () = set no_retype ()
+  let _leopard    () = leopard_mode := Some true
+  let _no_leopard () = leopard_mode := Some false
+
   let _args = wrap_expand Arg.read_arg
   let _args0 = wrap_expand Arg.read_arg0
 

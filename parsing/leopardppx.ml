@@ -3,8 +3,10 @@ open Longident
 open Parsetree
 open Location
 
-let with_leopardlib = ref false
-    
+let leopard_mode () = match !Clflags.leopard_mode with
+  | Some true -> true
+  | _ -> false
+
 let overload_vdesc vdesc = 
   { vdesc with pval_prim = ["%OVERLOADED"] }
 
@@ -15,7 +17,7 @@ let rename lid n = match lid with
   
   
 let extend super =
-  let expr = if not !with_leopardlib then super.expr else
+  let expr = if not @@ leopard_mode () then super.expr else
       fun self e -> match e.pexp_desc with
         | Pexp_apply( ({ pexp_loc;
                          pexp_desc = Pexp_ident { txt= Ldot (m, f); loc= loc } } as fn), 

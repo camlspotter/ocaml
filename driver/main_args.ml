@@ -771,6 +771,16 @@ let mk_no_trans f =
   " Work as a OCamleopard preprocessor without any transformation"
 ;;
 
+let mk_leopard f =
+  "-leopard", Arg.Unit f,
+  " Force Leopard mode, even if Leopard module is not found"
+;;
+
+let mk_no_leopard f =
+  "-no-leopard", Arg.Unit f,
+  " Disable Leopard mode, even if Leopard module is found"
+;;
+
 module type Common_options = sig
   val _absname : unit -> unit
   val _I : string -> unit
@@ -864,6 +874,8 @@ module type Compiler_options = sig
   val _as_pp_text : unit -> unit
   val _no_retype  : unit -> unit
   val _no_trans   : unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 
@@ -881,6 +893,8 @@ module type Toplevel_options = sig
 
   (* OCamleopard *)
   val _no_retype: unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 
@@ -1097,7 +1111,9 @@ struct
     mk_as_pp F._as_pp;
     mk_as_pp_text F._as_pp_text;
     mk_no_retype F._no_retype;
-    mk_no_trans F._no_trans
+    mk_no_trans F._no_trans;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1157,6 +1173,8 @@ struct
 
     (* OCamleopard *)
     mk_no_retype F._no_retype;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1298,7 +1316,9 @@ struct
     mk_as_pp F._as_pp;
     mk_as_pp_text F._as_pp_text;
     mk_no_retype F._no_retype;
-    mk_no_trans F._no_trans
+    mk_no_trans F._no_trans;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1394,6 +1414,8 @@ module Make_opttop_options (F : Opttop_options) = struct
 
     (* OCamleopard *)
     mk_no_retype F._no_retype;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard
   ]
 end;;
 
