@@ -2,7 +2,8 @@
 open Asttypes
 open Types
 open Typedtree
-
+open Leopardtype
+    
 (*
 let print_ident ppf id = Format.fprintf ppf "%s/%d" id.Ident.name id.Ident.stamp
 
@@ -11,7 +12,7 @@ let rec print_path ppf = function
   | Path.Pdot (p, name, n) -> Format.fprintf ppf "%a.%s__%d" print_path p name n
   | Path.Papply (p1, p2) -> Format.fprintf ppf "%a(%a)" print_path p1 print_path p2
 *)
-    
+
 let get_name = function
   | Path.Pident id -> Ident.name id
   | Path.Pdot (_, name, _) -> name
@@ -24,58 +25,37 @@ let test env ty vdesc =
   Btype.backtrack snapshot;
   res
 
+let resolve_overloading exp ({loc} as lidloc) path = 
 (*
-let scrape_sg _path env mdecl = 
-  try
-    match Env.scrape_alias env @@ Mtype.scrape env mdecl.Types.md_type with
-    | Mty_signature sg -> sg
-    | Mty_functor _ -> [] (* We do not scan the internals of functors *)
-    | _ -> assert false
-  with
-  | e -> 
-      Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
-      raise e
+  Format.eprintf "resolve_overloading %a %a@." !Location.printer loc Printtyp.path path;
 *)
-  
-let resolve_overloading exp lidloc path = 
-  (* Format.eprintf "resolve_overloading %a@." Printtyp.path path; *)
   let env = exp.exp_env in
 
   let name = get_name path in
 
-  let rec find_candidates (path : Path.t) mty =
+  let rec find_candidates env (path : Path.t) =
     (* Format.eprintf "Find_candidates %a@." Printtyp.path path; *)
-
-    let env = Env.empty in
-    let sg = 
-      match Env.scrape_alias env @@ Mtype.scrape env mty with
-      | Mty_signature sg -> sg
-      | _ -> assert false
-    in
-    List.fold_right (fun sitem st -> match sitem with
-    | Sig_value (id, _vdesc) when Ident.name id = name -> 
-        let lident = Longident.Ldot (Untypeast.lident_of_path path, Ident.name id) in
-        let path, vdesc = Env.lookup_value lident env  in
+    fold_module env path [] @@ fun st -> function
+    | `Value (id, path, vdesc) when Ident.name id = name -> 
         if test env exp.exp_type vdesc then (path, vdesc) :: st else st
-    | Sig_module (id, _mty, _) -> 
-        let lident = Longident.Ldot (Untypeast.lident_of_path path, Ident.name id) in
-        let path = Env.lookup_module ~load:true (*?*) lident env  in
-        let moddecl = Env.find_module path env in
-        find_candidates path moddecl.Types.md_type @ st
-    | _ -> st) sg []
+    | `Module (_id, path, _moddecl) ->
+        find_candidates env path @ st
+    | _ -> st
   in
 
-  let lid_opt = match path with
-    | Path.Pident _ -> None
-    | Path.Pdot (p, _, _) -> Some (Untypeast.lident_of_path p)
+  let mpath = match path with
+    | Path.Pident _ -> assert false (* must be fixed XXX *)
+    | Path.Pdot (p, _, _) -> p
     | Path.Papply _ -> assert false
   in
 
   match
-    (* Here Env.empty must be used! *)
-    Env.fold_modules (fun _name path moddecl st -> 
-        (* Format.eprintf "%s %a@." _name Printtyp.path path; *)
-        find_candidates path moddecl.Types.md_type @ st) lid_opt Env.empty []
+    (* Here Env.empty must be used! ... Really!??!  How about local overloading? *)
+    fold_module env mpath [] @@ fun st -> function
+    | `Module (_id, path, _) ->
+        Format.eprintf "%s %a@." name Printtyp.path path;
+        find_candidates env path @ st
+    | _ -> st
   with
   | [] -> 
      Location.raise_errorf ~loc:lidloc.loc "Overload resolution failed: no match"
