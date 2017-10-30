@@ -16,3 +16,7 @@ module Overload = struct:
     let (-) = (-.)
     let ( * ) = ( *. )
     let (/) = (/.)
+
+  module Lib = struct
+  end
+    
