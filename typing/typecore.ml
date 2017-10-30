@@ -2791,17 +2791,6 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
 
 (* ppx_curried_constr begin *)
         
-   (* ((!F) 1) 2 3  == !F 1 2 3
-      
-      We here to try contract applications as possible...
-   *)
-   | Pexp_apply ( { pexp_desc = Pexp_apply(x,xs);
-                    pexp_attributes = [] }, ys ) when !Leopardtype.curried_constr ->
- 
-       type_expect_ ?in_function env 
-         { sexp with pexp_desc = Pexp_apply (x, xs @ ys) }
-         ty_expected
- 
    | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
                 (Nolabel, ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) when !Leopardtype.curried_constr ->
        (* ! C a b *)
@@ -2837,6 +2826,46 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
 
   | Pexp_apply(sfunct, sargs) ->
       assert (sargs <> []);
+
+      (* ppx_curried_constructor begin *)
+
+      (* ((!F) 1) 2 3  == !F 1 2 3
+      
+         We here to try contract applications as possible...
+         
+         We have to restrict this application contractions only to constructors,
+         otherwise it causes typing problems. See https://github.com/camlspotter/ocaml/issues/6
+      *)
+      (* when !Leopardtype.curried_constr && is_constructor_application x ->*)
+      let try_contract_constructor_apps e =
+        if !Leopardtype.curried_constr then None
+        else if e.pexp_attributes <> [] then None
+        else
+          let rec f e = match e.pexp_desc with
+            | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
+                         (Nolabel, { pexp_desc = Pexp_construct (lid, None) }) :: xs) ->
+                (* !F *) 
+                Some (e, xs)
+            | Pexp_construct (lid, None) ->
+                (* (F) (no argument) *)
+                Some (e, [])
+            | Pexp_apply ( ({ pexp_attributes = [] } as e), ys ) ->
+                begin match f e with
+                | None -> None
+                | Some (e, xs) -> Some (e, xs @ ys)
+                end
+            | _ -> None
+          in
+          f e
+      in
+      
+      begin match try_contract_constructor_apps sfunct with
+      | Some (e, xs) ->
+          type_expect ?in_function ~recarg env { sexp with pexp_desc = Pexp_apply (e, xs @ sargs) } ty_expected
+      | None ->
+
+      (* ppx_curried_constr end *)
+
       begin_def (); (* one more level for non-returning functions *)
       if !Clflags.principal then begin_def ();
       let funct = type_exp env sfunct in
@@ -2866,6 +2895,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_type = ty_res;
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+
+      end (* ppx_curried_constr *)
   | Pexp_match(sarg, caselist) ->
       begin_def ();
       let arg = type_exp env sarg in
