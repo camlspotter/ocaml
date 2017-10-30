@@ -1,6 +1,8 @@
-OCAMLC=../ocamlc
-OCAMLOPT=../ocamlopt
-OCAMLDEP=../tools/ocamldep
+OCAMLRUN=../boot/ocamlrun 
+OPTIONS=-nostdlib -I ../stdlib
+OCAMLC= $(OCAMLRUN) ../ocamlc $(OPTIONS)
+OCAMLOPT= $(OCAMLRUN) ../ocamlopt $(OPTIONS)
+OCAMLDEP= $(OCAMLRUN) ../tools/ocamldep
 
 .PHONY: all
 all: leopard.cmo test.exe
