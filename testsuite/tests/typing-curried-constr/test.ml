@@ -18,10 +18,8 @@ let x : (int * float) -> t = fun x -> (Foo) x;;
 
 (* (::)(x,xs) has a special parsing rule. We can handle it but requires parser.mly modificaiton *)
 let cons0 = (::)(1,[]);;
-(*
 let cons1 = ((::)) (1,[])
 let cons2 = !(::) 1 []
-*)
 
 let z = !`Foo @@ (1,2,3);;
 
