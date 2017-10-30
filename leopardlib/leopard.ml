@@ -17,25 +17,19 @@ module Overload = struct:
   val %overload ( * ) : 'a -> 'a -> 'a
   
   module Int = struct:
-    let (+) = (+)
-    let (-) = (-)
-    let ( * ) = ( * )
-    let (/) = (/)
+    let (+)   = Pervasives.(+)
+    let (-)   = Pervasives.(-)
+    let ( * ) = Pervasives.( * )
+    let (/)   = Pervasives.(/)
   
   module Float = struct:
-    let (+) = (+.)
-    let (-) = (-.)
-    let ( * ) = ( *. )
-    let (/) = (/.)
+    let (+)   = Pervasives.(+.)
+    let (-)   = Pervasives.(-.)
+    let ( * ) = Pervasives.( *. )
+    let (/)   = Pervasives.(/.)
 
   module OrigString = String
 
-  val %overload __string_get : 'a -> int -> 'b
-  val %overload __string_set : 'a -> int -> 'b -> unit
-  val %overload __string_unsafe_get : 'a -> int -> 'b
-  val %overload __string_unsafe_set : 'a -> int -> 'b -> unit
-
-    
   module String = struct:
     let __string_get = OrigString.get
     let __string_set = OrigString.set
@@ -48,4 +42,8 @@ module Overload = struct:
     let __string_unsafe_get = Array.unsafe_get
     let __string_unsafe_set = Array.unsafe_set
 
-  
+  val %overload __string_get : 'a -> int -> 'b
+  val %overload __string_set : 'a -> int -> 'b -> unit
+  val %overload __string_unsafe_get : 'a -> int -> 'b
+  val %overload __string_unsafe_set : 'a -> int -> 'b -> unit
+
