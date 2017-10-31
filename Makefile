@@ -88,7 +88,8 @@ UTILS=utils/config.cmo utils/misc.cmo \
   utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
   utils/consistbl.cmo \
   utils/strongly_connected_components.cmo \
-  utils/targetint.cmo
+  utils/targetint.cmo \
+  utils/leopardutils.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/syntaxerr.cmo \
@@ -114,8 +115,10 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/stypes.cmo typing/typedecl.cmo typing/typecore.cmo \
   typing/typeclass.cmo \
+  typing/leopardcomplib.cmo \
   typing/unshadow.cmo \
   typing/overload.cmo \
+  typing/implicit.cmo \
   typing/typemod.cmo
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \

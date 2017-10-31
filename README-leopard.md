@@ -78,6 +78,11 @@ Effective set of compiler predicates: pkg_leopard,syntax,autolink,byte
 val x : 'a -> 'a option
 ```
 
+### Other versions
+
+OCamleopard based on other OCaml versions may be available at the repo
+`git://github.com/camlspotter/ocaml`, with branch names `<version>+leoaprd`.
+
 ## From a local source
 
 Or, if you have a copy of the source code:

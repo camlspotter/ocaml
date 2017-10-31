@@ -2,7 +2,6 @@
 open Asttypes
 open Types
 open Typedtree
-open Leopardtype
     
 (*
 let print_ident ppf id = Format.fprintf ppf "%s/%d" id.Ident.name id.Ident.stamp
@@ -25,7 +24,7 @@ let test env ty vdesc =
   Btype.backtrack snapshot;
   res
 
-let resolve_overloading exp ({loc} as lidloc) path = 
+let resolve_overloading exp ({loc=_loc} as lidloc) path = 
 (*
   Format.eprintf "resolve_overloading %a %a@." !Location.printer loc Printtyp.path path;
 *)
@@ -35,7 +34,7 @@ let resolve_overloading exp ({loc} as lidloc) path =
 
   let rec find_candidates env (path : Path.t) =
     (* Format.eprintf "Find_candidates %a@." Printtyp.path path; *)
-    fold_module env path [] @@ fun st -> function
+    Leopardcomplib.fold_module env path [] @@ fun st -> function
     | `Value (id, path, vdesc) when Ident.name id = name -> 
         if test env exp.exp_type vdesc then (path, vdesc) :: st else st
     | `Module (_id, path, _moddecl) ->
@@ -51,7 +50,7 @@ let resolve_overloading exp ({loc} as lidloc) path =
 
   match
     (* Here Env.empty must be used! ... Really!??!  How about local overloading? *)
-    fold_module env mpath [] @@ fun st -> function
+    Leopardcomplib.fold_module env mpath [] @@ fun st -> function
     | `Module (_id, path, _) ->
         Format.eprintf "%s %a@." name Printtyp.path path;
         find_candidates env path @ st
