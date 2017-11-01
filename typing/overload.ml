@@ -52,7 +52,7 @@ let resolve_overloading exp ({loc=_loc} as lidloc) path =
     (* Here Env.empty must be used! ... Really!??!  How about local overloading? *)
     Leopardcomplib.fold_module env mpath [] @@ fun st -> function
     | `Module (_id, path, _) ->
-        Format.eprintf "%s %a@." name Printtyp.path path;
+        (* Format.eprintf "%s %a@." name Printtyp.path path; *)
         find_candidates env path @ st
     | _ -> st
   with
@@ -85,6 +85,5 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardtype.overload then
-    Unshadow.Alias.insert @@ Map.map_structure str
+  if !Leopardtype.overload then Map.map_structure str
   else str

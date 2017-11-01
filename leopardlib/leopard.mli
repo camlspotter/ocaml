@@ -51,3 +51,10 @@ module Overload : sig:
     val __string_unsafe_get : 'a array -> int -> 'a
     val __string_unsafe_set : 'a array -> int -> 'a -> unit
       
+module Implicits : sig:
+  type ('a, 'spec) t
+  exception Not_resolved
+  val from_Some : 'a option -> 'a
+  external get : ('a, 'spec) t -> 'a = "%identity"
+  val imp : ?d:('a, 'spec) t -> 'a
+  external embed : 'a -> ('a, 'spec) t = "%identity"

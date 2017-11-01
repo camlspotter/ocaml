@@ -1,4 +1,5 @@
-open Ast_mapper
+open Leopardutils
+ open Ast_mapper
 open Longident
 open Parsetree
 open Location
@@ -60,6 +61,24 @@ let extend super =
   in
   { super with expr; structure_item; signature_item }
 
-let make_mapper () = extend default_mapper
+module Imp = struct
+  let from_payload_to_core_type_forward = ref (fun _ -> assert false : Location.t -> payload -> core_type)
+
+  (*
+  
+    Pre-preprocessing for syntax sugars for 
+      [%imp <spec>]
+  *)
+  
+  let extend super =
+    let typ self cty =
+      match cty.ptyp_desc with
+      | Ptyp_extension ({txt="imp"; loc}, pld) -> !from_payload_to_core_type_forward loc pld
+      | _ -> super.typ self cty
+    in
+    { super with typ }
+end
+
+let make_mapper () = Imp.extend & extend default_mapper
 let structure s = let mapper = make_mapper () in mapper.structure mapper s
 let signature s = let mapper = make_mapper () in mapper.signature mapper s

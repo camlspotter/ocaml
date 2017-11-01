@@ -110,12 +110,12 @@ parsing/indent.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
     parsing/location.cmx parsing/lexer.cmx parsing/indent.cmi
 parsing/indent.cmi : parsing/parser.cmi
 parsing/leopardppx.cmo : parsing/parsetree.cmi parsing/longident.cmi \
-    parsing/location.cmi utils/clflags.cmi parsing/ast_mapper.cmi \
-    parsing/leopardppx.cmi
+    parsing/location.cmi utils/leopardutils.cmo utils/clflags.cmi \
+    parsing/ast_mapper.cmi parsing/leopardppx.cmi
 parsing/leopardppx.cmx : parsing/parsetree.cmi parsing/longident.cmx \
-    parsing/location.cmx utils/clflags.cmx parsing/ast_mapper.cmx \
-    parsing/leopardppx.cmi
-parsing/leopardppx.cmi : parsing/parsetree.cmi
+    parsing/location.cmx utils/leopardutils.cmx utils/clflags.cmx \
+    parsing/ast_mapper.cmx parsing/leopardppx.cmi
+parsing/leopardppx.cmi : parsing/parsetree.cmi parsing/location.cmi
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
     parsing/location.cmi parsing/docstrings.cmi parsing/lexer.cmi
 parsing/lexer.cmx : utils/warnings.cmx parsing/parser.cmx utils/misc.cmx \
@@ -229,16 +229,22 @@ typing/envaux.cmi : typing/subst.cmi typing/path.cmi typing/env.cmi
 typing/ident.cmo : utils/identifiable.cmi typing/ident.cmi
 typing/ident.cmx : utils/identifiable.cmx typing/ident.cmi
 typing/ident.cmi : utils/identifiable.cmi
-typing/implicit.cmo : typing/untypeast.cmi typing/types.cmi \
-    typing/typedtree.cmi typing/printtyp.cmi typing/path.cmi \
-    parsing/longident.cmi parsing/location.cmi utils/leopardutils.cmo \
-    typing/leopardcomplib.cmo typing/ident.cmi typing/env.cmi \
-    typing/ctype.cmi typing/btype.cmi parsing/asttypes.cmi
-typing/implicit.cmx : typing/untypeast.cmx typing/types.cmx \
-    typing/typedtree.cmx typing/printtyp.cmx typing/path.cmx \
-    parsing/longident.cmx parsing/location.cmx utils/leopardutils.cmx \
-    typing/leopardcomplib.cmx typing/ident.cmx typing/env.cmx \
-    typing/ctype.cmx typing/btype.cmx parsing/asttypes.cmi
+typing/implicit.cmo : typing/untypeast.cmi typing/unshadow.cmi \
+    typing/types.cmi typing/typedtreeMap.cmi typing/typedtree.cmi \
+    typing/typecore.cmi typing/printtyp.cmi parsing/pprintast.cmi \
+    typing/path.cmi parsing/parsetree.cmi parsing/longident.cmi \
+    parsing/location.cmi utils/leopardutils.cmo typing/leopardtype.cmi \
+    parsing/leopardppx.cmi typing/leopardcomplib.cmo typing/ident.cmi \
+    typing/env.cmi typing/ctype.cmi typing/btype.cmi parsing/asttypes.cmi \
+    parsing/ast_mapper.cmi parsing/ast_helper.cmi
+typing/implicit.cmx : typing/untypeast.cmx typing/unshadow.cmx \
+    typing/types.cmx typing/typedtreeMap.cmx typing/typedtree.cmx \
+    typing/typecore.cmx typing/printtyp.cmx parsing/pprintast.cmx \
+    typing/path.cmx parsing/parsetree.cmi parsing/longident.cmx \
+    parsing/location.cmx utils/leopardutils.cmx typing/leopardtype.cmx \
+    parsing/leopardppx.cmx typing/leopardcomplib.cmx typing/ident.cmx \
+    typing/env.cmx typing/ctype.cmx typing/btype.cmx parsing/asttypes.cmi \
+    parsing/ast_mapper.cmx parsing/ast_helper.cmx
 typing/includeclass.cmo : typing/types.cmi typing/printtyp.cmi \
     typing/ctype.cmi typing/includeclass.cmi
 typing/includeclass.cmx : typing/types.cmx typing/printtyp.cmx \
@@ -268,19 +274,21 @@ typing/includemod.cmi : typing/types.cmi typing/typedtree.cmi \
     typing/path.cmi parsing/location.cmi typing/includecore.cmi \
     typing/ident.cmi typing/env.cmi typing/ctype.cmi
 typing/leopardcomplib.cmo : typing/untypeast.cmi typing/types.cmi \
-    typing/typedtree.cmi typing/printtyp.cmi typing/predef.cmi \
-    parsing/pprintast.cmi typing/path.cmi parsing/parsetree.cmi \
-    parsing/parser.cmi typing/mtype.cmi parsing/longident.cmi \
-    parsing/location.cmi parsing/lexer.cmi utils/leopardutils.cmo \
-    typing/ident.cmi typing/env.cmi typing/ctype.cmi typing/btype.cmi \
-    parsing/ast_mapper.cmi parsing/ast_helper.cmi
+    typing/typedtree.cmi typing/typecore.cmi typing/printtyp.cmi \
+    typing/predef.cmi parsing/pprintast.cmi typing/path.cmi \
+    parsing/parsetree.cmi parsing/parser.cmi typing/mtype.cmi \
+    parsing/longident.cmi parsing/location.cmi parsing/lexer.cmi \
+    utils/leopardutils.cmo typing/ident.cmi typing/env.cmi typing/ctype.cmi \
+    typing/btype.cmi parsing/asttypes.cmi parsing/ast_mapper.cmi \
+    parsing/ast_helper.cmi
 typing/leopardcomplib.cmx : typing/untypeast.cmx typing/types.cmx \
-    typing/typedtree.cmx typing/printtyp.cmx typing/predef.cmx \
-    parsing/pprintast.cmx typing/path.cmx parsing/parsetree.cmi \
-    parsing/parser.cmx typing/mtype.cmx parsing/longident.cmx \
-    parsing/location.cmx parsing/lexer.cmx utils/leopardutils.cmx \
-    typing/ident.cmx typing/env.cmx typing/ctype.cmx typing/btype.cmx \
-    parsing/ast_mapper.cmx parsing/ast_helper.cmx
+    typing/typedtree.cmx typing/typecore.cmx typing/printtyp.cmx \
+    typing/predef.cmx parsing/pprintast.cmx typing/path.cmx \
+    parsing/parsetree.cmi parsing/parser.cmx typing/mtype.cmx \
+    parsing/longident.cmx parsing/location.cmx parsing/lexer.cmx \
+    utils/leopardutils.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
+    typing/btype.cmx parsing/asttypes.cmi parsing/ast_mapper.cmx \
+    parsing/ast_helper.cmx
 typing/leopardtype.cmo : typing/leopardtype.cmi
 typing/leopardtype.cmx : typing/leopardtype.cmi
 typing/leopardtype.cmi :
@@ -302,15 +310,15 @@ typing/oprint.cmi : typing/outcometree.cmi
 typing/outcometree.cmi : parsing/asttypes.cmi
 typing/overload.cmo : typing/untypeast.cmi typing/unshadow.cmi \
     typing/types.cmi typing/typedtreeMap.cmi typing/typedtree.cmi \
-    typing/printtyp.cmi typing/primitive.cmi typing/path.cmi \
-    parsing/location.cmi typing/leopardtype.cmi typing/leopardcomplib.cmo \
-    typing/ident.cmi typing/ctype.cmi typing/btype.cmi parsing/asttypes.cmi \
+    typing/primitive.cmi typing/path.cmi parsing/location.cmi \
+    typing/leopardtype.cmi typing/leopardcomplib.cmo typing/ident.cmi \
+    typing/ctype.cmi typing/btype.cmi parsing/asttypes.cmi \
     typing/overload.cmi
 typing/overload.cmx : typing/untypeast.cmx typing/unshadow.cmx \
     typing/types.cmx typing/typedtreeMap.cmx typing/typedtree.cmx \
-    typing/printtyp.cmx typing/primitive.cmx typing/path.cmx \
-    parsing/location.cmx typing/leopardtype.cmx typing/leopardcomplib.cmx \
-    typing/ident.cmx typing/ctype.cmx typing/btype.cmx parsing/asttypes.cmi \
+    typing/primitive.cmx typing/path.cmx parsing/location.cmx \
+    typing/leopardtype.cmx typing/leopardcomplib.cmx typing/ident.cmx \
+    typing/ctype.cmx typing/btype.cmx parsing/asttypes.cmi \
     typing/overload.cmi
 typing/overload.cmi : typing/typedtree.cmi
 typing/parmatch.cmo : utils/warnings.cmi typing/untypeast.cmi \
@@ -476,26 +484,28 @@ typing/typedtreeMap.cmo : typing/typedtree.cmi utils/misc.cmi \
 typing/typedtreeMap.cmx : typing/typedtree.cmx utils/misc.cmx \
     typing/typedtreeMap.cmi
 typing/typedtreeMap.cmi : typing/typedtree.cmi
-typing/typemod.cmo : utils/warnings.cmi typing/typetexp.cmi typing/types.cmi \
-    typing/typedtree.cmi typing/typedecl.cmi typing/typecore.cmi \
-    typing/typeclass.cmi typing/subst.cmi typing/stypes.cmi \
-    typing/printtyp.cmi typing/path.cmi parsing/parsetree.cmi \
-    typing/overload.cmi typing/mtype.cmi utils/misc.cmi parsing/longident.cmi \
-    parsing/location.cmi typing/includemod.cmi typing/ident.cmi \
-    typing/env.cmi typing/ctype.cmi utils/config.cmi typing/cmt_format.cmi \
-    typing/cmi_format.cmi utils/clflags.cmi parsing/builtin_attributes.cmi \
-    typing/btype.cmi parsing/asttypes.cmi parsing/ast_iterator.cmi \
-    typing/annot.cmi typing/typemod.cmi
-typing/typemod.cmx : utils/warnings.cmx typing/typetexp.cmx typing/types.cmx \
-    typing/typedtree.cmx typing/typedecl.cmx typing/typecore.cmx \
-    typing/typeclass.cmx typing/subst.cmx typing/stypes.cmx \
-    typing/printtyp.cmx typing/path.cmx parsing/parsetree.cmi \
-    typing/overload.cmx typing/mtype.cmx utils/misc.cmx parsing/longident.cmx \
-    parsing/location.cmx typing/includemod.cmx typing/ident.cmx \
-    typing/env.cmx typing/ctype.cmx utils/config.cmx typing/cmt_format.cmx \
-    typing/cmi_format.cmx utils/clflags.cmx parsing/builtin_attributes.cmx \
-    typing/btype.cmx parsing/asttypes.cmi parsing/ast_iterator.cmx \
-    typing/annot.cmi typing/typemod.cmi
+typing/typemod.cmo : utils/warnings.cmi typing/unshadow.cmi \
+    typing/typetexp.cmi typing/types.cmi typing/typedtree.cmi \
+    typing/typedecl.cmi typing/typecore.cmi typing/typeclass.cmi \
+    typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi typing/path.cmi \
+    parsing/parsetree.cmi typing/overload.cmi typing/mtype.cmi utils/misc.cmi \
+    parsing/longident.cmi parsing/location.cmi typing/includemod.cmi \
+    typing/implicit.cmo typing/ident.cmi typing/env.cmi typing/ctype.cmi \
+    utils/config.cmi typing/cmt_format.cmi typing/cmi_format.cmi \
+    utils/clflags.cmi parsing/builtin_attributes.cmi typing/btype.cmi \
+    parsing/asttypes.cmi parsing/ast_iterator.cmi typing/annot.cmi \
+    typing/typemod.cmi
+typing/typemod.cmx : utils/warnings.cmx typing/unshadow.cmx \
+    typing/typetexp.cmx typing/types.cmx typing/typedtree.cmx \
+    typing/typedecl.cmx typing/typecore.cmx typing/typeclass.cmx \
+    typing/subst.cmx typing/stypes.cmx typing/printtyp.cmx typing/path.cmx \
+    parsing/parsetree.cmi typing/overload.cmx typing/mtype.cmx utils/misc.cmx \
+    parsing/longident.cmx parsing/location.cmx typing/includemod.cmx \
+    typing/implicit.cmx typing/ident.cmx typing/env.cmx typing/ctype.cmx \
+    utils/config.cmx typing/cmt_format.cmx typing/cmi_format.cmx \
+    utils/clflags.cmx parsing/builtin_attributes.cmx typing/btype.cmx \
+    parsing/asttypes.cmi parsing/ast_iterator.cmx typing/annot.cmi \
+    typing/typemod.cmi
 typing/typemod.cmi : typing/types.cmi typing/typedtree.cmi typing/path.cmi \
     parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
     parsing/location.cmi typing/includemod.cmi typing/ident.cmi \

@@ -47,3 +47,20 @@ module Overload = struct:
   val %overload __string_unsafe_get : 'a -> int -> 'b
   val %overload __string_unsafe_set : 'a -> int -> 'b -> unit
 
+module Implicits = struct:
+  type ('a, 'spec) t = 'a
+
+  exception Not_resolved
+
+  let from_Some = function
+    | Some x -> x
+    | None -> raise Not_resolved
+        
+  external get : ('a, 'spec) t -> 'a = "%identity"
+  
+  let imp ?d = from_Some d
+  
+  external embed : 'a -> ('a, 'spec) t = "%identity"
+
+  
+    

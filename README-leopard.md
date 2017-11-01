@@ -27,6 +27,10 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
 	List.map Some xs
 	```
 
+    ```ocaml
+	fun x -> Some @@ x + 1
+	```
+
 * User definable SML style simple overloading.
 
     ```ocaml

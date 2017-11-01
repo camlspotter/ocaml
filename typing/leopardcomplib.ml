@@ -267,7 +267,7 @@ let scrape_sg env mdecl =
       raise e
   
 let fold_module env path init f =
-  Format.eprintf "fold_module %a@." Printtyp.path path;
+  (* Format.eprintf "fold_module %a@." Printtyp.path path; *)
   let mdecl = Env.find_module path env in
   let mty = mdecl.Types.md_type in
   let sg : Types.signature = scrape_sg env mdecl in
@@ -485,6 +485,8 @@ val fold_module
 *)
     
 module Forge = struct
+  (* We should not use this module as possible, since it only fakes
+     Typedtree data with incorrect types. *)
   open Typedtree
 
   let default_loc = ref Location.none
@@ -543,6 +545,7 @@ module Forge = struct
     open Longident
     open Path
     type t = Path.t
+    (* XXX This is incorrect *)
     let rec of_lident = function
       | Lident s -> Pident (Ident.create s)
       | Ldot (t,s) -> Pdot (of_lident t, s, 0)
@@ -655,8 +658,10 @@ module Forge = struct
     open Asttypes
   
     let mark txt e =
-      { e with exp_attributes= ({txt; loc= Ast_helper.ghost e.exp_loc}, Parsetree.PStr []) 
-                               :: e.exp_attributes }
+      { e
+        with exp_attributes= ( {txt; loc= Ast_helper.ghost e.exp_loc}
+                             , Parsetree.PStr []) 
+                             :: e.exp_attributes }
         
     let partition_marks e f =
       let g = function
