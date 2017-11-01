@@ -116,9 +116,9 @@ module Candidate = struct
       | Env_cltype (s, _, _)
       | Env_constraints (s, _)
       | Env_functor_arg (s, _) -> dump s
-      | Env_type (s, id, _) -> Format.eprintf "type %a@." Ident.format id; dump s
-      | Env_module (s, id, _) -> Format.eprintf "module %a@." Ident.format id; dump s
-      | Env_open (s, path) -> Format.eprintf "open %a@." Path.format path; dump s
+      | Env_type (s, id, _) -> !!% "type %a@." Ident.format id; dump s
+      | Env_module (s, id, _) -> !!% "module %a@." Ident.format id; dump s
+      | Env_open (s, path) -> !!% "open %a@." Path.format path; dump s
     in
     dump & Env.summary env
     
@@ -137,7 +137,7 @@ module Candidate = struct
           with
           | _ -> None)
     | Some open_ ->
-        (*  Format.eprintf "open %a@." Path.format open_; *)
+        (*  !!% "open %a@." Path.format open_; *)
         let mdecl = Env.find_module open_ env in (* It should succeed *)
         let sg = scrape_sg env mdecl in
         let env = Env.open_signature Fresh open_ sg Env.empty in
@@ -192,8 +192,8 @@ module Candidate = struct
   let cand_opened env loc (flg,lid) =
     let opens = get_opens env in
     if Debug.debug_resolve then begin
-      Format.eprintf "debug_resolve: cand_opened opened paths@.";
-      flip iter opens & Format.eprintf "  %a@." Path.format
+      !!% "debug_resolve: cand_opened opened paths@.";
+      flip iter opens & !!% "  %a@." Path.format
     end;
     let paths = 
       concat 
@@ -201,8 +201,8 @@ module Candidate = struct
       & None :: map (fun x -> Some x) opens
     in
     if Debug.debug_resolve then begin
-      Format.eprintf "debug_resolve: cand_opened cand modules@.";
-      flip iter paths & Format.eprintf "  %a@." Path.format
+      !!% "debug_resolve: cand_opened cand modules@.";
+      flip iter paths & !!% "  %a@." Path.format
     end;
     concat & map (fun path ->
       let lid = Untypeast.lident_of_path path in
@@ -1102,7 +1102,7 @@ let check_arg env loc l ty
     ) =
   let default = (ty, None, (fun x -> x), (fun x -> x)) in
   let f ty = match is_imp_arg_type env ty with
-    | Some (_ty, spec) ->
+    | Some (ty, spec) ->
         let spec = Specconv.from_type_expr env loc spec in
         (ty, Some spec, Runtime.embed, Runtime.get)
     | None -> default
