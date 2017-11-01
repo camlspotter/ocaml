@@ -1,6 +1,7 @@
 open Leopardutils
 open Leopardcomplib
 
+open List
 open Asttypes
 
 module Debug = struct
@@ -13,7 +14,6 @@ module Klabel = struct
   (** Constraint labels *)
     
   open Types
-  open List
 
   let is_klabel = function
     | Labelled s when s.[0] = '_' -> Some `Normal
@@ -61,7 +61,6 @@ module Candidate = struct
     OCaml type definitions.
   
   *)
-  open List
   open Path
   open Types
   
@@ -224,120 +223,118 @@ module Cderiving = struct end
 module Cppxderive = struct end
 
 module Spec = struct
-(*
-
-  Instance search space specification DSL, magling to and back from
-  OCaml type definitions.
-
-*)
-open List
-
-open Parsetree
-open Types
-
-(** spec dsl *)
-type t = t2 list (** [t2, .., t2] *)
-
-and t2 = 
-  | Opened of [`In | `Just] * Longident.t (** [opened M]. The values defined under module path [P.M] which is accessible as [M] by [open P] *)
-  | Direct of [`In | `Just] * Longident.t * Path.t option
-    (** [P] or [just P]. [P] is for the values defined under module [P] and [P]'s sub-modules. [just P] is for values defined just under module [P] and values defined in its sub-modules are not considered. *)
-  | Aggressive of t2 (** [aggressive t2]. Even normal function arrows are considered as constraints. *)
-  | Related (** [related]. The values defined under module [P] where data type defined in [P] appears in the type of the resolution target *)
-(*
-  | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
-*)
-  | Has_type of core_type * type_expr option (** [typeclass path]. Typeclass style resolution.  *) 
-  | Deriving of Longident.t (** [deriving M]. [M] must define [M.tuple], [M.object_] and [M.poly_variant] *)
-  | PPXDerive of Parsetree.expression * core_type * type_expr option (** [ppxderive ([%...] : ty)]. *)
+  (*
+  
+    Instance search space specification DSL, magling to and back from
+    OCaml type definitions.
+  
+  *)
+  
+  open Parsetree
+  open Types
+  
+  (** spec dsl *)
+  type t = t2 list (** [t2, .., t2] *)
+  
+  and t2 = 
+    | Opened of [`In | `Just] * Longident.t (** [opened M]. The values defined under module path [P.M] which is accessible as [M] by [open P] *)
+    | Direct of [`In | `Just] * Longident.t * Path.t option
+      (** [P] or [just P]. [P] is for the values defined under module [P] and [P]'s sub-modules. [just P] is for values defined just under module [P] and values defined in its sub-modules are not considered. *)
+    | Aggressive of t2 (** [aggressive t2]. Even normal function arrows are considered as constraints. *)
+    | Related (** [related]. The values defined under module [P] where data type defined in [P] appears in the type of the resolution target *)
+  (*
+    | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
+  *)
+    | Has_type of core_type * type_expr option (** [typeclass path]. Typeclass style resolution.  *) 
+    | Deriving of Longident.t (** [deriving M]. [M] must define [M.tuple], [M.object_] and [M.poly_variant] *)
+    | PPXDerive of Parsetree.expression * core_type * type_expr option (** [ppxderive ([%...] : ty)]. *)
+        
+  let rec is_static = function
+    | Opened _ -> true
+    | Direct _ -> true
+    | Related -> false
+    | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
+    | Has_type _ -> true
+    | Deriving _ -> false
+    | PPXDerive _ -> false
       
-let rec is_static = function
-  | Opened _ -> true
-  | Direct _ -> true
-  | Related -> false
-  | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
-  | Has_type _ -> true
-  | Deriving _ -> false
-  | PPXDerive _ -> false
-    
-let to_string = 
-  let rec t = function
-    | [x] -> t2 x
-    | xs -> String.concat ", " (map t2 xs)
-  and t2 = function
-    | Direct (`In, l, _) -> Longident.to_string l
-    | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
-    | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
-    | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
-    | Related -> "related"
-    | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
-(*
-    | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
-*)
-    | Has_type (cty, _) -> 
-        Format.asprintf "has_type (%a)"
-          Pprintast.core_type cty
-    | Deriving p -> Printf.sprintf "deriving %s" & Longident.to_string p
-    | PPXDerive (e, cty, _) ->
-        Format.asprintf "ppxderive (%a : %a)"
-          Pprintast.expression e
-          Pprintast.core_type cty
-  in
-  t 
-
-(** spec to candidates *)
-
-open Candidate
-    
-let rec cand_static env loc : t2 -> t list = function
-  | Aggressive x ->
-      map (fun x -> { x with aggressive = true }) & cand_static env loc x
-  | Opened (f,x) -> cand_opened env loc (f,x)
-  | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
-(*
-  | Name (_, rex, t2) -> cand_name rex & fun () -> cand_static env loc t2
-*)
-(*
-  | Has_type (_, Some ty) -> Chas_type.cand_has_type env loc ty
-*)
-  | Has_type _ -> assert false (* impos *)
-  | spec when is_static spec -> assert false (* impos *)
-  | _ -> assert false (* impos *)
-
-let rec cand_dynamic env loc ty = function
-(*
-  | Related -> Crelated.cand_related env loc ty
-*)
-  | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
-(*
-  | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
-*)
-(*
-  | Deriving lid -> Cderiving.cand_deriving env loc ty lid
-  | PPXDerive (_e, _cty, None) -> assert false (* impos *)
-  | PPXDerive (e, _cty, Some temp_ty) -> Cppxderive.cand_derive env loc e temp_ty ty 
-*)
-  | Opened _ | Direct _ | Has_type _ ->
-      (* they are static *)
-      assert false (* impos *)
-  | _ -> assert false
-
-let candidates env loc = function
-  | ts ->
-      let statics, dynamics = partition is_static ts in
-      let statics = concat & map (cand_static env loc) statics in
-      if Debug.debug_resolve then begin
-        !!% "debug_resolve: static candidates@.";
-        flip iter statics & fun x ->
-          !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
-      end;
-      let dynamics ty = concat & map (cand_dynamic env loc ty) dynamics in
-      fun ty -> uniq & statics @ dynamics ty
-    
+  let to_string = 
+    let rec t = function
+      | [x] -> t2 x
+      | xs -> String.concat ", " (map t2 xs)
+    and t2 = function
+      | Direct (`In, l, _) -> Longident.to_string l
+      | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
+      | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
+      | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
+      | Related -> "related"
+      | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
+  (*
+      | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
+  *)
+      | Has_type (cty, _) -> 
+          Format.asprintf "has_type (%a)"
+            Pprintast.core_type cty
+      | Deriving p -> Printf.sprintf "deriving %s" & Longident.to_string p
+      | PPXDerive (e, cty, _) ->
+          Format.asprintf "ppxderive (%a : %a)"
+            Pprintast.expression e
+            Pprintast.core_type cty
+    in
+    t 
+  
+  (** spec to candidates *)
+  
+  open Candidate
+      
+  let rec cand_static env loc : t2 -> t list = function
+    | Aggressive x ->
+        map (fun x -> { x with aggressive = true }) & cand_static env loc x
+    | Opened (f,x) -> cand_opened env loc (f,x)
+    | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
+  (*
+    | Name (_, rex, t2) -> cand_name rex & fun () -> cand_static env loc t2
+  *)
+  (*
+    | Has_type (_, Some ty) -> Chas_type.cand_has_type env loc ty
+  *)
+    | Has_type _ -> assert false (* impos *)
+    | spec when is_static spec -> assert false (* impos *)
+    | _ -> assert false (* impos *)
+  
+  let rec cand_dynamic env loc ty = function
+  (*
+    | Related -> Crelated.cand_related env loc ty
+  *)
+    | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
+  (*
+    | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
+  *)
+  (*
+    | Deriving lid -> Cderiving.cand_deriving env loc ty lid
+    | PPXDerive (_e, _cty, None) -> assert false (* impos *)
+    | PPXDerive (e, _cty, Some temp_ty) -> Cppxderive.cand_derive env loc e temp_ty ty 
+  *)
+    | Opened _ | Direct _ | Has_type _ ->
+        (* they are static *)
+        assert false (* impos *)
+    | _ -> assert false
+  
+  let candidates env loc = function
+    | ts ->
+        let statics, dynamics = partition is_static ts in
+        let statics = concat & map (cand_static env loc) statics in
+        if Debug.debug_resolve then begin
+          !!% "debug_resolve: static candidates@.";
+          flip iter statics & fun x ->
+            !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
+        end;
+        let dynamics ty = concat & map (cand_dynamic env loc ty) dynamics in
+        fun ty -> uniq & statics @ dynamics ty
+      
 end
 
 module Specconv = struct
-  open List
   
   open Parsetree
   open Types
@@ -566,7 +563,7 @@ module Specconv = struct
     let mangled, ctys = mangle spec in
     let label n = !@ ("l" ^ string_of_int n) in
     let make_meth_type cty =  (* quantify cty *)
-      Typ.poly (List.map (!@) & tvars_of_core_type cty) cty
+      Typ.poly (map (!@) & tvars_of_core_type cty) cty
     in
     let oty = Typ.object_ (mapi (fun n cty -> (label n, [], make_meth_type cty)) ctys) Closed
     in
@@ -579,462 +576,88 @@ module Specconv = struct
   
 end
 
-module Pre_typeclass = struct
-(*
-
-  Pre-preprocessing for syntax sugars for 
-    [@@typeclass]
-    [@@instance]
-*)
-
-open Ast_helper
-
-open Parsetree
-open Ast_mapper
-open List
-
-module VarInInstance : sig
-  val replace_var_extensions : core_type -> core_type * string list
-end = struct
-  open Longident
-    
-  let vars = ref []
-    
-  let extend super =
-    let typ self cty = match cty.ptyp_desc with
-      | Ptyp_extension ({txt="var"; loc}, PTyp cty) ->
-          begin match cty.ptyp_desc with
-          | Ptyp_var n ->
-              let n = "__var_" ^ n in
-              vars := n :: !vars;
-              Typ.constr ~loc:cty.ptyp_loc (at ~loc:cty.ptyp_loc & Lident n) []
-          | _ -> 
-              raise_errorf "%a: Illegal %%var.  The correct syntax is: [%%var:'a]"
-                Location.format loc
-          end
-      | Ptyp_extension ({txt="var"; loc}, _) ->
-          raise_errorf "%a: Illegal %%var.  The correct syntax is: [%%var:'a]"
-            Location.format loc
-      | _ -> super.typ self cty
-    in
-    { super with typ }
-
-  let mapper = extend default_mapper
-    
-  let replace_var_extensions cty =
-    vars := [];
-    let cty = mapper.typ mapper cty in
-    cty, sort_uniq compare !vars
-end
-
-(***
-
-(* [@@typeclass] and [@@instance] *)
-module TypeClass : sig
-  val gen_declaration
-    : module_type_declaration
-    -> structure_item
-    
-  val parse_instance_declaration
-    : Location.t
-    -> payload
-    -> Longident.t * Location.t * (string * core_type) list * string list
-
-  val gen_instance
-    : Longident.t
-    -> module_binding
-    -> instance_loc: Location.t
-    -> (string * core_type) list
-    -> string list
-    -> structure_item    
-end = struct
-  open Longident
-
-  (* module type Show = sig 
-     type a 
-     type b
-     val show : a -> b -> string 
-     end
-     => [a; b]
-  *)
-  let parameters sg = sort compare & concat_map (fun si ->
-    match si.psig_desc with
-    | Psig_type (_rf, tds) ->
-        flip filter_map tds & fun td ->
-          begin match td with
-          | { ptype_name = {txt}; ptype_params = []; ptype_cstrs = []; ptype_kind = Ptype_abstract; ptype_manifest = None; } -> Some txt
-          | _ -> None
-          end
-    | _ -> []) sg
-
-  (* module type Show = sig 
-       type a 
-       type b
-       val show : a -> b -> string 
-     end
-     => ["show", a -> b -> string]
-  *)
-  let values = filter_map & fun si ->
-    match si.psig_desc with
-      | Psig_value vdesc -> Some (vdesc.pval_name.txt, vdesc.pval_type)
-      | _ -> None
-
-  let add_newtypes = fold_right (fun s -> Exp.newtype ?loc:None s)
-
-  let link = [%stri type __class__ ]
-
-  (* type ('a, 'b) _module = (module Show with type a = 'a and b = 'b) *)
-  let gen_ty_module name ps =
-    let tvars = map (Typ.var ?loc:None) ps in (* CR jfuruse: loc *)
-    Type.mk ?loc:None
-      ~params: (map (fun tv -> (tv, Invariant)) tvars)
-      ~manifest: (Typ.package ?loc:None 
-                   (at (Lident name)) 
-                   (map2 (fun p tv -> (at (Lident p), tv)) ps tvars))
-      (at "_module") (* CR jfuruse: can have a ghost loc *)
-
-  (* type ('a, 'b) _class = (('a, 'b) _module, [%imp has_type __class__]) Ppx_implicits.t *)
-  let gen_ty_class ps =
-    let tvars = map (Typ.var ?loc:None) ps in (* CR jfuruse: loc *)
-    Type.mk ?loc:None
-      ~params: (map (fun tv -> (tv, Invariant)) tvars)
-      ~manifest: [%type: ([%t Typ.constr (at (Lident "_module")) tvars], [%imp has_type __class__]) Ppx_implicits.t]
-      (at "_class") (* CR jfuruse: can have a ghost loc *)
-  ;;
-
-  (* let show (type a) ?_d:(_d : a _class option) =
-    let module M = (val (Ppx_implicits.(get (from_Some _d)))) in
-    M.show
-  *)
-
-  let method_ tys (n,_ty) = 
-    let paramed_s = 
-      let open Typ in
-      constr (at ?loc:None & Lident "_class") 
-      & map (fun ty -> constr ?loc:None (at ?loc:None & Lident ty) []) tys
-    in
-    [%stri let [%p Pat.var' ?loc:None n] =
-        [%e add_newtypes (List.map (!@) tys)
-            [%expr fun ?_d:(_d : [%t paramed_s] option) -> 
-                     let module M = (val (Ppx_implicits.(get (from_Some _d)))) in
-                     [%e Exp.(ident ?loc:None (at ?loc:None (Ldot (Lident "M", n)))) ] ] ] ]
-
-  let gen_declaration mtd =
-    let name = mtd.pmtd_name.txt in
-    match mtd.pmtd_type with 
-    | Some { pmty_desc = Pmty_signature sg } -> 
-        let ps = parameters sg in
-        let vs = values sg in
-        begin match ps with
-        | [] ->
-            raise_errorf "%a: sig .. end [@@@@typeclass] requires at least one parameter type declaration like type a" Location.format mtd.pmtd_loc
-        | _ -> 
-            Str.module_ ?loc:None & Mb.mk ?loc:None (at ?loc:None name)
-              (Mod.structure ?loc:None 
-               & [%stri [@@@warning "-16"]]
-                 :: Str.type_ [gen_ty_module name ps]
-                 :: link
-                 :: Str.type_ [gen_ty_class ps]
-                 :: map (method_ ps) vs
-              )
-        end
-    | _ -> raise_errorf "%a: a signature (sig .. end) is required for [@@@@typeclass]" Location.format mtd.pmtd_loc
-
-  let parse_instance_declaration loc = function
-    | PTyp cty ->
-        let cty, vars = VarInInstance.replace_var_extensions cty in
-        begin match cty with
-        | {ptyp_desc = Ptyp_package ({txt; loc}, ps)} ->
-            let ps = flip map ps & fun (p,cty) -> match p with
-              | {txt=Lident s} -> s, cty
-              | {txt;loc} -> raise_errorf "%a Illegal @@@@instance type constraint %a. It must be a simple name." Location.format loc Longident.format txt
-            in
-            txt, loc, ps, vars
-        | _ -> raise_errorf "%a: Illegal @@@@instance payload. It must be [@@instance: (module X with type ...)]" Location.format loc
-        end      
-    | _ -> raise_errorf "%a: Illegal @@@@instance payload. It must be [@@instance: (module X with type ...)]" Location.format loc
-    
-      
-  (* ((module (struct type a = ... include <m> end) : (<n>.a, <n>.b) <o>._module)) *)
-  let dict_module m o ps =
-    Exp.constraint_ ?loc:None 
-      (Exp.pack ?loc:None &
-         Mod.structure & map (fun (p,cty) -> Str.type_ [Type.mk ~manifest: cty (at p)]) ps
-                         @ [ Str.include_ { pincl_mod = Mod.ident' ?loc:None (Lident m);
-                                            pincl_loc = Location.none; (* CR fix it *)
-                                            pincl_attributes = [] }
-                         ]  
-      )
-      (Typ.constr ?loc:None (at ?loc:None & Ldot (Lident o, "_module"))
-(*
-       & map (fun (p,_) -> Typ.constr ?loc:None (at ?loc:None & Ldot (Lident m, p)) []) ps)
-*)
-       & map (fun (_,cty) -> cty) ps)
-         
-  module Dict = struct
-      
-    (* [param d tvs m] = (d : (<tvs> <m>._module, [%imp has_type <m>.__class__]) Ppx_implicits.t option) *)
-    let param d tvs m =
-      Pat.constraint_ (Pat.var' d)
-      & Typ.(let a = constr (at & Ldot (m, "_module"))
-               (map (fun tv -> constr (at & Lident tv) []) tvs)
-             in
-             let b = Specconv.to_core_type Location.none & Spec.([Has_type (Typ.(constr (at & Ldot (m, "__class__")) []), None)]) in
-             [%type: ([%t a], [%t b]) Ppx_implicits.t option])
-        
-    (* let dict (type a) ?d:(d : (a Numdef.Num._module, [%imp has_type Numdef.Num.__class__]) Ppx_implicits.t option) = *)
-  
-    (* val (Ppx_implicits.(get (from_Some <d>))) *)
-    let functor_arg d = Mod.unpack [%expr Ppx_implicits.(get (from_Some [%e d])) ]
-  
-    (* ((module (struct type a = ... include <n> end) : (<n>.a, <n>.b) <o>._module)
-       
-       or
-       
-       let module M = <n>((val (Ppx_implicits.(get (from_Some d)))))..(..) in
-       ((module (struct type a = ... include M end) : (M.a, M.b) <o>._module)
-    *)
-    let z n ds o ps = match ds with
-      | [] -> dict_module n o ps
-      | _ -> 
-          Exp.letmodule (at "M") (fold_left Mod.apply (Mod.ident (at & Lident n)) & map functor_arg ds)
-          & dict_module "M" o ps
-
-    (* let dict (type a) (type b).. ?d1:(d1 : (a m1._module, [%imp has_type m1.__class__]) Ppx_implicits.t option) ?d2:(d2 : (b m2._module, [...]) =
-       let module M = <n>((val (Ppx_implicits.(get (from_Some d1))))).. in
-       ((module M) : (M.ps1, M.psn) <o>._module)
-    *)
-    let dict f (* functor *)
-             p_mty (* module defines the module type *)
-             ps (* parameters of type class *)
-             ks (* constraints *)
-             vars (* local type names *) =
-      let ds = mapi (fun i _ -> "d" ^ string_of_int i) ks in
-      let pats = map2 (fun d (tvs, m) -> param d tvs m) ds ks in
-      let tvs = concat & map (fun (tvs, _) -> tvs) ks in
-      let e = z f (map (fun i -> Exp.ident (at & Lident i)) ds) p_mty ps in
-      let e = fold_left2 (fun e d p -> Exp.fun_ (Optional d) None p e) e ds pats in
-      [%stri let dict = [%e fold_left (flip Exp.newtype) e (List.map (!@) & tvs @ vars)]]
-  end
-                                
-  (* 
-     module ShowInt = struct
-       type a = int
-       let show  = string_of_int
-     end [@@instance Show] 
-
-     =>
-
-     module ShowIntInstance = struct
-       let dict : ShowInt.a Show.s = (module ShowInt)
-       type __imp_instance_of__ = Show.__class__
-     end
-  *)
-  let gen_instance lid mb ~instance_loc ps vars =
-    let cname = match lid with (* Show *)
-      | Lident cname -> cname
-      | Ldot (_, cname) -> cname
-      | _ ->
-          raise_errorf "%a: %a is invalid for type class"
-            Location.format instance_loc
-            Longident.format lid
-    in
-    let iname = mb.pmb_name.txt in (* ShowInt *)
-    let oname = iname ^ "Instance" in (* ShowIntInstance *)
-    let _str, ks =
-      let rec get_str me = match me.pmod_desc with
-        | Pmod_structure str -> str, []
-        | Pmod_constraint (me, _) -> get_str me
-        | Pmod_functor (_, Some { pmty_attributes = attrs }, me) ->
-            begin match
-                filter_map (function
-                  | ({txt="typeclass"}, PStr [{pstr_desc=Pstr_eval (e,_)}]) -> Some e
-                  | ({txt="typeclass"; loc}, _) ->
-                      raise_errorf "%a: Invalid syntax of @@typeclass for functor argument.  It must be [@@typeclass <params> <modname>]"
-                        Location.format loc
-                  | _ -> None) attrs
-              with
-              | [] -> get_str me
-              | [e] ->
-                  let k = match e.pexp_desc with
-                    | Pexp_apply (tvs, [Nolabel, mp]) ->
-                        let tvs =
-                          let get_var tv = match tv.pexp_desc with
-                            | Pexp_ident {txt=Lident s} -> s
-                            | _ ->
-                                raise_errorf "%a: Invalid syntax of @@typeclass parameter"
-                                  Location.format tv.pexp_loc
-                          in
-                          match tvs.pexp_desc with
-                          | Pexp_tuple es -> map get_var es
-                          | _ -> [get_var tvs]
-                        in
-                        let lid = match mp.pexp_desc with
-                          | Pexp_construct ({txt=lid}, None) -> lid
-                          | _ ->
-                              raise_errorf "%a: Invalid syntax of @@typeclass module"
-                                Location.format mp.pexp_loc
-                        in
-                        tvs, lid
-                    | _ -> 
-                        raise_errorf "%a: Invalid syntax of @@typeclass for functor argument.  It must be [@@typeclass <params> <modname>]"
-                          Location.format e.pexp_loc
-                  in
-                  let str, ks = get_str me in
-                  str, k::ks
-              | _ ->
-                  raise_errorf "%a: multiple @@typeclass attributes found"
-                    Location.format me.pmod_loc
-            end
-        | Pmod_functor (_, _, me) -> get_str me
-        | _ ->
-            raise_errorf "%a: Invalid module for @@@@instance"
-              Location.format me.pmod_loc
-      in
-      get_str mb.pmb_expr
-    in
-    with_gloc mb.pmb_loc & fun () ->
-        Str.module_ & Mb.mk (at ~loc:mb.pmb_name.loc oname)
-        & Mod.structure ~loc:mb.pmb_expr.pmod_loc
-          [ [%stri [@@@warning "-16"] (* We need this for ?imp: *) ]
-          ; Dict.dict iname cname ps ks vars
-          ; with_gloc instance_loc & fun () ->
-            Str.type_ [ Type.mk ~manifest:(Typ.constr (at & Ldot (Lident cname, "__class__")) []) (at "__imp_instance_of__") ]
-          ]
-end
-*)
-
-(* module type S = sig .. end [@@typeclass] *)
-(* module M = struct .. end [@@instance C] *)
-let extend super =
-  let _has_typeclass_attr = function
-    | {txt="typeclass"}, PStr [] -> true
-    | {txt="typeclass"; loc}, _ ->
-        raise_errorf "%a: [@@@@typeclass] must not take payload"
-          Location.format loc
-    | _ -> false
-  in
-  let structure self sitems =
-    let sitems = flip concat_map sitems & fun sitem ->
-      match sitem.pstr_desc with
-(*
-      | Pstr_modtype mtd when exists has_typeclass_attr mtd.pmtd_attributes ->
-          (* module type M = ... [@@typeclass] *)
-          (* CR jfuruse: need to remove [@@typeclass] *)
-          [ sitem
-          (* ; TypeClass.process_module_type_declaration mtd *)
-          ; TypeClass.gen_declaration mtd
-          ]
-      | Pstr_module mb ->
-          (* module M = ... [@@instance Show] *)
-          begin match 
-            flip filter_map mb.pmb_attributes & function 
-              | ({txt="instance"; loc}, payload) -> Some (TypeClass.parse_instance_declaration loc payload)
-              | _ -> None
-          with
-          | [] -> [ sitem ]
-          | [ (lid, instance_loc, ps, vars) ] ->
-              [ sitem
-              ; TypeClass.gen_instance lid mb ~instance_loc ps vars
-              ]
-          | _ -> 
-              raise_errorf "%a: multiple [@@@@instance] found"
-                Location.format mb.pmb_loc
-          end
-*)
-        | _ -> [sitem]
-    in
-    super.structure self sitems
-  in 
-  { super with structure }
-end
-
 module Tysize = struct
-(* Size of type *)
-
-open Types
-open Btype
-
-type t = (int option, int) Hashtbl.t
-(** Polynomial. v_1 * 2 + v_2 * 3 + 4 has the following bindings:
-    [(Some 1, 2); (Some 3, 2); (None, 4)]
-*)
-
-let to_string t =
-  let open Printf in
-  String.concat " + "
-  & Hashtbl.fold (fun k v st ->
-    let s = match k,v with
-      | None, _ -> sprintf "%d" v
-      | Some _, 0 -> ""
-      | Some k, 1 -> sprintf "a%d" k
-      | Some k, _ -> sprintf "%d*a%d" v k
-    in
-    s :: st) t []
-    
-let format ppf t = Format.fprintf ppf "%s" (to_string t)
-    
-let size ty =
-  let open Hashtbl in
-  let tbl = create 9 in
-  let incr k =
-    try
-      replace tbl k (find tbl k + 1)
-    with
-    | Not_found -> add tbl k 1
-  in
-  let it = 
-    { type_iterators with
-      it_do_type_expr = (fun it ty ->
-        let ty = Ctype.repr ty in
-        begin match ty.desc with
-        | Tvar _ -> incr (Some ty.id)
-        | _ -> incr None
-        end;
-        begin match ty.desc with
-        | Tvariant row -> 
-           (* Tvariant may contain a Tvar at row_more even if it is `closed'. *)
-           let row = row_repr row in
-           if not & static_row row then type_iterators.it_do_type_expr it ty
-        | _ -> type_iterators.it_do_type_expr it ty
-        end)
-    }
-  in
-  it.it_type_expr it ty;
-  unmark_iterators.it_type_expr unmark_iterators ty;
-  tbl
-
-let lt t1 t2 =
-  (* Comparison of polynomials.
-     All the components in t1 must appear in t2 with GE multiplier.
-     At least one component in t1 must appear in t2 with GT multiplier.
-  *)
-  let open Hashtbl in
-  try
-    fold (fun k1 v1 found_gt ->
-      let v2 = find t2 k1 in
-      if v1 < v2 then true
-      else if v1 = v2 then found_gt
-      else raise Exit
-      ) t1 false
-  with
-  | Exit | Not_found -> false
-
-let has_var t =
-  try
-    Hashtbl.iter (fun k v -> if k <> None && v > 0 then raise Exit) t;
-    false
-  with
-  | Exit -> true
+  (* Size of type *)
   
-
+  open Types
+  open Btype
+  
+  type t = (int option, int) Hashtbl.t
+  (** Polynomial. v_1 * 2 + v_2 * 3 + 4 has the following bindings:
+      [(Some 1, 2); (Some 3, 2); (None, 4)]
+  *)
+  
+  let to_string t =
+    let open Printf in
+    String.concat " + "
+    & Hashtbl.fold (fun k v st ->
+      let s = match k,v with
+        | None, _ -> sprintf "%d" v
+        | Some _, 0 -> ""
+        | Some k, 1 -> sprintf "a%d" k
+        | Some k, _ -> sprintf "%d*a%d" v k
+      in
+      s :: st) t []
+      
+  let format ppf t = Format.fprintf ppf "%s" (to_string t)
+      
+  let size ty =
+    let open Hashtbl in
+    let tbl = create 9 in
+    let incr k =
+      try
+        replace tbl k (find tbl k + 1)
+      with
+      | Not_found -> add tbl k 1
+    in
+    let it = 
+      { type_iterators with
+        it_do_type_expr = (fun it ty ->
+          let ty = Ctype.repr ty in
+          begin match ty.desc with
+          | Tvar _ -> incr (Some ty.id)
+          | _ -> incr None
+          end;
+          begin match ty.desc with
+          | Tvariant row -> 
+             (* Tvariant may contain a Tvar at row_more even if it is `closed'. *)
+             let row = row_repr row in
+             if not & static_row row then type_iterators.it_do_type_expr it ty
+          | _ -> type_iterators.it_do_type_expr it ty
+          end)
+      }
+    in
+    it.it_type_expr it ty;
+    unmark_iterators.it_type_expr unmark_iterators ty;
+    tbl
+  
+  let lt t1 t2 =
+    (* Comparison of polynomials.
+       All the components in t1 must appear in t2 with GE multiplier.
+       At least one component in t1 must appear in t2 with GT multiplier.
+    *)
+    let open Hashtbl in
+    try
+      fold (fun k1 v1 found_gt ->
+        let v2 = find t2 k1 in
+        if v1 < v2 then true
+        else if v1 = v2 then found_gt
+        else raise Exit
+        ) t1 false
+    with
+    | Exit | Not_found -> false
+  
+  let has_var t =
+    try
+      Hashtbl.iter (fun k v -> if k <> None && v > 0 then raise Exit) t;
+      false
+    with
+    | Exit -> true
 end
 
 open Typedtree
 open Types
-
 open Format
-open List
     
 (* CR jfuruse: bad state... *)
 (* CR jfuruse: confusing with deriving spec *)                      
@@ -1044,7 +667,6 @@ let derived_candidates = ref []
 let get_candidates env loc spec ty =
   let f = Spec.candidates env loc spec in
   Candidate.uniq & f ty @ map snd !derived_candidates
-
 
 module Runtime = struct
   open Longident
