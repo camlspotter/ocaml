@@ -1341,12 +1341,19 @@ let resolve env loc spec ty = with_snapshot & fun () ->
         (List.format "@," format_expression) es
   | Resolve_result.Ok [es] ->
       match es with
-      | [e] -> Unshadow.Replace.replace e
+      | [e] ->
+          prerr_endline "unshadow replace...";
+          Unshadow.Replace.replace e
       | _ -> assert false (* impos *)
 
 let retype env exp expected =
   let uexp = Untypeast.(default_mapper.expr default_mapper) exp in
-  Typecore.type_expect env uexp expected
+  try
+    Typecore.type_expect env uexp expected
+  with
+  | e ->
+      Format.eprintf "Failed to retype: %a@." Pprintast.expression uexp;
+      raise e
   
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
@@ -1360,7 +1367,12 @@ let resolve_omitted_imp_arg loc env a = match a with
           | None -> a (* It is not imp arg *)
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
-              let e'' = retype e.exp_env e' e.exp_type in
+              prerr_endline "resolve done";
+              (* for retyping, e.exp_env is not suitable, since 
+                 it is made by Typecore.option_none with Env.initial_safe_string
+              *)
+              let e'' = retype env e' e.exp_type in
+              prerr_endline "retype done";
               (l, Some e'')
       end
   | _ -> a
