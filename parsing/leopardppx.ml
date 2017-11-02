@@ -9,7 +9,9 @@ let leopard_mode () = match !Clflags.leopard_mode with
   | _ -> false
 
 let overload_vdesc vdesc = 
-  { vdesc with pval_prim = ["%OVERLOADED"] }
+  { vdesc with pval_prim = ["%OVERLOADED"] } (* All capital by a historical reason *)
+
+let imp_vdesc vdesc = { vdesc with pval_prim = ["%imp"] }
 
 let rename lid n = match lid with
   | Lident m -> "__" ^ String.lowercase_ascii m ^ "_" ^ n
@@ -49,6 +51,11 @@ let extend super =
                         PStr [{pstr_desc= Pstr_primitive vdesc}]),
                        _ ) ->
         { i with pstr_desc = Pstr_primitive (overload_vdesc vdesc) }
+    (* val %imp n : t  =>  extern n : t = "%imp" *)
+    | Pstr_extension ( ({txt="imp"},
+                        PStr [{pstr_desc= Pstr_primitive vdesc}]),
+                       _ ) ->
+        { i with pstr_desc = Pstr_primitive (imp_vdesc vdesc) }
     | _ -> super.structure_item self i
   in
   let signature_item self i = match i.psig_desc with
@@ -57,6 +64,11 @@ let extend super =
                         PSig [{psig_desc= Psig_value vdesc}]),
                        _ ) ->
         { i with psig_desc = Psig_value (overload_vdesc vdesc) }
+    (* val %imp n : t  =>  extern n : t = "%imp" *)
+    | Psig_extension ( ({txt="imp"},
+                        PSig [{psig_desc= Psig_value vdesc}]),
+                       _ ) ->
+        { i with psig_desc = Psig_value (imp_vdesc vdesc) }
     | _ -> super.signature_item self i
   in
   { super with expr; structure_item; signature_item }

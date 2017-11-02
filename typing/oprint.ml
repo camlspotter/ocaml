@@ -458,6 +458,12 @@ and print_out_sig_item ppf =
         !out_type vd.oval_type
         (fun ppf -> List.iter (fun a -> fprintf ppf "@ [@@@@%s]" a.oattr_name))
         vd.oval_attributes
+  | Osig_value vd when vd.oval_prims = ["%imp"] ->
+      let kwd = "val %imp" in
+      fprintf ppf "@[<2>%s %a :@ %a%a@]" kwd value_ident vd.oval_name
+        !out_type vd.oval_type
+        (fun ppf -> List.iter (fun a -> fprintf ppf "@ [@@@@%s]" a.oattr_name))
+        vd.oval_attributes
   | Osig_value vd ->
       let kwd = if vd.oval_prims = [] then "val" else "external" in
       let pr_prims ppf =
