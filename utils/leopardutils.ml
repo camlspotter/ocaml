@@ -167,4 +167,4 @@ let warnf fmt =
 
 let exit_then d f = try f () with Exit -> d
 
-
+let env_exist s = try ignore (Sys.getenv s); true with _ -> false

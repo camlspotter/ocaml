@@ -4,10 +4,12 @@ open Leopardcomplib
 open List
 open Asttypes
 
-module Debug = struct
-  let env_exist s = try ignore (Sys.getenv s); true with _ -> false
+module Debug : sig
+  val debug_resolve : bool
+  val debug_unif : bool
+end = struct
   let debug_resolve = env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
-  let debug_unif = env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
+  let debug_unif    = env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
 end
 
 module Klabel = struct
@@ -222,8 +224,8 @@ module Chastype = struct end
 module Cderiving = struct end
 module Cppxderive = struct end
 
-module Spec = struct
-  (*
+module Spec : sig
+  (**
   
     Instance search space specification DSL, magling to and back from
     OCaml type definitions.
@@ -249,15 +251,28 @@ module Spec = struct
     | Deriving of Longident.t (** [deriving M]. [M] must define [M.tuple], [M.object_] and [M.poly_variant] *)
     | PPXDerive of Parsetree.expression * core_type * type_expr option (** [ppxderive ([%...] : ty)]. *)
         
-  let rec is_static = function
-    | Opened _ -> true
-    | Direct _ -> true
-    | Related -> false
-    | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
-    | Has_type _ -> true
-    | Deriving _ -> false
-    | PPXDerive _ -> false
-      
+  val to_string : t -> string
+
+  val candidates : Env.t -> Location.t -> t -> type_expr -> Candidate.t list
+end = struct
+
+  open Parsetree
+  open Types
+  
+  type t = t2 list
+  
+  and t2 = 
+    | Opened of [`In | `Just] * Longident.t
+    | Direct of [`In | `Just] * Longident.t * Path.t option
+    | Aggressive of t2
+    | Related
+  (*
+    | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
+  *)
+    | Has_type of core_type * type_expr option
+    | Deriving of Longident.t
+    | PPXDerive of Parsetree.expression * core_type * type_expr option
+        
   let to_string = 
     let rec t = function
       | [x] -> t2 x
@@ -282,7 +297,17 @@ module Spec = struct
             Pprintast.core_type cty
     in
     t 
-  
+
+  (** "Dynamic" means that candidates are dependent on the target type *)
+  let rec is_static = function
+    | Opened _ -> true
+    | Direct _ -> true
+    | Has_type _ -> true
+    | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
+    | Related -> false
+    | Deriving _ -> false
+    | PPXDerive _ -> false
+      
   (** spec to candidates *)
   
   open Candidate
@@ -320,32 +345,36 @@ module Spec = struct
         assert false (* impos *)
     | _ -> assert false
   
-  let candidates env loc = function
-    | ts ->
-        let statics, dynamics = partition is_static ts in
-        let statics = concat & map (cand_static env loc) statics in
-        if Debug.debug_resolve then begin
-          !!% "debug_resolve: static candidates@.";
-          flip iter statics & fun x ->
-            !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
-        end;
-        let dynamics ty = concat & map (cand_dynamic env loc ty) dynamics in
-        fun ty -> uniq & statics @ dynamics ty
+  let candidates env loc ts =
+    let statics, dynamics = partition is_static ts in
+    let statics = concat & map (cand_static env loc) statics in
+    if Debug.debug_resolve then begin
+      !!% "debug_resolve: static candidates@.";
+      flip iter statics & fun x ->
+        !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
+    end;
+    let dynamics ty = concat & map (cand_dynamic env loc ty) dynamics in
+    fun ty -> uniq & statics @ dynamics ty
       
 end
 
-module Specconv = struct
+module Specconv : sig
+  (** Spec conversion 
+  
+      Specs cannot appear in programs as they are.  
+      This module provides conversions between them and types and expressions.
+  *)
+
+  open Types
+
+  val from_type_expr : Env.t -> Location.t -> type_expr -> Spec.t
+end = struct
+  
   
   open Parsetree
   open Types
   
   open Spec
-  
-  (* Spec conversion 
-  
-     * between attribute expression: [%imp <e>] <=> spec
-     * between type definition: type __imp_spec__ <=> [%%imp_spec <e>] <=> spec
-  *)
   
   let prefix = "Spec_"
   let prefix_len = String.length prefix
@@ -576,8 +605,15 @@ module Specconv = struct
   
 end
 
-module Tysize = struct
-  (* Size of type *)
+module Tysize : sig 
+  (** Size of type *)
+  type t
+  val lt : t -> t -> bool
+  val to_string : t -> string
+  val format : Format.formatter -> t -> unit
+  val has_var : t -> bool
+  val size : Types.type_expr -> t
+end = struct
   
   open Types
   open Btype
@@ -671,37 +707,40 @@ let get_candidates env loc spec ty =
 module Runtime = struct
   open Longident
 
-   (* Leopard.Implicits.Runtime *)
+  (* Leopard.Implicits.Runtime *)
   let lident_implicits = Ldot (Lident "Leopard", "Implicits")
 
-  let lident_embed = Ldot (lident_implicits, "embed")
+  (* Leopard.Implicits.Runtime.embed *)
+  let lident_embed     = Ldot (lident_implicits, "embed")
 
-  let lident_get = Ldot (lident_implicits, "get")
+  (* Leopard.Implicits.Runtime.get *)
+  let lident_get       = Ldot (lident_implicits, "get")
 
+  (* Leopard.Implicits.Runtime.from_Some *)
   let lident_from_Some = Ldot (lident_implicits, "from_Some")
 
-   (** [Leopard.Implicits.Runtime.t] *)
+   (** [Leopard.Implicits.t] *)
    let is_imp_t_path = function
     | Path.(Pdot(Pdot(Pident{Ident.name="Leopard"},
                       "Implicits", _),
                  "t", _)) -> true
     | _ -> false
 
-   (** [embed e] builds [Ppx_implicits.Runtime.embed <e>] *)
+   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
    let embed e =
      let env = e.exp_env in
      let loc = e.exp_loc in
      let f = Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lident_embed; loc}) in
      Forge.Exp.(app f [Nolabel, e])
 
-   (** [get e] builds [Ppx_implicits.get <e>] *)
+   (** [get e] builds [Leopard.Implicits.get <e>] *)
    let get e =
      let env = e.exp_env in
      let loc = e.exp_loc in
      let f = Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lident_get; loc}) in
      Forge.Exp.(app f [Nolabel, e])
   
-   (** [from_Some e] builds [Ppx_implicits.from_Some <e>] *)
+   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
    let from_Some e =
      let env = e.exp_env in
      let loc = e.exp_loc in
