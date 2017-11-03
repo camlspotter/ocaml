@@ -10,7 +10,9 @@ module Format = struct
   include Format
 
   type t = formatter
-      
+
+  type 'a fmt = t -> 'a -> unit
+
   let sprintf fmt =
     let buf = Buffer.create 100 in
     let ppf = formatter_of_buffer buf in

@@ -4,15 +4,12 @@ open Leopardutils
 open Asttypes
 open List
 
-module Ast_helper = struct
-  include Ast_helper
-  open Location
-  let ghost l = { l with loc_ghost = true }
-end
-
-module Longident = struct
-  include Longident
-
+module XLongident : sig
+  val format : Longident.t Format.fmt
+  val to_string : Longident.t -> string
+  module Set : Set.S with type elt = Longident.t
+end = struct
+  open Longident
   open Format
   
   (* [Pprintast.longident] is not exposed in OCaml 4.05.0 *)
@@ -22,20 +19,36 @@ module Longident = struct
     | Lapply (p1, p2) -> fprintf ppf "%a(%a)" format p1 format p2
                            
   let to_string l = asprintf "%a" format l
+
+  module Set = Set.Make(struct type t = Longident.t let compare = compare end)
 end
 
-module Ident = struct
-  include Ident
+module Longident = struct
+  include Longident
+  include XLongident
+end
 
+module XIdent : sig
+  val format : Ident.t Format.fmt
+  val format_verbose : Ident.t Format.fmt
+end = struct
+  open Ident
   open Format
-  
   let format ppf id = pp_print_string ppf id.name
   let format_verbose ppf id = fprintf ppf "%s/%d" id.name id.stamp
 end
 
-module Path = struct
-  include Path
+module Ident = struct
+  include Ident
+  include XIdent
+end
 
+module XPath : sig
+  val format : Path.t Format.fmt
+  val format_verbose : Path.t Format.fmt
+  val to_string : Path.t -> string
+end = struct
+  open Path
   open Format
 
   let format = Printtyp.path
@@ -48,57 +61,93 @@ module Path = struct
   let to_string l = asprintf "%a" format l
 end
 
-module Location = struct
-  include Location
-  let merge t1 t2 = { t1 with loc_end = t2.loc_end }
-
-  let format = print_loc
+module Path = struct
+  include Path
+  include XPath
 end
 
-let raise_errorf = Location.raise_errorf
-type 'a loc = 'a Location.loc = { txt : 'a; loc : Location.t }
+module XLocation : sig
+  val ghost : Location.t -> Location.t
+  val merge : Location.t -> Location.t -> Location.t
+  val format : Location.t Format.fmt
+  module Open : sig
+    val raise_errorf
+      : ?loc:Location.t
+      -> ?sub:Location.error list
+      -> ?if_highlight:string
+      -> ('a, Format.formatter, unit, 'b) format4 -> 'a
 
-module XParsetree = struct
+    type 'a loc = 'a Location.loc = { txt : 'a; loc : Location.t }
+
+    val at : ?loc:Location.t -> 'a -> 'a loc
+    val (!@) : 'a -> 'a loc
+  end
+end = struct
+  open Location
+  let ghost l = { l with loc_ghost = true }
+  let merge t1 t2 = { t1 with loc_end = t2.loc_end }
+  let format = print_loc
+  module Open = struct
+    let raise_errorf = Location.raise_errorf
+    type 'a loc = 'a Location.loc = { txt : 'a; loc : Location.t }
+
+    let at ?loc txt = 
+      let loc = match loc with 
+        | None -> !Ast_helper.default_loc
+        | Some loc -> loc
+      in
+      { txt; loc }
+    
+    let (!@) x = at x
+  end
+end
+
+module Location = struct
+  include Location
+  include XLocation
+end
+
+open Location.Open
+
+module XParsetree : sig
+  open Parsetree
+  val iter_core_type : (core_type -> unit) -> core_type -> unit
+  val constrs_in_type_declaration : type_declaration -> Longident.t list
+  val group_type_declarations
+    : type_declaration list
+    -> type_declaration list list * type_declaration list
+  val is_gadt : type_declaration -> bool
+  val tvars_of_core_type : core_type -> string list
+
+  val sig_module_of_stri : structure_item -> signature_item
+end = struct
   (* We cannot include Parsetree since it lacks implementation *)
   open Parsetree
-    
-  let iter_core_type f ty = match ty.ptyp_desc with
-      Ptyp_any | Ptyp_var _ -> ()
-    | Ptyp_arrow (_, ty1, ty2) -> f ty1; f ty2
-    | Ptyp_tuple l      
-    | Ptyp_constr (_, l)
-    | Ptyp_class (_, l) -> iter f l
-    | Ptyp_alias (ty, _) -> f ty
-    | Ptyp_object(s_a_cty_l, _) ->
-        iter (fun (_, _, cty) -> f cty) s_a_cty_l
-    | Ptyp_variant (rfs, _, _) ->
-        iter (function
-          | Rtag (_, _, _, l) -> iter f l
-          | Rinherit t -> f t) rfs
-    | Ptyp_poly (_, t) -> f t
-    | Ptyp_package (_, l_cty_s) ->
-        iter (fun (_, t) -> f t) l_cty_s
-    | Ptyp_extension _ -> ()
 
-  module LongidentSet = Set.Make(struct type t = Longident.t let compare = compare end)
-
+  let iter_core_type f ty =
+    let open Ast_iterator in
+    let super = default_iterator in
+    let typ self ty =
+      super.typ self ty;
+      f ty
+    in
+    let i = { super with typ } in
+    i.typ i ty
+      
   (* referred constrs and classes *)   
   let constrs_in_core_type_ ty =
-    let s = ref LongidentSet.empty in
-    let add l = s := LongidentSet.add l !s in
-    let rec f ty =
-      begin match ty.ptyp_desc with
-      | Ptyp_constr ({txt}, _) -> add txt
-      | Ptyp_class ({txt}, _) -> add txt
-      | _ -> ()
-      end;
-      iter_core_type f ty
-    in
-    f ty;
+    let s = ref Longident.Set.empty in
+    let add l = s := Longident.Set.add l !s in
+    iter_core_type
+      (fun ty -> match ty.ptyp_desc with
+         | Ptyp_constr ({txt}, _) -> add txt
+         | Ptyp_class ({txt}, _) -> add txt
+         | _ -> ())
+      ty;
     !s
 
   let constrs_in_core_type ty =
-    LongidentSet.elements & constrs_in_core_type_ ty
+    Longident.Set.elements & constrs_in_core_type_ ty
 
   let constrs_in_type_declaration td =
     constrs_in_core_type
@@ -177,24 +226,77 @@ module XParsetree = struct
   let is_gadt type_decl = match type_decl.ptype_kind with
     | Ptype_variant constrs -> List.exists (fun c -> c.pcd_res <> None) constrs
     | _ -> false
+
+  let tvars_of_core_type cty =
+    (* Using mapper for iterator is redundant, but easiest way *)
+    (* XXX We should use Ast_iterator *)
+    let open Ast_mapper in
+    let open Parsetree in
+    let vars = ref [] in
+    let extend super =
+      let typ self ty =
+        match ty.ptyp_desc with
+        | Ptyp_var s ->
+            if not & mem s !vars then vars := s :: !vars;
+            ty
+        | _ -> super.typ self ty
+      in
+      { super with typ }
+    in
+    let m = extend default_mapper in
+    ignore & m.typ m cty;
+    !vars
+
+  (* XXX not used ?*)
+  let sig_module_of_stri sitem =
+    let open Parsetree in
+    match sitem.pstr_desc with
+    | Pstr_modtype mtd ->
+        Ast_helper.Sig.module_ ~loc:sitem.pstr_loc
+          { pmd_name       = mtd.pmtd_name
+          ; pmd_type       = from_Some mtd.pmtd_type
+          ; pmd_attributes = mtd.pmtd_attributes
+          ; pmd_loc        = mtd.pmtd_loc
+          }
+    | _ ->
+        !!% "sig_module_of_stri: got a non modtype@.";
+        assert false
 end
 
-module Ctype = struct
-(*
-  ctype.ml says:
+module XCtype : sig
+  (**
+    ctype.ml says:
+  
+     Type manipulation after type inference
+     ======================================
+     If one wants to manipulate a type after type inference (for
+     instance, during code generation or in the debugger), one must
+     first make sure that the type levels are correct, using the
+     function [correct_levels]. Then, this type can be correctely
+     manipulated by [apply], [expand_head] and [moregeneral].
+  
+    Therefore we simply wrap these functions by correct_levels.
+    They may be slower but I do not want to be bothered by strange
+    type level bugs.
+  *)
+  open Types
 
-   Type manipulation after type inference
-   ======================================
-   If one wants to manipulate a type after type inference (for
-   instance, during code generation or in the debugger), one must
-   first make sure that the type levels are correct, using the
-   function [correct_levels]. Then, this type can be correctely
-   manipulated by [apply], [expand_head] and [moregeneral].
+  val expand_head : Env.t -> type_expr -> type_expr
 
-  Therefore we simply wrap these functions by correct_levels.
-  They may be slower but I do not want to be bothered by strange
-  type level bugs.
-*)
+  val apply
+    : Env.t
+    -> type_expr list
+    -> type_expr
+    -> type_expr list
+    -> type_expr
+
+  val moregeneral
+    : Env.t
+    -> bool
+    -> type_expr
+    -> type_expr
+    -> bool
+end = struct
   include Ctype
     
   let expand_head env ty = expand_head env & correct_levels ty
@@ -203,10 +305,36 @@ module Ctype = struct
   let moregeneral env b ty1 ty2 = moregeneral env b (correct_levels ty1) (correct_levels ty2)
 end
 
-module Types = struct
-  include Types
+module Ctype = struct
+  include Ctype
+  include XCtype
+end
+  
+module XTypes : sig
+  open Types
+
+  val repr_desc : type_expr -> type_desc
+
+  val expand_repr_desc : Env.t -> type_expr -> type_desc
+
+  val with_snapshot : (unit -> 'a) -> 'a
+
+  val is_constr : Env.t -> type_expr -> (Path.t * type_expr list) option
+
+  val is_option_type : Env.t -> type_expr -> type_expr option
+
+  val gen_vars : type_expr -> type_expr list
+
+  (** Create a type which can be unified only with itself *)
+  val create_uniq_type : unit -> type_expr
+    
+  val close_gen_vars : type_expr -> unit
+
+end = struct
+  open Types
   open Btype
   open Ctype
+
   let repr_desc ty = (repr ty).desc
 
   let expand_repr_desc env ty = (repr & expand_head env ty).desc
@@ -248,242 +376,254 @@ module Types = struct
     | _ -> assert false
 end
 
-
-open List
-
-open Longident
-open Path
-open Types
-
-let scrape_sg env mdecl = 
-  try
-    match Env.scrape_alias env @@ Mtype.scrape env mdecl.Types.md_type with
-    | Mty_signature sg -> sg
-    | Mty_functor _ -> [] (* We do not scan the internals of functors *)
-    | _ -> assert false
-  with
-  | e -> 
-      Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
-      raise e
-  
-let fold_module env path init f =
-  (* Format.eprintf "fold_module %a@." Printtyp.path path; *)
-  let mdecl = Env.find_module path env in
-  let mty = mdecl.Types.md_type in
-  let sg : Types.signature = scrape_sg env mdecl in
-  let id = Ident.create "Dummy" in
-  let env' = Env.add_module id mty Env.empty in
-  let lid id = Longident.(Ldot (Lident "Dummy", id.Ident.name)) in
-  let pathfix p = match p with
-    | Path.Pdot (Path.Pident _, s, n) -> Path.(Pdot (path, s, n))
-    | _ -> assert false
-  in
-  List.fold_left (fun st i ->
-      let x = match i with
-        | Sig_value (id, _vdesc) ->
-            let p, vdesc = Env.lookup_value (lid id) env' in
-            `Value (id, pathfix p, vdesc)
-        | Sig_type (id, td, _) ->
-            let p = Env.lookup_type (lid id) env' in
-            `Type (id, pathfix p, td)
-        | Sig_typext (id, ec, _) ->
-            let p = Env.lookup_type (lid id) env' in
-            `Typext (id, pathfix p, ec)
-        | Sig_module (id, mdecl, _) ->
-            let p = Env.lookup_module ~load:false (lid id) env' in
-            `Module (id, pathfix p, mdecl)
-        | Sig_modtype (id, _) ->
-            let p, mdtd = Env.lookup_modtype (lid id) env' in
-            `Modtype (id, pathfix p, mdtd)
-        | Sig_class (id, _, _) ->
-            let p, cd = Env.lookup_class (lid id) env' in
-            `Class (id, pathfix p, cd)
-        | Sig_class_type (id, _, _) ->
-            let p, ctd = Env.lookup_cltype (lid id) env' in
-            `Cltype (id, pathfix p, ctd)
-      in
-      f st x) init sg
-  
-(** Build an empty type env except mp module with the given module type *)
-class dummy_module env mp mty =
-  (* Env.lookup_* does not support Mty_alias (and probably Mty_indent) *)
-  let mty = Env.scrape_alias env & Mtype.scrape env mty in
-(*
-  let () = !!% "dummy_module of @[%a@]@." Printtyp.modtype mty in 
-*)
-  let dummy = "Dummy" in
-  let id = Ident.create "Dummy" in
-  let env = Env.add_module id mty Env.empty in
-object
-
-  method lookup_type s =
-    match Env.lookup_type (Longident.(Ldot (Lident dummy, s))) env with
-    | Pdot (_, s', n) as p ->
-       let td = Env.find_type p env in
-       Pdot (mp, s', n), td
-    | _ -> assert false (* impos *)
-
-  method lookup_module s =
-    match Env.lookup_module ~load:false (Longident.(Ldot (Lident dummy, s))) env with
-    | Pdot (_, s', n) -> Pdot (mp, s', n)
-    | _ -> assert false (* impos *)
-    
-  method lookup_value s =
-    match Env.lookup_value (Longident.(Ldot (Lident dummy, s))) env with
-    | Pdot (_, s', n), _vd -> Pdot (mp, s', n)
-    | _ -> assert false (* impos *)
-    
+module Types = struct
+  include Types
+  include XTypes
 end
 
-let mangle s = 
-  let len = String.length s in
-  let b = Buffer.create len in
-  for i = 0 to len - 1 do
-    let c = String.unsafe_get s i in
-    match c with
-    | 'A'..'Z' | 'a'..'z' | '0'..'9' | '\'' -> Buffer.add_char b c
-    | '_' -> Buffer.add_string b "__"
-    | _ -> 
-        Buffer.add_char b '_';
-        Buffer.add_string b & Printf.sprintf "%02x" & Char.code c
-  done;
-  Buffer.contents b
+module XEnv : sig
+  val scrape_sg : Env.t -> Types.module_declaration -> Types.signature
 
-(* CR jfuruse: need tests *)
-let unmangle s = 
-  try
+  val fold_module
+    : Env.t
+    -> Path.t
+    -> 'a
+    -> ('a
+        -> [> `Class of Ident.t * Path.t * Types.class_declaration
+           |  `Cltype of Ident.t * Path.t * Types.class_type_declaration
+           |  `Modtype of Ident.t * Path.t * Types.modtype_declaration
+           |  `Module of Ident.t * Path.t * Types.module_declaration
+           |  `Type of Ident.t * Path.t * Types.type_declaration
+           |  `Typext of Ident.t * Path.t * Types.extension_constructor
+           |  `Value of Ident.t * Path.t * Types.value_description
+           ]
+        -> 'a)
+    -> 'a
+
+  class dummy_module
+    : Env.t
+      -> Path.t
+      -> Types.module_type ->
+      object
+        method lookup_module : string -> Path.t
+        method lookup_type   : string -> Path.t * Types.type_declaration
+        method lookup_value  : string -> Path.t
+      end
+
+  val values_of_module : recursive:bool -> Env.t -> Location.t -> Path.t -> Path.t list
+
+end = struct
+  open Types
+  open Path
+      
+  let scrape_sg env mdecl = 
+    try
+      match Env.scrape_alias env @@ Mtype.scrape env mdecl.Types.md_type with
+      | Mty_signature sg -> sg
+      | Mty_functor _ -> [] (* We do not scan the internals of functors *)
+      | _ -> assert false
+    with
+    | e -> 
+        Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
+        raise e
+
+  let fold_module env path init f =
+    (* Format.eprintf "fold_module %a@." Printtyp.path path; *)
+    let mdecl = Env.find_module path env in
+    let mty = mdecl.Types.md_type in
+    let sg : Types.signature = scrape_sg env mdecl in
+    let id = Ident.create "Dummy" in
+    let env' = Env.add_module id mty Env.empty in
+    let lid id = Longident.(Ldot (Lident "Dummy", id.Ident.name)) in
+    let pathfix p = match p with
+      | Path.Pdot (Path.Pident _, s, n) -> Path.(Pdot (path, s, n))
+      | _ -> assert false
+    in
+    List.fold_left (fun st i ->
+        let x = match i with
+          | Sig_value (id, _vdesc) ->
+              let p, vdesc = Env.lookup_value (lid id) env' in
+              `Value (id, pathfix p, vdesc)
+          | Sig_type (id, td, _) ->
+              let p = Env.lookup_type (lid id) env' in
+              `Type (id, pathfix p, td)
+          | Sig_typext (id, ec, _) ->
+              let p = Env.lookup_type (lid id) env' in
+              `Typext (id, pathfix p, ec)
+          | Sig_module (id, mdecl, _) ->
+              let p = Env.lookup_module ~load:false (lid id) env' in
+              `Module (id, pathfix p, mdecl)
+          | Sig_modtype (id, _) ->
+              let p, mdtd = Env.lookup_modtype (lid id) env' in
+              `Modtype (id, pathfix p, mdtd)
+          | Sig_class (id, _, _) ->
+              let p, cd = Env.lookup_class (lid id) env' in
+              `Class (id, pathfix p, cd)
+          | Sig_class_type (id, _, _) ->
+              let p, ctd = Env.lookup_cltype (lid id) env' in
+              `Cltype (id, pathfix p, ctd)
+        in
+        f st x) init sg
+
+  (* XXX I believe now fold_module is for it *)
+  (** Build an empty type env except mp module with the given module type *)
+  class dummy_module env mp mty =
+    (* Env.lookup_* does not support Mty_alias (and probably Mty_indent) *)
+    let mty = Env.scrape_alias env & Mtype.scrape env mty in
+  (*
+    let () = !!% "dummy_module of @[%a@]@." Printtyp.modtype mty in 
+  *)
+    let dummy = "Dummy" in
+    let id = Ident.create "Dummy" in
+    let env = Env.add_module id mty Env.empty in
+  object
+  
+    method lookup_type s =
+      match Env.lookup_type (Longident.(Ldot (Lident dummy, s))) env with
+      | Pdot (_, s', n) as p ->
+         let td = Env.find_type p env in
+         Pdot (mp, s', n), td
+      | _ -> assert false (* impos *)
+  
+    method lookup_module s =
+      match Env.lookup_module ~load:false (Longident.(Ldot (Lident dummy, s))) env with
+      | Pdot (_, s', n) -> Pdot (mp, s', n)
+      | _ -> assert false (* impos *)
+      
+    method lookup_value s =
+      match Env.lookup_value (Longident.(Ldot (Lident dummy, s))) env with
+      | Pdot (_, s', n), _vd -> Pdot (mp, s', n)
+      | _ -> assert false (* impos *)
+      
+  end
+
+  (* XXX pretty sure we do not need it any more *)
+  let rec values_of_module ~recursive env path mdecl : Path.t list =
+    let m = new dummy_module env path mdecl.md_type in
+    let sg = scrape_sg env mdecl in
+    flip2 fold_right sg [] & fun sitem st -> match sitem with
+      | Sig_value (id, _vdesc) ->
+          let path = try m#lookup_value & Ident.name id with Not_found ->
+            !!% "values_of_module: m#lookup_value %s not found@." & Ident.name id;
+            assert false
+          in
+          path :: st
+      | Sig_module (id, moddecl, _) when recursive -> 
+          let path = m#lookup_module & Ident.name id in
+          values_of_module ~recursive env path moddecl @ st
+            
+      | _ -> st
+
+  let check_module env loc path =
+    match 
+      try Some (Env.find_module path env) with _ -> None
+    with
+    | None -> 
+        raise_errorf "%a: no module desc found: %a" Location.format loc Path.format path
+    | Some mdecl -> mdecl
+  
+  (* XXX pretty sure we do not need it any more *)
+  let values_of_module ~recursive env loc path =
+    let mdecl = check_module env loc path in
+    values_of_module ~recursive env path mdecl
+end
+
+module Env = struct
+  include Env
+  include XEnv
+end
+
+module Mangle : sig
+  val mangle : string -> string
+  val unmangle : string -> (string, [> `Failed_unmangle of string ]) result
+end = struct
+  let mangle s = 
     let len = String.length s in
     let b = Buffer.create len in
-    let rec f i = 
-      if i = len then ()
-      else begin
-        let c = String.unsafe_get s i in
-        match c with
-        | 'A'..'Z' | 'a'..'z' | '0'..'9' | '\'' -> Buffer.add_char b c; f & i+1
-        | '_' -> 
-            begin match s.[i+1] with
-            | '_' -> Buffer.add_char b '_'; f & i+2
-            | _ ->
-                let hex = String.sub s (i+1) 2 in
-                let c = Char.chr & int_of_string & "0x" ^ hex in
-                Buffer.add_char b c;
-                f & i+3
-            end
-        | _ -> raise Exit
-      end
-    in
-    f 0;
-    Ok (Buffer.contents b)
-  with
-  | Failure e -> Error (`Failed_unmangle (s ^ ": " ^ e))
+    for i = 0 to len - 1 do
+      let c = String.unsafe_get s i in
+      match c with
+      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '\'' -> Buffer.add_char b c
+      | '_' -> Buffer.add_string b "__"
+      | _ -> 
+          Buffer.add_char b '_';
+          Buffer.add_string b & Printf.sprintf "%02x" & Char.code c
+    done;
+    Buffer.contents b
+  
+  (* CR jfuruse: need tests *)
+  let unmangle s = 
+    try
+      let len = String.length s in
+      let b = Buffer.create len in
+      let rec f i = 
+        if i = len then ()
+        else begin
+          let c = String.unsafe_get s i in
+          match c with
+          | 'A'..'Z' | 'a'..'z' | '0'..'9' | '\'' -> Buffer.add_char b c; f & i+1
+          | '_' -> 
+              begin match s.[i+1] with
+              | '_' -> Buffer.add_char b '_'; f & i+2
+              | _ ->
+                  let hex = String.sub s (i+1) 2 in
+                  let c = Char.chr & int_of_string & "0x" ^ hex in
+                  Buffer.add_char b c;
+                  f & i+3
+              end
+          | _ -> raise Exit
+        end
+      in
+      f 0;
+      Ok (Buffer.contents b)
+    with
+    | Failure e -> Error (`Failed_unmangle (s ^ ": " ^ e))
+end
 
-let expression_from_string s = 
-  let lexbuf = Lexing.from_string s in
-  try Ok (Parser.parse_expression Lexer.token lexbuf) with
-  | _ -> Error (`Parse s)
+module XParser : sig
+  val expression_from_string : string -> (Parsetree.expression, [>`Parse of string]) result
+end = struct
+  let expression_from_string s = 
+    let lexbuf = Lexing.from_string s in
+    try Ok (Parser.parse_expression Lexer.token lexbuf) with
+    | _ -> Error (`Parse s)
+end
 
-let tvars_of_core_type cty =
-  (* Using mapper for iterator is redundant, but easiest way *)
-  let open Ast_mapper in
-  let open Parsetree in
-  let vars = ref [] in
-  let extend super =
-    let typ self ty =
-      match ty.ptyp_desc with
-      | Ptyp_var s ->
-          if not & mem s !vars then vars := s :: !vars;
-          ty
-      | _ -> super.typ self ty
-    in
-    { super with typ }
-  in
-  let m = extend default_mapper in
-  ignore & m.typ m cty;
-  !vars
+module Parser = struct
+  include Parser
+  include XParser
+end
 
-let sig_module_of_stri sitem =
-  let open Parsetree in
-  match sitem.pstr_desc with
-  | Pstr_modtype mtd ->
-      Ast_helper.Sig.module_ ~loc:sitem.pstr_loc
-        { pmd_name       = mtd.pmtd_name
-        ; pmd_type       = from_Some mtd.pmtd_type
-        ; pmd_attributes = mtd.pmtd_attributes
-        ; pmd_loc        = mtd.pmtd_loc
-        }
-  | _ ->
-      !!% "sig_module_of_stri: got a non modtype@.";
-      assert false
+open List
+open Longident
+open Types
 
+module XTypedtree : sig
+  val format_expression : Typedtree.expression Format.fmt
+  val is_none : Typedtree.expression -> Types.type_expr option
+end = struct
+  let format_expression ppf e =
+    Pprintast.expression ppf
+    & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
+  
+  let is_none e =
+    let open Typedtree in
+    match e.Typedtree.exp_desc with
+    | Texp_construct ({Location.txt=Lident "None"}, _, []) -> 
+        begin match is_option_type e.exp_env e.exp_type with
+        | None ->
+            !!% "is_none: the input is type-corrupted@."; assert false
+        | Some ty -> Some ty
+        end
+    | _ -> None
+  
+end
 
-let rec values_of_module ~recursive env path mdecl : Path.t list =
-  let m = new dummy_module env path mdecl.md_type in
-  let sg = scrape_sg env mdecl in
-  flip2 fold_right sg [] & fun sitem st -> match sitem with
-    | Sig_value (id, _vdesc) ->
-        let path = try m#lookup_value & Ident.name id with Not_found ->
-          !!% "values_of_module: m#lookup_value %s not found@." & Ident.name id;
-          assert false
-        in
-        path :: st
-    | Sig_module (id, moddecl, _) when recursive -> 
-        let path = m#lookup_module & Ident.name id in
-        values_of_module ~recursive env path moddecl @ st
-          
-    | _ -> st
+module Typedtree = struct
+  include Typedtree
+  include XTypedtree
+end
 
-let check_module env loc path =
-  match 
-    try Some (Env.find_module path env) with _ -> None
-  with
-  | None -> 
-      raise_errorf "%a: no module desc found: %a" Location.format loc Path.format path
-  | Some mdecl -> mdecl
-
-let values_of_module ~recursive env loc path =
-  let mdecl = check_module env loc path in
-  values_of_module ~recursive env path mdecl
-
-let format_expression ppf e =
-  Pprintast.expression ppf
-  & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
-
-let is_none e =
-  let open Typedtree in
-  match e.Typedtree.exp_desc with
-  | Texp_construct ({Location.txt=Lident "None"}, _, []) -> 
-      begin match is_option_type e.exp_env e.exp_type with
-      | None ->
-          !!% "is_none: the input is type-corrupted@."; assert false
-      | Some ty -> Some ty
-      end
-  | _ -> None
-
-
-      
-
-(*
-(** Typing tools *)
-    
-val scrape_sg : Env.t -> Types.module_declaration -> Types.signature
-
-val fold_module
-  : Env.t
-  -> Path.t
-  -> 'a ->
-  ('a
-   -> [> `Class   of Ident.t * Path.t * Types.class_declaration
-       | `Cltype  of Ident.t * Path.t * Types.class_type_declaration
-       | `Modtype of Ident.t * Path.t * Types.modtype_declaration
-       | `Module  of Ident.t * Path.t * Types.module_declaration
-       | `Type    of Ident.t * Path.t * Types.type_declaration
-       | `Typext  of Ident.t * Path.t * Types.extension_constructor
-       | `Value   of Ident.t * Path.t * Types.value_description ]
-   -> 'a)
-  -> 'a
-
-*)
-    
 module Forge = struct
   (* We should not use this module as possible, since it only fakes
      Typedtree data with incorrect types. *)
@@ -659,7 +799,7 @@ module Forge = struct
   
     let mark txt e =
       { e
-        with exp_attributes= ( {txt; loc= Ast_helper.ghost e.exp_loc}
+        with exp_attributes= ( {txt; loc= Location.ghost e.exp_loc}
                              , Parsetree.PStr []) 
                              :: e.exp_attributes }
         
@@ -711,11 +851,4 @@ module Forge = struct
   end
 end
 
-let at ?loc txt = 
-  let loc = match loc with 
-    | None -> !Ast_helper.default_loc
-    | Some loc -> loc
-  in
-  { txt; loc }
-
-let (!@) x = at x
+include Location.Open

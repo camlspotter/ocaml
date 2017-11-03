@@ -76,7 +76,7 @@ module Candidate = struct
   let format ppf c =
     Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
       Path.format c.path
-      format_expression c.expr
+      Typedtree.format_expression c.expr
       Printtyp.type_scheme c.type_
       
   let uniq xs =
@@ -140,7 +140,7 @@ module Candidate = struct
     | Some open_ ->
         (*  !!% "open %a@." Path.format open_; *)
         let mdecl = Env.find_module open_ env in (* It should succeed *)
-        let sg = scrape_sg env mdecl in
+        let sg = Env.scrape_sg env mdecl in
         let env = Env.open_signature Fresh open_ sg Env.empty in
         flip filter_map lids (fun lid ->
           try
@@ -187,7 +187,7 @@ module Candidate = struct
           with
           | Not_found -> raise_errorf "%a: Unbound module %a." Location.format loc Longident.format lid
     in
-    let paths = values_of_module ~recursive env loc path in
+    let paths = Env.values_of_module ~recursive env loc path in
     map (default_candidate_of_path env) paths
   
   let cand_opened env loc (flg,lid) =
@@ -443,16 +443,16 @@ end = struct
     | _ -> assert false (* impos *)
   
   let mangle x =
-    (prefix ^ mangle (to_string x),
+    (prefix ^ Mangle.mangle (to_string x),
      get_type_components x)
   
   (* CR jfuruse: need tests *)
   let unmangle_spec_string s = 
     if not & String.is_prefix prefix s then raise_errorf "Mangled spec string does not start with \"Spec_\": %s" s;
     let s = String.sub s prefix_len (String.length s - prefix_len) in
-    unmangle s
+    Mangle.unmangle s
   
-  let from_string = expression_from_string
+  let from_string = XParser.expression_from_string
   
   let from_expression _env e =
     let open Longident in
@@ -592,7 +592,7 @@ end = struct
     let mangled, ctys = mangle spec in
     let label n = !@ ("l" ^ string_of_int n) in
     let make_meth_type cty =  (* quantify cty *)
-      Typ.poly (map (!@) & tvars_of_core_type cty) cty
+      Typ.poly (map (!@) & XParsetree.tvars_of_core_type cty) cty
     in
     let oty = Typ.object_ (mapi (fun n cty -> (label n, [], make_meth_type cty)) ctys) Closed
     in
@@ -1079,7 +1079,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
                                           aggressive = false } ) 
                                   :: !derived_candidates;
             let case = { case with
-              c_lhs = Forge.(with_loc p.pat_loc & fun () -> Pat.desc (Tpat_alias (p, id, {txt=fid; loc= Ast_helper.ghost p.pat_loc})))} 
+              c_lhs = Forge.(with_loc p.pat_loc & fun () -> Pat.desc (Tpat_alias (p, id, {txt=fid; loc= Location.ghost p.pat_loc})))} 
             in
             let e = retype e.exp_env { e with exp_desc = Texp_function { arg_label=l; param; cases= [case]; partial } } e.exp_type
             in
