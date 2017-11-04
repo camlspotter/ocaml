@@ -1,13 +1,13 @@
-(* (@@) is too strong *)
-external ( & ) : ('a -> 'b) -> 'a -> 'b = "%apply"
-
-let (!!%) = Format.eprintf
-
-let flip f x y = f y x
-let flip2 f x y z = f z x y
+module Open = struct
+  (* (@@) is too strong *)
+  external ( & ) : ('a -> 'b) -> 'a -> 'b = "%apply"
   
-module Format = struct
-  include Format
+  let flip f x y = f y x
+  let flip2 f x y z = f z x y
+end
+  
+module XFormat = struct
+  open Format
 
   type t = formatter
 
@@ -26,6 +26,25 @@ module Format = struct
   let wrapf left right ppf fmt =
     left ppf;
     kfprintf right ppf fmt
+      
+  let warnf fmt =
+    wrapf
+      (fun ppf -> fprintf ppf "@[<2>Warning: ")
+      (fun ppf -> fprintf ppf "@]@.")
+      err_formatter fmt
+
+  let (!!%) = Format.eprintf
+
+  module Open = struct
+    let (!!%) = (!!%)
+
+    let warnf = warnf
+  end
+end
+
+module Format = struct
+  include Format
+  include XFormat
 end
   
 module Option = struct
@@ -37,10 +56,6 @@ module Option = struct
     | Some x -> [x]
     | None -> []
 
-  exception Is_None
-  let from_Some = function
-    | Some x -> x
-    | None -> raise Is_None
   module Monad = struct
     let return x = Some x
     let some = return
@@ -53,12 +68,17 @@ module Option = struct
   let format f ppf = function
     | None -> pp_print_string ppf "None"
     | Some v -> fprintf ppf "@[<2>Some@ (@[%a@])@]" f v
+
+  module Open = struct
+    exception Is_None
+    let from_Some = function
+      | Some x -> x
+      | None -> raise Is_None
+  end
 end
 
-let from_Some = Option.from_Some
-  
-module List = struct
-  include List
+module XList = struct
+  open List
 
   let rec filter_map f = function
     | [] -> []
@@ -110,8 +130,14 @@ module List = struct
   	(format sep f) xs
 end 
 
-module String = struct
-  include String
+module List = struct
+  include List
+  include XList
+end
+
+module XString = struct
+  open String
+
   let is_prefix p s = try sub s 0 (length p) = p with _ -> false
 
   let drop len str = String.sub str len (String.length str - len)
@@ -124,13 +150,21 @@ module String = struct
     with _ -> None
 end 
 
-module Hashtbl = struct
-  include Hashtbl
+module String = struct
+  include String
+  include XString
+end
+
+module XHashtbl = struct
   let to_list tbl = Hashtbl.fold (fun k v st -> (k,v) :: st) tbl []
 end
 
-module Filename = struct
-  include Filename
+module Hashtbl = struct
+  include Hashtbl
+  include XHashtbl
+end
+
+module XFilename = struct
   let split_extension s =
     let open String in
     try
@@ -140,6 +174,11 @@ module Filename = struct
     | _ -> s, "" 
 end
 
+module Filename = struct
+  include Filename
+  include XFilename
+end
+
 module Result = struct
   type ('a, 'err) t = ('a, 'err) result
 
@@ -147,26 +186,42 @@ module Result = struct
     | Ok v -> v
     | Error e -> f e
 
+  module Open = struct
+    let at_Error = at_Error
+  end
+  
   module Monad = struct
     let (>>=) x f = match x with Error e -> Error e | Ok v -> f v
   end
 end
 
-let at_Error = Result.at_Error
+module Exn = struct
+  let protect f = try Ok (f ()) with e -> Error e
 
-let protect f = try Ok (f ()) with e -> Error e
+  let unprotect = function
+    | Ok v -> v
+    | Error e -> raise e
 
-let unprotect = function
-  | Ok v -> v
-  | Error e -> raise e
+  let exit_then d f = try f () with Exit -> d
 
-let warnf fmt =
-  let open Format in
-  wrapf
-    (fun ppf -> fprintf ppf "@[<2>Warning: ")
-    (fun ppf -> fprintf ppf "@]@.")
-    err_formatter fmt
+  module Open = struct
+    let protect = protect
+    let unprotect = unprotect
+    let exit_then = exit_then
+  end
+end
 
-let exit_then d f = try f () with Exit -> d
+module XSys = struct
+  let env_exist s = try ignore (Sys.getenv s); true with _ -> false
+end
 
-let env_exist s = try ignore (Sys.getenv s); true with _ -> false
+module Sys = struct
+  include Sys
+  include XSys
+end
+
+include Open
+include Format.Open
+include Option.Open
+include Result.Open
+include Exn.Open

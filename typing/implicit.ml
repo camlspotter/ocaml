@@ -8,8 +8,8 @@ module Debug : sig
   val debug_resolve : bool
   val debug_unif : bool
 end = struct
-  let debug_resolve = env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
-  let debug_unif    = env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
+  let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
+  let debug_unif    = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
 end
 
 module Klabel = struct
