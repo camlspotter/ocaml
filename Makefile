@@ -89,6 +89,7 @@ UTILS=utils/config.cmo utils/misc.cmo \
   utils/consistbl.cmo \
   utils/strongly_connected_components.cmo \
   utils/targetint.cmo \
+  utils/leopardfeatures.cmo \
   utils/leopardutils.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
@@ -109,7 +110,6 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/printtyp.cmo typing/includeclass.cmo \
   typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
   typing/typedtreeIter.cmo typing/typedtreeMap.cmo \
-  typing/leopardtype.cmo \
   typing/tast_mapper.cmo \
   typing/cmt_format.cmo typing/untypeast.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \

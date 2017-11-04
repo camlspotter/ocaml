@@ -721,9 +721,9 @@ module Runtime = struct
 
    (** [Leopard.Implicits.t] *)
    let is_imp_t_path = function
-    | Path.(Pdot(Pdot(Pident{Ident.name="Leopard"},
-                      "Implicits", _),
-                 "t", _)) -> true
+    | Path.Pdot(Path.Pdot(Path.Pident {Ident.name="Leopard"},
+                          "Implicits", _),
+                 "t", _) -> true
     | _ -> false
 
    (** [embed e] builds [Leopard.Implicits.embed <e>] *)
@@ -1105,5 +1105,5 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardtype.overload then Map.map_structure str
+  if !Leopardfeatures.overload then Map.map_structure str
   else str

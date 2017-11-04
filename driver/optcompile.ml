@@ -145,7 +145,7 @@ let implementation ~backend ppf sourcefile outputprefix =
         Warnings.check_fatal ();
         Stypes.dump (Some (outputprefix ^ ".annot"));
 
-        Leopardtype.without_leopard (fun () ->
+        Leopardfeatures.without_leopard (fun () ->
             Compmisc.init_path false;
             Env.set_unit_name modulename;
             let env = Compmisc.initial_env() in

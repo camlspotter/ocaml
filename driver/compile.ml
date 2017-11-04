@@ -139,7 +139,7 @@ let implementation ppf sourcefile outputprefix =
     let (typedtree, coercion) =
       if !Clflags.no_retype then (typedtree, coercion)
       else begin
-        Leopardtype.without_leopard (fun () ->
+        Leopardfeatures.without_leopard (fun () ->
             Compmisc.init_path false;
             Env.set_unit_name modulename;
             let env = Compmisc.initial_env() in

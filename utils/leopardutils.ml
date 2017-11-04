@@ -1,7 +1,12 @@
-module Open = struct
+module Open : sig
+  (** Same as [(@@)], but slightly weaker *)
+  external ( & ) : ('a -> 'b) -> 'a -> 'b = "%apply"
+
+  val flip : ('a -> 'b -> 'c) -> 'b -> 'a -> 'c
+  val flip2 : ('a -> 'b -> 'c -> 'd) -> 'b -> 'c -> 'a -> 'd
+end = struct
   (* (@@) is too strong *)
   external ( & ) : ('a -> 'b) -> 'a -> 'b = "%apply"
-  
   let flip f x y = f y x
   let flip2 f x y z = f z x y
 end
