@@ -4,13 +4,24 @@ module Open : sig
 
   val flip : ('a -> 'b -> 'c) -> 'b -> 'a -> 'c
   val flip2 : ('a -> 'b -> 'c -> 'd) -> 'b -> 'c -> 'a -> 'd
+  val with_begin_end : string -> (unit -> 'a) -> 'a
 end = struct
   (* (@@) is too strong *)
   external ( & ) : ('a -> 'b) -> 'a -> 'b = "%apply"
   let flip f x y = f y x
   let flip2 f x y z = f z x y
+
+  let with_begin_end n f =
+    prerr_endline ("begin " ^ n);
+    let res = f () in
+    prerr_endline ("end " ^ n);
+    res
 end
-  
+
+module Either = struct
+  type ('a, 'b) t = Left of 'a | Right of 'b
+end
+
 module XFormat = struct
   open Format
 
@@ -82,7 +93,18 @@ module Option = struct
   end
 end
 
-module XList = struct
+module XList : sig
+  val filter_map : ('a -> 'b option) -> 'a list -> 'b list
+  val concat_map : ('a -> 'b list) -> 'a list -> 'b list
+  val partition_map : ('a -> ('l, 'r) Either.t) -> 'a list -> ('l list * 'r list)
+  val from_to : int -> int -> int list
+  val split_at : int -> 'a list -> 'a list * 'a list
+  val format :
+    (unit, Format.formatter, unit) format ->
+    (Format.formatter -> 'a -> unit) ->
+    Format.formatter -> 'a list -> unit
+
+end = struct
   open List
 
   let rec filter_map f = function
@@ -93,15 +115,13 @@ module XList = struct
 
   let concat_map f xs = concat (map f xs)
 
-  let assoc_opt x xs = try Some (assoc x xs) with _ -> None
-
   let partition_map f xs =
     let rec part left right = function
       | [] -> rev left, rev right
       | x::xs ->
           match f x with
-          | `Left v -> part (v::left) right xs
-          | `Right v -> part left (v::right) xs
+          | Either.Left v -> part (v::left) right xs
+          | Either.Right v -> part left (v::right) xs
     in
     part [] [] xs
 

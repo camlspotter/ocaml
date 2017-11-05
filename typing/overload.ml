@@ -36,9 +36,9 @@ let resolve_overloading exp ({loc=_loc} as lidloc) path =
   let rec find_candidates env (path : Path.t) =
     (* Format.eprintf "Find_candidates %a@." Printtyp.path path; *)
     Env.fold_module env path [] @@ fun st -> function
-    | `Value (id, path, vdesc) when Ident.name id = name -> 
+    | Env.Value (id, path, vdesc) when Ident.name id = name -> 
         if test env exp.exp_type vdesc then (path, vdesc) :: st else st
-    | `Module (_id, path, _moddecl) ->
+    | Env.Module (_id, path, _moddecl) ->
         find_candidates env path @ st
     | _ -> st
   in
@@ -52,7 +52,7 @@ let resolve_overloading exp ({loc=_loc} as lidloc) path =
   match
     (* Here Env.empty must be used! ... Really!??!  How about local overloading? *)
     Env.fold_module env mpath [] @@ fun st -> function
-    | `Module (_id, path, _) ->
+    | Env.Module (_id, path, _) ->
         (* Format.eprintf "%s %a@." name Printtyp.path path; *)
         find_candidates env path @ st
     | _ -> st

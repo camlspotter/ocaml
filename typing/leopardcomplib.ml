@@ -216,8 +216,8 @@ end = struct
     in
     let graph, nonrecs = List.partition_map (fun td ->
       match mutually_defined td with
-      | [] -> `Right td.ptype_name.txt
-      | ns -> `Left (td.ptype_name.txt, ns)) tds
+      | [] -> Either.Right td.ptype_name.txt
+      | ns -> Either.Left (td.ptype_name.txt, ns)) tds
     in
     let groups = sccs graph in
     (List.map (List.map (flip List.assoc alist)) groups,
@@ -384,19 +384,21 @@ end
 module XEnv : sig
   val scrape_sg : Env.t -> Types.module_declaration -> Types.signature
 
+  type fold = 
+    | Class of Ident.t * Path.t * Types.class_declaration
+    | Cltype of Ident.t * Path.t * Types.class_type_declaration
+    | Modtype of Ident.t * Path.t * Types.modtype_declaration
+    | Module of Ident.t * Path.t * Types.module_declaration
+    | Type of Ident.t * Path.t * Types.type_declaration
+    | Typext of Ident.t * Path.t * Types.extension_constructor
+    | Value of Ident.t * Path.t * Types.value_description
+
   val fold_module
     : Env.t
     -> Path.t
     -> 'a
     -> ('a
-        -> [> `Class of Ident.t * Path.t * Types.class_declaration
-           |  `Cltype of Ident.t * Path.t * Types.class_type_declaration
-           |  `Modtype of Ident.t * Path.t * Types.modtype_declaration
-           |  `Module of Ident.t * Path.t * Types.module_declaration
-           |  `Type of Ident.t * Path.t * Types.type_declaration
-           |  `Typext of Ident.t * Path.t * Types.extension_constructor
-           |  `Value of Ident.t * Path.t * Types.value_description
-           ]
+        -> fold
         -> 'a)
     -> 'a
 
@@ -427,6 +429,15 @@ end = struct
         Format.eprintf "scraping failed: %s" @@ Printexc.to_string e;
         raise e
 
+  type fold = 
+    | Class of Ident.t * Path.t * Types.class_declaration
+    | Cltype of Ident.t * Path.t * Types.class_type_declaration
+    | Modtype of Ident.t * Path.t * Types.modtype_declaration
+    | Module of Ident.t * Path.t * Types.module_declaration
+    | Type of Ident.t * Path.t * Types.type_declaration
+    | Typext of Ident.t * Path.t * Types.extension_constructor
+    | Value of Ident.t * Path.t * Types.value_description
+
   let fold_module env path init f =
     (* Format.eprintf "fold_module %a@." Printtyp.path path; *)
     let mdecl = Env.find_module path env in
@@ -443,25 +454,25 @@ end = struct
         let x = match i with
           | Sig_value (id, _vdesc) ->
               let p, vdesc = Env.lookup_value (lid id) env' in
-              `Value (id, pathfix p, vdesc)
+              Value (id, pathfix p, vdesc)
           | Sig_type (id, td, _) ->
               let p = Env.lookup_type (lid id) env' in
-              `Type (id, pathfix p, td)
+              Type (id, pathfix p, td)
           | Sig_typext (id, ec, _) ->
               let p = Env.lookup_type (lid id) env' in
-              `Typext (id, pathfix p, ec)
+              Typext (id, pathfix p, ec)
           | Sig_module (id, mdecl, _) ->
               let p = Env.lookup_module ~load:false (lid id) env' in
-              `Module (id, pathfix p, mdecl)
+              Module (id, pathfix p, mdecl)
           | Sig_modtype (id, _) ->
               let p, mdtd = Env.lookup_modtype (lid id) env' in
-              `Modtype (id, pathfix p, mdtd)
+              Modtype (id, pathfix p, mdtd)
           | Sig_class (id, _, _) ->
               let p, cd = Env.lookup_class (lid id) env' in
-              `Class (id, pathfix p, cd)
+              Class (id, pathfix p, cd)
           | Sig_class_type (id, _, _) ->
               let p, ctd = Env.lookup_cltype (lid id) env' in
-              `Cltype (id, pathfix p, ctd)
+              Cltype (id, pathfix p, ctd)
         in
         f st x) init sg
 
@@ -535,7 +546,7 @@ end
 
 module Mangle : sig
   val mangle : string -> string
-  val unmangle : string -> (string, [> `Failed_unmangle of string ]) result
+  val unmangle : string -> (string, string) result
 end = struct
   let mangle s = 
     let len = String.length s in
@@ -577,11 +588,11 @@ end = struct
       f 0;
       Ok (Buffer.contents b)
     with
-    | Failure e -> Error (`Failed_unmangle (s ^ ": " ^ e))
+    | Failure e -> Error (s ^ ": " ^ e)
 end
 
 module XParser : sig
-  val expression_from_string : string -> (Parsetree.expression, [>`Parse of string]) result
+  val expression_from_string : string -> (Parsetree.expression, [> `Parse of string]) result
 end = struct
   let expression_from_string s = 
     let lexbuf = Lexing.from_string s in
@@ -805,8 +816,8 @@ module Forge = struct
         
     let partition_marks e f =
       let g = function
-        | {txt}, Parsetree.PStr [] when f txt -> `Left txt
-        | a -> `Right a
+        | {txt}, Parsetree.PStr [] when f txt -> Either.Left txt
+        | a -> Either.Right a
       in
       let marks, exp_attributes = partition_map g e.exp_attributes in
       marks,

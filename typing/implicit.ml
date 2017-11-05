@@ -848,8 +848,8 @@ module Resolve_result = struct
   let concat xs =
     match
       flip partition_map xs & function
-        | Ok ys -> `Right ys
-        | MayLoop ys -> `Left ys
+        | Ok ys -> Either.Right ys
+        | MayLoop ys -> Either.Left ys
     with
     | [], oks -> Ok (concat oks)
     | mayloops, _ -> MayLoop (concat mayloops)
@@ -1009,6 +1009,7 @@ let resolve env loc spec ty = with_snapshot & fun () ->
 
 let retype env exp expected =
   let uexp = Untypeast.(default_mapper.expr default_mapper) exp in
+  Format.eprintf "Retype: %a@." Pprintast.expression uexp;
   try
     Typecore.type_expect env uexp expected
   with
@@ -1038,6 +1039,7 @@ let resolve_omitted_imp_arg loc env a = match a with
       end
   | _ -> a
 
+(*
 let resolve_imp_prim_arg loc env retty a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
@@ -1060,6 +1062,7 @@ let resolve_imp_prim_arg loc env retty a = match a with
               `Left e''
       end
   | _ -> `Right a
+         *)
 
 module MapArg : TypedtreeMap.MapArgument = struct
   include TypedtreeMap.DefaultMapArgument
@@ -1075,41 +1078,40 @@ module MapArg : TypedtreeMap.MapArgument = struct
   let is_function_id = String.is_prefix "__imp__arg__"
 
   let enter_expression e = match e.exp_desc with
-    | Texp_apply ( ({ exp_loc= floc
-                    ; exp_typ = ftyp
-                    ; exp_desc= Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }})} as f)
-                 , args ) ->
-        let (ty, specopt, _conv, _unconv) =
-          check_arg e.exp_env floc l e.exp_type
-        in
-        let l,retty = match repr_desc ftyp with
-          | Tarrow ((Optional _ as l), _, ty, _) -> l,ty
-          | _ -> assert false
-        in
-        let imps, others = List.partition_map (function
-            | (lab, a) when l = lab ->
-                let (ty, specopt, _conv, _unconv) = check_arg e.exp_env loc l e.exp_type in
-                match specopt with
-                | None -> `Right a (* It is not imp arg *)
-                | Some spec ->
-                    `Left a
-            | a -> `Right a) args
-        in
-        begin match imps with
-        | [] -> 
-            (* Fall back to the normal *)
-            { e with
-              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg floc e.exp_env) args) }
-        | [Some e] -> (* explicitly given *)
-            assert false
-        | [None] -> (* omitted *)
-            let e' = resolve e.exp_env floc spec ty in
-        | _ -> assert false (* impos *)
-        end
     | Texp_apply (f, args) ->
         (* Resolve omitted ?_x arguments *)
-        { e with
-          exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+        let opt e = match e.exp_desc with
+          | Texp_apply ( f, args ) ->
+              begin match f.exp_desc with
+              | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
+                  let l = match repr_desc f.exp_type with
+                    | Tarrow (l, _, _, _) -> l
+                    | _ -> assert false
+                  in
+                  let (lefts, rights) =
+                    partition_map (fun (l',a) ->
+                        if l = l' then Either.Left a else Either.Right (l', a)) args
+                  in
+                  begin match lefts, rights with
+                  | [Some a], [] ->
+                      retype 
+                        e.exp_env
+                        a
+                        e.exp_type
+                  | [Some a], _ ->
+                      retype 
+                        e.exp_env
+                        { e with exp_desc = Texp_apply (a, rights) }
+                        e.exp_type
+                  | _ -> e
+                  end
+              | _ ->e
+              end
+          | _ ->e
+        in
+        opt
+          { e with
+            exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
           
     | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
         (* Eeek, label with multiple cases? *)
@@ -1159,5 +1161,5 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardfeatures.overload then Map.map_structure str
+  if !Leopardfeatures.overload then with_begin_end "map_str" & fun () -> Map.map_structure str
   else str
