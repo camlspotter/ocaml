@@ -1080,6 +1080,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
   let enter_expression e = match e.exp_desc with
     | Texp_apply (f, args) ->
         (* Resolve omitted ?_x arguments *)
+        let un_some e = match e.exp_desc with
+          | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> e
+          | _ -> assert false
+        in
         let opt e = match e.exp_desc with
           | Texp_apply ( f, args ) ->
               begin match f.exp_desc with
@@ -1096,12 +1100,12 @@ module MapArg : TypedtreeMap.MapArgument = struct
                   | [Some a], [] ->
                       retype 
                         e.exp_env
-                        a
+                        (Runtime.get (un_some a))
                         e.exp_type
                   | [Some a], _ ->
                       retype 
                         e.exp_env
-                        { e with exp_desc = Texp_apply (a, rights) }
+                        { e with exp_desc = Texp_apply (Runtime.get (un_some a), rights) }
                         e.exp_type
                   | _ -> e
                   end

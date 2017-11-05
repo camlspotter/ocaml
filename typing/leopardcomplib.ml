@@ -546,7 +546,7 @@ end
 
 module Mangle : sig
   val mangle : string -> string
-  val unmangle : string -> (string, string) result
+  val unmangle : string -> (string, [> `Failed_unmangle of string ]) result
 end = struct
   let mangle s = 
     let len = String.length s in
@@ -588,7 +588,7 @@ end = struct
       f 0;
       Ok (Buffer.contents b)
     with
-    | Failure e -> Error (s ^ ": " ^ e)
+    | Failure e -> Error (`Failed_unmangle (s ^ ": " ^ e))
 end
 
 module XParser : sig
