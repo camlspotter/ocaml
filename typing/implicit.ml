@@ -1038,6 +1038,29 @@ let resolve_omitted_imp_arg loc env a = match a with
       end
   | _ -> a
 
+let resolve_imp_prim_arg loc env retty a = match a with
+  (* (l, None, Optional) means curried *)
+  | ((Optional _ as l), Some e) ->
+      begin match is_none e with
+      | None -> (* explicitly applied *)
+          `Left (Runtime.get e)
+      | Some _ -> (* omitted *)
+          let (ty, specopt, _conv, _unconv) = check_arg env loc l e.exp_type in
+          match specopt with
+          | None -> `Right a (* It is not imp arg *)
+          | Some spec ->
+              let e' = resolve env loc spec ty in
+              prerr_endline "resolve done";
+              (* for retyping, e.exp_env is not suitable, since 
+                 it is made by Typecore.option_none with Env.initial_safe_string
+              *)
+              (* XXX retype is not performed *)
+              let e'' = retype env e' retty in
+              prerr_endline "retype done";
+              `Left e''
+      end
+  | _ -> `Right a
+
 module MapArg : TypedtreeMap.MapArgument = struct
   include TypedtreeMap.DefaultMapArgument
 
@@ -1052,11 +1075,42 @@ module MapArg : TypedtreeMap.MapArgument = struct
   let is_function_id = String.is_prefix "__imp__arg__"
 
   let enter_expression e = match e.exp_desc with
+    | Texp_apply ( ({ exp_loc= floc
+                    ; exp_typ = ftyp
+                    ; exp_desc= Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }})} as f)
+                 , args ) ->
+        let (ty, specopt, _conv, _unconv) =
+          check_arg e.exp_env floc l e.exp_type
+        in
+        let l,retty = match repr_desc ftyp with
+          | Tarrow ((Optional _ as l), _, ty, _) -> l,ty
+          | _ -> assert false
+        in
+        let imps, others = List.partition_map (function
+            | (lab, a) when l = lab ->
+                let (ty, specopt, _conv, _unconv) = check_arg e.exp_env loc l e.exp_type in
+                match specopt with
+                | None -> `Right a (* It is not imp arg *)
+                | Some spec ->
+                    `Left a
+            | a -> `Right a) args
+        in
+        begin match imps with
+        | [] -> 
+            (* Fall back to the normal *)
+            { e with
+              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg floc e.exp_env) args) }
+        | [Some e] -> (* explicitly given *)
+            assert false
+        | [None] -> (* omitted *)
+            let e' = resolve e.exp_env floc spec ty in
+        | _ -> assert false (* impos *)
+        end
     | Texp_apply (f, args) ->
         (* Resolve omitted ?_x arguments *)
         { e with
           exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
-
+          
     | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
         (* Eeek, label with multiple cases? *)
         warnf "%a: Unexpected label with multiple function cases"
