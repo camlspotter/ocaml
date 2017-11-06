@@ -1007,7 +1007,10 @@ let resolve env loc spec ty = with_snapshot & fun () ->
           Unshadow.Replace.replace e
       | _ -> assert false (* impos *)
 
+(* Retyping locally is a bad idea since we have no way to know the correct
+   type level we have to use *)
 let retype exp =
+(*
   let env = exp.exp_env in
   let expected = exp.exp_type in
   let uexp = Untypeast.(default_mapper.expr default_mapper) exp in
@@ -1018,6 +1021,8 @@ let retype exp =
   | e ->
       Format.eprintf "Failed to retype: %a@." Pprintast.expression uexp;
       raise e
+*)
+exp
   
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
@@ -1082,12 +1087,13 @@ module MapArg : TypedtreeMap.MapArgument = struct
   let enter_expression e = match e.exp_desc with
     | Texp_apply (f, args) ->
         (* Resolve omitted ?_x arguments *)
-        let un_some e = match e.exp_desc with
-          | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
-          | _ -> None
-        in
+        (* XXX cleanup *)
         let opt e = match e.exp_desc with
           | Texp_apply ( f, args ) ->
+              let un_some e = match e.exp_desc with
+                | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
+                | _ -> None
+              in
               begin match f.exp_desc with
               | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
                   let l = match repr_desc f.exp_type with
