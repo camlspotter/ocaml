@@ -1007,7 +1007,9 @@ let resolve env loc spec ty = with_snapshot & fun () ->
           Unshadow.Replace.replace e
       | _ -> assert false (* impos *)
 
-let retype env exp expected =
+let retype exp =
+  let env = exp.exp_env in
+  let expected = exp.exp_type in
   let uexp = Untypeast.(default_mapper.expr default_mapper) exp in
   Format.eprintf "Retype: %a@." Pprintast.expression uexp;
   try
@@ -1033,7 +1035,7 @@ let resolve_omitted_imp_arg loc env a = match a with
               (* for retyping, e.exp_env is not suitable, since 
                  it is made by Typecore.option_none with Env.initial_safe_string
               *)
-              let e'' = retype env e' e.exp_type in
+              let e'' = retype { e' with exp_env = env; exp_type = e.exp_type } in
               prerr_endline "retype done";
               (l, Some e'')
       end
@@ -1081,8 +1083,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
     | Texp_apply (f, args) ->
         (* Resolve omitted ?_x arguments *)
         let un_some e = match e.exp_desc with
-          | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> e
-          | _ -> assert false
+          | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
+          | _ -> None
         in
         let opt e = match e.exp_desc with
           | Texp_apply ( f, args ) ->
@@ -1098,15 +1100,16 @@ module MapArg : TypedtreeMap.MapArgument = struct
                   in
                   begin match lefts, rights with
                   | [Some a], [] ->
-                      retype 
-                        e.exp_env
-                        (Runtime.get (un_some a))
-                        e.exp_type
+                      begin match un_some a with
+                      | Some a -> retype { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                      | None -> retype { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                      end
                   | [Some a], _ ->
-                      retype 
-                        e.exp_env
-                        { e with exp_desc = Texp_apply (Runtime.get (un_some a), rights) }
-                        e.exp_type
+                      begin match un_some a with
+                      | Some a -> retype { e with exp_desc = Texp_apply (Runtime.get a, rights) }
+                      | None -> 
+                          retype { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights) }
+                      end
                   | _ -> e
                   end
               | _ ->e
@@ -1141,8 +1144,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
             let case = { case with
               c_lhs = Forge.(with_loc p.pat_loc & fun () -> Pat.desc (Tpat_alias (p, id, {txt=fid; loc= Location.ghost p.pat_loc})))} 
             in
-            let e = retype e.exp_env { e with exp_desc = Texp_function { arg_label=l; param; cases= [case]; partial } } e.exp_type
-            in
+            let e = retype { e with exp_desc = Texp_function { arg_label=l; param; cases= [case]; partial } } in
             Forge.Exp.mark fid e
         end
     | _ -> e
@@ -1165,5 +1167,5 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardfeatures.overload then with_begin_end "map_str" & fun () -> Map.map_structure str
+  if !Leopardfeatures.overload then Map.map_structure str
   else str
