@@ -12,11 +12,25 @@ end = struct
   let debug_unif    = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
 end
 
-module Klabel = struct
+module Klabel : sig
+
+  val is_klabel : Asttypes.arg_label -> [> `Normal | `Optional ] option
+
+  val extract :
+    Env.t
+    -> Types.type_expr
+    -> (Asttypes.arg_label * Types.type_expr) list * Types.type_expr
+
+  val extract_aggressively :
+    Env.t
+    ->  Types.type_expr
+    -> ((Asttypes.arg_label * Types.type_expr) list * Types.type_expr) list
+end = struct
   (** Constraint labels *)
     
   open Types
 
+  (* Constraint labels must start with '_' *)
   let is_klabel = function
     | Labelled s when s.[0] = '_' -> Some `Normal
     | Optional s when s.[0] = '_' -> Some `Optional
@@ -35,7 +49,8 @@ module Klabel = struct
         cs, { (Ctype.newty & Tarrow (l, ty1, ty, x)) with level = ty.level }
   *)
     | _ -> [], ty
-  
+
+  (* In the agressive mode, any argument with gen_vars can be constraint arguments *)
   let rec extract_aggressively env ty =
     let ty = Ctype.expand_head env ty in
     match repr_desc ty with
@@ -56,7 +71,45 @@ module Klabel = struct
   
 end
 
-module Candidate = struct
+module Candidate : sig
+  type t = {
+    path : Path.t;
+    expr : Typedtree.expression;
+    type_ : Types.type_expr;
+    aggressive : bool;
+  }
+
+  val format : t Format.fmt
+
+  val uniq : t list -> t list
+
+  val module_lids_in_open_path :
+    Env.t
+    -> Longident.t list
+    -> Path.t option
+    -> Path.t list
+
+  val expr_of_path :
+    ?loc:Location.t
+    -> Env.t
+    -> Path.t
+    -> Typedtree.expression
+
+  val default_candidate_of_path :
+    Env.t
+    -> Path.t
+    -> t
+
+  val cand_direct :
+    Env.t
+    -> Location.t
+    -> [< `In | `Just ] * Longident.t * Path.t option -> t list
+
+  val cand_opened :
+    Env.t
+    -> Location.t
+    -> [< `In | `Just ] * Longident.t -> t list
+end = struct
   (*
   
     Instance search space specification DSL, mangling to and back from
@@ -88,41 +141,7 @@ module Candidate = struct
       with
       | Not_found -> Hashtbl.add tbl x.path x) xs;
     Hashtbl.to_list tbl |> map snd
-  
-  let get_opens env =
-    let open Env in (* We need this because of -principal *)
-    let rec get = function
-      | Env_empty -> []
-      | Env_value (s, _, _) 
-      | Env_type (s, _, _)
-      | Env_extension (s, _, _)
-      | Env_module (s, _, _)
-      | Env_modtype (s, _, _)
-      | Env_class (s, _, _)
-      | Env_cltype (s, _, _)
-      | Env_constraints (s, _)
-      | Env_functor_arg (s, _) -> get s
-      | Env_open (s, path) -> path :: get s
-    in
-    get & Env.summary env
-  
-  let _dump_summary env =
-    let open Env in
-    let rec dump = function
-      | Env_empty -> ()
-      | Env_value (s, _, _)
-      | Env_extension (s, _, _)
-      | Env_modtype (s, _, _)
-      | Env_class (s, _, _)
-      | Env_cltype (s, _, _)
-      | Env_constraints (s, _)
-      | Env_functor_arg (s, _) -> dump s
-      | Env_type (s, id, _) -> !!% "type %a@." Ident.format id; dump s
-      | Env_module (s, id, _) -> !!% "module %a@." Ident.format id; dump s
-      | Env_open (s, path) -> !!% "open %a@." Path.format path; dump s
-    in
-    dump & Env.summary env
-    
+
   let module_lids_in_open_path env lids = function
     | None -> 
         (* Finds lids in the current scope, but only defined ones in the current scope level.
@@ -191,7 +210,7 @@ module Candidate = struct
     map (default_candidate_of_path env) paths
   
   let cand_opened env loc (flg,lid) =
-    let opens = get_opens env in
+    let opens = Env.get_opens env in
     if Debug.debug_resolve then begin
       !!% "debug_resolve: cand_opened opened paths@.";
       flip iter opens & !!% "  %a@." Path.format
@@ -368,6 +387,7 @@ module Specconv : sig
   open Types
 
   val from_type_expr : Env.t -> Location.t -> type_expr -> Spec.t
+  val from_payload_to_core_type : Location.t -> Parsetree.payload -> Parsetree.core_type
 end = struct
   
   
@@ -605,92 +625,6 @@ end = struct
   
 end
 
-module Tysize : sig 
-  (** Size of type *)
-  type t
-  val lt : t -> t -> bool
-  val to_string : t -> string
-  val format : Format.formatter -> t -> unit
-  val has_var : t -> bool
-  val size : Types.type_expr -> t
-end = struct
-  
-  open Types
-  open Btype
-  
-  type t = (int option, int) Hashtbl.t
-  (** Polynomial. v_1 * 2 + v_2 * 3 + 4 has the following bindings:
-      [(Some 1, 2); (Some 3, 2); (None, 4)]
-  *)
-  
-  let to_string t =
-    let open Printf in
-    String.concat " + "
-    & Hashtbl.fold (fun k v st ->
-      let s = match k,v with
-        | None, _ -> sprintf "%d" v
-        | Some _, 0 -> ""
-        | Some k, 1 -> sprintf "a%d" k
-        | Some k, _ -> sprintf "%d*a%d" v k
-      in
-      s :: st) t []
-      
-  let format ppf t = Format.fprintf ppf "%s" (to_string t)
-      
-  let size ty =
-    let open Hashtbl in
-    let tbl = create 9 in
-    let incr k =
-      try
-        replace tbl k (find tbl k + 1)
-      with
-      | Not_found -> add tbl k 1
-    in
-    let it = 
-      { type_iterators with
-        it_do_type_expr = (fun it ty ->
-          let ty = Ctype.repr ty in
-          begin match ty.desc with
-          | Tvar _ -> incr (Some ty.id)
-          | _ -> incr None
-          end;
-          begin match ty.desc with
-          | Tvariant row -> 
-             (* Tvariant may contain a Tvar at row_more even if it is `closed'. *)
-             let row = row_repr row in
-             if not & static_row row then type_iterators.it_do_type_expr it ty
-          | _ -> type_iterators.it_do_type_expr it ty
-          end)
-      }
-    in
-    it.it_type_expr it ty;
-    unmark_iterators.it_type_expr unmark_iterators ty;
-    tbl
-  
-  let lt t1 t2 =
-    (* Comparison of polynomials.
-       All the components in t1 must appear in t2 with GE multiplier.
-       At least one component in t1 must appear in t2 with GT multiplier.
-    *)
-    let open Hashtbl in
-    try
-      fold (fun k1 v1 found_gt ->
-        let v2 = find t2 k1 in
-        if v1 < v2 then true
-        else if v1 = v2 then found_gt
-        else raise Exit
-        ) t1 false
-    with
-    | Exit | Not_found -> false
-  
-  let has_var t =
-    try
-      Hashtbl.iter (fun k v -> if k <> None && v > 0 then raise Exit) t;
-      false
-    with
-    | Exit -> true
-end
-
 open Typedtree
 open Types
 open Format
@@ -719,34 +653,44 @@ module Runtime = struct
   (* Leopard.Implicits.Runtime.from_Some *)
   let lident_from_Some = Ldot (lident_implicits, "from_Some")
 
-   (** [Leopard.Implicits.t] *)
-   let is_imp_t_path = function
+  (** [Leopard.Implicits.t] *)
+  let is_imp_t_path = function
     | Path.Pdot(Path.Pdot(Path.Pident {Ident.name="Leopard"},
                           "Implicits", _),
-                 "t", _) -> true
+                "t", _) -> true
     | _ -> false
 
-   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
-   let embed e =
-     let env = e.exp_env in
-     let loc = e.exp_loc in
-     let f = Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lident_embed; loc}) in
-     Forge.Exp.(app f [Nolabel, e])
 
-   (** [get e] builds [Leopard.Implicits.get <e>] *)
-   let get e =
-     let env = e.exp_env in
-     let loc = e.exp_loc in
-     let f = Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lident_get; loc}) in
-     Forge.Exp.(app f [Nolabel, e])
-  
-   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
-   let from_Some e =
-     let env = e.exp_env in
-     let loc = e.exp_loc in
-     let f = Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lident_from_Some; loc}) in
-     Forge.Exp.(app f [Nolabel, e])
- end
+  let gen_ident env loc lid = 
+    let res = Ctype.with_def & fun () -> 
+        Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lid; loc})
+    in
+    Ctype.generalize res.exp_type;
+    res
+
+  let app e args = { e with exp_desc = Texp_apply (e, args) }
+ 
+  (** [embed e] builds [Leopard.Implicits.embed <e>] *)
+  let embed e =
+    let f = gen_ident e.exp_env e.exp_loc lident_embed in
+    (* Typedtree.app e.exp_env f [Nolabel, e] *)
+    app f [Nolabel, Some e]
+
+  (** [get e] builds [Leopard.Implicits.get <e>] *)
+  let get e =
+    let f = gen_ident e.exp_env e.exp_loc lident_get in
+    (* Typedtree.app e.exp_env f [Nolabel, e] *)
+    app f [Nolabel, Some e]
+
+  (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
+  let from_Some e =
+    !!% "from_Some of %a@." Printtyp.type_scheme e.exp_type; 
+    let f = gen_ident e.exp_env e.exp_loc lident_from_Some in
+    !!% "from_Some of f : %a@." Printtyp.type_scheme f.exp_type; 
+    let res = Typedtree.app e.exp_env f [Nolabel, e] in
+    !!% "from_Some of %a@." Printtyp.type_scheme e.exp_type;
+    res
+end
 
 (** Check it is [(<ty>, <spec>) Ppx_implicits.t] *)
 let is_imp_arg_type env ty = 
@@ -780,7 +724,7 @@ let check_arg env loc l ty
         | None -> default
         | Some _ -> 
             (ty, spec_opt,
-             (fun e -> Forge.Exp.some env (conv e)),
+             (fun e -> Typedtree.some env (conv e)),
              (fun e -> unconv (Runtime.from_Some e))
             )
   end 
@@ -901,6 +845,8 @@ and resolve_cand loc env trace ty problems (path, expr, (cs,vty)) =
       (* CR jfuruse: Older binding of path is no longer useful. Replace instead of add? *)
       let trace' = (path, ty) :: trace in 
 
+      (* These type instantiations are done in the current level,
+         completely unrelated with the levels used for the implicit values! *)
       let ity = Ctype.instance env ty in
      
       let ivty, cs =
@@ -970,7 +916,7 @@ and resolve_cand loc env trace ty problems (path, expr, (cs,vty)) =
               | Resolve_result.Ok res_list ->
                   let build res =
                     let args, res = split_at (length cs) res in
-                    Forge.Exp.(app expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args)) :: res
+                    Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
                   in
                   Resolve_result.Ok (map build res_list)
 
@@ -983,47 +929,31 @@ let resolve env loc spec ty = with_snapshot & fun () ->
   if Debug.debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
 
   (* CR jfuruse: Only one value at a time so far *)
+  let open Resolve_result in
   match resolve loc env [([],ty,spec)] with
-  | Resolve_result.MayLoop es -> 
+  | MayLoop es -> 
       raise_errorf "%a:@ The experssion has type @[%a@] which is too ambiguous to resolve this implicit.@ @[<2>The following instances may cause infinite loop of the resolution:@ @[<2>%a@]@]"
         Location.format loc
         Printtyp.type_expr ty
         (* CR jfuruse: should define a function for printing Typedtree.expression *)
         (List.format ",@," format_expression) es
-  | Resolve_result.Ok [] ->
+  | Ok [] ->
       raise_errorf "%a:@ no instance found for@ @[%a@]"
         Location.format loc
         Printtyp.type_expr ty
-  | Resolve_result.Ok (_::_::_ as es) ->
+  | Ok (_::_::_ as es) ->
       let es = map (function [e] -> e | _ -> assert false (* impos *)) es in
       raise_errorf "%a: This implicit has too ambiguous type:@ @[%a@]@ @[<2>Following possible resolutions:@ @[<v>%a@]"
         Location.format loc
         Printtyp.type_expr ty
         (List.format "@," format_expression) es
-  | Resolve_result.Ok [es] ->
+  | Ok [es] ->
       match es with
       | [e] ->
           prerr_endline "unshadow replace...";
           Unshadow.Replace.replace e
       | _ -> assert false (* impos *)
 
-(* Retyping locally is a bad idea since we have no way to know the correct
-   type level we have to use *)
-let retype exp =
-(*
-  let env = exp.exp_env in
-  let expected = exp.exp_type in
-  let uexp = Untypeast.(default_mapper.expr default_mapper) exp in
-  Format.eprintf "Retype: %a@." Pprintast.expression uexp;
-  try
-    Typecore.type_expect env uexp expected
-  with
-  | e ->
-      Format.eprintf "Failed to retype: %a@." Pprintast.expression uexp;
-      raise e
-*)
-exp
-  
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
@@ -1036,12 +966,10 @@ let resolve_omitted_imp_arg loc env a = match a with
           | None -> a (* It is not imp arg *)
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
-              prerr_endline "resolve done";
               (* for retyping, e.exp_env is not suitable, since 
                  it is made by Typecore.option_none with Env.initial_safe_string
               *)
-              let e'' = retype { e' with exp_env = env; exp_type = e.exp_type } in
-              prerr_endline "retype done";
+              let e'' = { e' with exp_env = env; exp_type = e.exp_type } in
               (l, Some e'')
       end
   | _ -> a
@@ -1078,7 +1006,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
      into one  AST mapper, and one part must be scattered into 
      more than two places. Very hard to read. *)
 
-  let create_function_id = 
+  let create_function_name = 
     let x = ref 0 in
     fun () -> incr x; "__imp__arg__" ^ string_of_int !x
 
@@ -1096,6 +1024,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
               in
               begin match f.exp_desc with
               | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
+                  prerr_endline "%imp";
                   let l = match repr_desc f.exp_type with
                     | Tarrow (l, _, _, _) -> l
                     | _ -> assert false
@@ -1107,51 +1036,70 @@ module MapArg : TypedtreeMap.MapArgument = struct
                   begin match lefts, rights with
                   | [Some a], [] ->
                       begin match un_some a with
-                      | Some a -> retype { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
-                      | None -> retype { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                      | Some a -> { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                      | None -> { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
                       end
                   | [Some a], _ ->
                       begin match un_some a with
-                      | Some a -> retype { e with exp_desc = Texp_apply (Runtime.get a, rights) }
+                      | Some a -> { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
                       | None -> 
-                          retype { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights) }
+                          { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights); exp_type = e.exp_type }
                       end
                   | _ -> e
                   end
-              | _ ->e
+              | _ -> e
               end
-          | _ ->e
+          | _ -> e
         in
         opt
           { e with
             exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
-          
+
+
     | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
         (* Eeek, label with multiple cases? *)
         warnf "%a: Unexpected label with multiple function cases"
           Location.format e.exp_loc;
         e
 
-    | Texp_function { arg_label=l; param; cases= [case]; partial } ->
+    | Texp_function ({ arg_label=l; cases= [case] } as f) ->
         let p = case.c_lhs in
         begin match check_arg p.pat_env p.pat_loc l p.pat_type with
         | (_, None, _, _) -> e
         | (type_, Some _spec, _conv, unconv) -> (* CR jfuruse: specs are ignored *)
-            let fid = create_function_id () in
-            let id = Ident.create fid in
+            let loc = Location.ghost p.pat_loc in
+            let fname = create_function_name () in
+            (* p ->     ===>   (p as fname) -> *)
+            let lident = Longident.Lident fname in
+            let id = Ident.create fname in
             let path = Path.Pident id in
-            let expr = unconv (Forge.Exp.(ident path)) in
-            
-            derived_candidates := (fid, { Candidate.path; (* <- not actually path. see expr field *)
-                                          expr;
-                                          type_;
-                                          aggressive = false } ) 
-                                  :: !derived_candidates;
-            let case = { case with
-              c_lhs = Forge.(with_loc p.pat_loc & fun () -> Pat.desc (Tpat_alias (p, id, {txt=fid; loc= Location.ghost p.pat_loc})))} 
+            let vdesc =
+              { val_type = p.pat_type
+              ; val_kind = Val_reg
+              ; val_loc = loc
+              ; val_attributes = []  }
             in
-            let e = retype { e with exp_desc = Texp_function { arg_label=l; param; cases= [case]; partial } } in
-            Forge.Exp.mark fid e
+            let expr = unconv &
+              { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
+              ; exp_loc = Location.none
+              ; exp_extra = []
+              ; exp_type = p.pat_type
+              ; exp_env = p.pat_env
+              ; exp_attributes = []
+              }
+            in
+            derived_candidates := (fname, { Candidate.path; (* <- not actually path. see expr field *)
+                                            expr;
+                                            type_;
+                                            aggressive = false } ) 
+                                  :: !derived_candidates;
+            let p' = { p with pat_desc = Tpat_alias (p, id, {txt=fname; loc})} in
+            let _case = { case with c_lhs = p' } in
+            let e = { e with
+                      (* exp_desc = Texp_function { f with cases= [case] }*)
+                      exp_desc = Texp_function f 
+                    } in
+            Forge.Exp.mark fname e
         end
     | _ -> e
 
