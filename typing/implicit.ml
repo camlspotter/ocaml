@@ -1147,13 +1147,24 @@ module MapArg : TypedtreeMap.MapArgument = struct
                       (* exp_desc = Texp_function { f with cases= [case] }*)
                       exp_desc = Texp_function f 
                     } in
-            Forge.Exp.mark fname e
+            (* XXX needs a helper module *)
+            Typedtree.add_attribute "leopard_mark" 
+              (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (fname, None))))) e
         end
     | _ -> e
 
   let leave_expression e =
+    let open Parsetree in
     (* Handling derived implicits, part 2 of 2 *)
-    match Forge.Exp.partition_marks e & fun txt -> is_function_id txt with
+    let is_mark ({txt}, payload as a) = 
+      if txt <> "leopard_mark" then Either.Right a
+      else 
+        match payload with
+        (* XXX need a helper *)
+        | PStr [{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant (Pconst_string (s, _))}, _)}] when is_function_id s -> Either.Left s
+        | _ -> Either.Right a
+    in
+    match Typedtree.filter_attributes is_mark e with
     | [], e -> e
     | [txt], e ->
         (* Hack:

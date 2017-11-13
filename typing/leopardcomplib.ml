@@ -657,16 +657,39 @@ open Longident
 open Types
 
 module XTypedtree : sig
-  val format_expression : Typedtree.expression Format.fmt
-  val is_none : Typedtree.expression -> Types.type_expr option
+  open Typedtree
+
+  val format_expression : expression Format.fmt
+  val is_none : expression -> Types.type_expr option
+
+  val check_constructor_is_for_path : Env.t -> string -> Path.t -> unit
+
+  val some : Env.t -> expression -> expression
+  val app : Env.t ->
+               expression ->
+               (Asttypes.arg_label * expression) list ->
+               expression
+
+  val add_attribute : string -> Parsetree.structure_item -> expression -> expression
+  (** Add [@<name> <sitem>] to an expression *)
+
+  val filter_attributes 
+    : (attribute -> ('a, attribute) Either.t)  (*+ The predicate to filter the attributes *)
+    -> expression
+    -> 'a list * expression
+    (** Filter out the attributes of the name which matches with the predicate.
+        It returns the matched attributes and the expression without them.
+    *)
+
 end = struct
+  open Typedtree
+
   let format_expression ppf e =
     Pprintast.expression ppf
     & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
   
   let is_none e =
-    let open Typedtree in
-    match e.Typedtree.exp_desc with
+    match e.exp_desc with
     | Texp_construct ({Location.txt=Lident "None"}, _, []) -> 
         begin match is_option_type e.exp_env e.exp_type with
         | None ->
@@ -675,11 +698,6 @@ end = struct
         end
     | _ -> None
   
-end
-
-module Typedtree = struct
-  include Typedtree
-  include XTypedtree
 
   let check_constructor_is_for_path ev s path =
     let lid = Longident.Lident s in
@@ -719,6 +737,23 @@ module Typedtree = struct
         ; exp_attributes = []
         }
     
+  open Asttypes
+  
+  let add_attribute key v e =
+    { e
+      with exp_attributes= ( {txt=key; loc= Location.ghost e.exp_loc}
+                           , Parsetree.PStr [v]) 
+                           :: e.exp_attributes }
+        
+  let filter_attributes f e =
+    let xs, exp_attributes = partition_map f e.exp_attributes in
+    xs,
+    { e with exp_attributes }
+end
+
+module Typedtree = struct
+  include Typedtree
+  include XTypedtree
 end
 
 module Forge = struct
@@ -891,24 +926,6 @@ module Forge = struct
       fold_right (fun e st ->
         { (cons e st) with exp_type = Predef.type_list e.exp_type })
         es (null ty)
-        
-    open Asttypes
-  
-    let mark txt e =
-      { e
-        with exp_attributes= ( {txt; loc= Location.ghost e.exp_loc}
-                             , Parsetree.PStr []) 
-                             :: e.exp_attributes }
-        
-    let partition_marks e f =
-      let g = function
-        | {txt}, Parsetree.PStr [] when f txt -> Either.Left txt
-        | a -> Either.Right a
-      in
-      let marks, exp_attributes = partition_map g e.exp_attributes in
-      marks,
-      { e with exp_attributes }
-  
   end
   
   module Pat = struct
