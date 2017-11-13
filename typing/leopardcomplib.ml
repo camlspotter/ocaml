@@ -296,6 +296,8 @@ module XCtype : sig
     -> type_expr
     -> type_expr
     -> bool
+
+  val with_def : (unit -> 'a) -> 'a
 end = struct
   include Ctype
     
@@ -303,6 +305,12 @@ end = struct
   let apply env tys ty tys2 =
     apply env (map correct_levels tys) (correct_levels ty) (map correct_levels tys2)
   let moregeneral env b ty1 ty2 = moregeneral env b (correct_levels ty1) (correct_levels ty2)
+
+  let with_def f =
+    begin_def ();
+    let res = f () in
+    end_def ();
+    res
 end
 
 module Ctype = struct
@@ -414,9 +422,15 @@ module XEnv : sig
 
   val values_of_module : recursive:bool -> Env.t -> Location.t -> Path.t -> Path.t list
 
+  val get_opens : Env.t -> Path.t list
+
+  val dump_summary : Env.t -> unit
+  (** Print type, module and open information to stderr *)
+    
 end = struct
   open Types
   open Path
+  open Env
       
   let scrape_sg env mdecl = 
     try
@@ -537,6 +551,39 @@ end = struct
   let values_of_module ~recursive env loc path =
     let mdecl = check_module env loc path in
     values_of_module ~recursive env path mdecl
+
+  (** Opened modules in the current environment *)
+  let get_opens env =
+    let rec get = function
+      | Env_empty -> []
+      | Env_value (s, _, _) 
+      | Env_type (s, _, _)
+      | Env_extension (s, _, _)
+      | Env_module (s, _, _)
+      | Env_modtype (s, _, _)
+      | Env_class (s, _, _)
+      | Env_cltype (s, _, _)
+      | Env_constraints (s, _)
+      | Env_functor_arg (s, _) -> get s
+      | Env_open (s, path) -> path :: get s
+    in
+    get & summary env
+
+  let dump_summary env =
+    let rec dump = function
+      | Env_empty -> ()
+      | Env_value (s, _, _)
+      | Env_extension (s, _, _)
+      | Env_modtype (s, _, _)
+      | Env_class (s, _, _)
+      | Env_cltype (s, _, _)
+      | Env_constraints (s, _)
+      | Env_functor_arg (s, _) -> dump s
+      | Env_type (s, id, _) -> !!% "type %a@." Ident.format id; dump s
+      | Env_module (s, id, _) -> !!% "module %a@." Ident.format id; dump s
+      | Env_open (s, path) -> !!% "open %a@." Path.format path; dump s
+    in
+    dump & Env.summary env
 end
 
 module Env = struct
@@ -633,6 +680,45 @@ end
 module Typedtree = struct
   include Typedtree
   include XTypedtree
+
+  let check_constructor_is_for_path ev s path =
+    let lid = Longident.Lident s in
+    try
+      let cdesc = Env.lookup_constructor lid ev in
+      match (Ctype.repr cdesc.cstr_res).desc with
+      | Tconstr (p, _, _) when p = path -> ()
+      | _ -> 
+          Format.eprintf "Typpx.Forge.Exp: %a is not accessible in this scope@." Longident.format lid;
+          assert false
+    with Not_found ->
+      Format.eprintf "Typpx.Forge.Exp: %a is not accessible in this scope@." Longident.format lid;
+      assert false
+      
+  let some ev e =
+    check_constructor_is_for_path ev "Some" Predef.path_option;
+    Typecore.option_some e
+
+  let app env funct args =
+    match args with
+    | [] -> funct
+    | _ ->
+        let fty = funct.exp_type in
+        let atys = map (function
+            | (l,e) -> l, e.exp_type) args
+        in
+        let rety = Btype.newgenvar () in
+        let apty = fold_right (fun (l,ty) t -> Btype.newgenty & Tarrow (l, ty, t, Cok)) atys rety in
+        !!% "@[<2>App:@ @[%a@]@ @[%a@]@]@." Printtyp.raw_type_expr fty Printtyp.raw_type_expr apty;
+        Ctype.unify env fty apty;
+        !!% "@[<2>App: =>@ @[%a@]@ @[%a@]@." Printtyp.raw_type_expr fty Printtyp.raw_type_expr apty;
+        { exp_desc = Texp_apply (funct, map (fun (l,a) -> (l,Some a)) args)
+        ; exp_loc = Location.none
+        ; exp_extra = []
+        ; exp_type = rety
+        ; exp_env = env
+        ; exp_attributes = []
+        }
+    
 end
 
 module Forge = struct
@@ -860,6 +946,92 @@ module Forge = struct
   
     let unpack e = of_module_expr_desc @@ Tmod_unpack (e, Dummy.mod_type)
   end
+end
+
+module Tysize : sig 
+  (** Size of type *)
+  type t
+  val lt : t -> t -> bool
+  val to_string : t -> string
+  val format : Format.formatter -> t -> unit
+  val has_var : t -> bool
+  val size : Types.type_expr -> t
+end = struct
+  
+  open Types
+  open Btype
+  
+  type t = (int option, int) Hashtbl.t
+  (** Polynomial. v_1 * 2 + v_2 * 3 + 4 has the following bindings:
+      [(Some 1, 2); (Some 3, 2); (None, 4)]
+  *)
+  
+  let to_string t =
+    let open Printf in
+    String.concat " + "
+    & Hashtbl.fold (fun k v st ->
+      let s = match k,v with
+        | None, _ -> sprintf "%d" v
+        | Some _, 0 -> ""
+        | Some k, 1 -> sprintf "a%d" k
+        | Some k, _ -> sprintf "%d*a%d" v k
+      in
+      s :: st) t []
+      
+  let format ppf t = Format.fprintf ppf "%s" (to_string t)
+      
+  let size ty =
+    let open Hashtbl in
+    let tbl = create 9 in
+    let incr k =
+      try
+        replace tbl k (find tbl k + 1)
+      with
+      | Not_found -> add tbl k 1
+    in
+    let it = 
+      { type_iterators with
+        it_do_type_expr = (fun it ty ->
+          let ty = Ctype.repr ty in
+          begin match ty.desc with
+          | Tvar _ -> incr (Some ty.id)
+          | _ -> incr None
+          end;
+          begin match ty.desc with
+          | Tvariant row -> 
+             (* Tvariant may contain a Tvar at row_more even if it is `closed'. *)
+             let row = row_repr row in
+             if not & static_row row then type_iterators.it_do_type_expr it ty
+          | _ -> type_iterators.it_do_type_expr it ty
+          end)
+      }
+    in
+    it.it_type_expr it ty;
+    unmark_iterators.it_type_expr unmark_iterators ty;
+    tbl
+  
+  let lt t1 t2 =
+    (* Comparison of polynomials.
+       All the components in t1 must appear in t2 with GE multiplier.
+       At least one component in t1 must appear in t2 with GT multiplier.
+    *)
+    let open Hashtbl in
+    try
+      fold (fun k1 v1 found_gt ->
+        let v2 = find t2 k1 in
+        if v1 < v2 then true
+        else if v1 = v2 then found_gt
+        else raise Exit
+        ) t1 false
+    with
+    | Exit | Not_found -> false
+  
+  let has_var t =
+    try
+      Hashtbl.iter (fun k v -> if k <> None && v > 0 then raise Exit) t;
+      false
+    with
+    | Exit -> true
 end
 
 include Location.Open
