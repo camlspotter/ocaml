@@ -1,5 +1,6 @@
 open Leopardutils
-open Leopardcomplib
+open Leopardparsing
+open Leopardtyping
 
 open List
 open Asttypes
