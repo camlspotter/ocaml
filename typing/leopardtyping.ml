@@ -212,6 +212,43 @@ end = struct
   open Path
   open Env
       
+  (** Opened modules in the current environment *)
+  let get_opens env =
+    let rec get = function
+      | Env_empty -> []
+      | Env_value (s, _, _) 
+      | Env_type (s, _, _)
+      | Env_extension (s, _, _)
+      | Env_module (s, _, _)
+      | Env_modtype (s, _, _)
+      | Env_class (s, _, _)
+      | Env_cltype (s, _, _)
+      | Env_constraints (s, _)
+      | Env_functor_arg (s, _) -> get s
+      | Env_open (s, path) -> path :: get s
+      | Env_copy_types (s, _) -> get s
+    in
+    get & summary env
+
+  let dump_summary env =
+    let rec dump = function
+      | Env_empty -> ()
+      | Env_extension (s, _, _)
+      | Env_modtype (s, _, _)
+      | Env_class (s, _, _)
+      | Env_cltype (s, _, _)
+      | Env_constraints (s, _)
+      | Env_functor_arg (s, _) -> dump s
+      | Env_type (s, id, _) -> !!% "type %a@." Ident.format id; dump s
+      | Env_module (s, id, md) ->
+          !!% "module %a@." Ident.format id; dump s;
+          !!% "  mty= %a@." Printtyp.modtype md.md_type;
+      | Env_open (s, path) -> !!% "open %a@." Path.format path; dump s
+      | Env_value (s, i, _vdesc) -> !!% "value %a@." Ident.format i; dump s
+      | Env_copy_types (s, _) -> dump s
+    in
+    dump & Env.summary env
+
   let scrape_sg env mdecl = 
     try
       match Env.scrape_alias env @@ Mtype.scrape env mdecl.Types.md_type with
@@ -235,9 +272,12 @@ end = struct
   let fold_module env path init f =
     (* Format.eprintf "fold_module %a@." Printtyp.path path; *)
     let mdecl = Env.find_module path env in
-    let mty = mdecl.Types.md_type in
     let sg : Types.signature = scrape_sg env mdecl in
+    (* We cannot use [let mty = mdecl.Types.md_type], 
+       since it can be Mty_alias, which is not good for scanning *)
+    let mty = Mty_signature sg in
     let id = Ident.create "Dummy" in
+    (* Format.eprintf "Adding module Dummy: %a@." Printtyp.modtype mty; *)
     let env' = Env.add_module id mty Env.empty in
     let lid id = Longident.(Ldot (Lident "Dummy", id.Ident.name)) in
     let pathfix p = match p with
@@ -247,7 +287,12 @@ end = struct
     List.fold_left (fun st i ->
         let x = match i with
           | Sig_value (id, _vdesc) ->
-              let p, vdesc = Env.lookup_value (lid id) env' in
+              let p, vdesc =
+                try  Env.lookup_value (lid id) env' with Not_found ->
+                  Format.eprintf "Ident %a is not found!@." Longident.format (lid id);
+                  dump_summary env';
+                  raise Not_found
+              in
               Value (id, pathfix p, vdesc)
           | Sig_type (id, td, _) ->
               let p = Env.lookup_type (lid id) env' in
@@ -332,40 +377,6 @@ end = struct
     let mdecl = check_module env loc path in
     values_of_module ~recursive env path mdecl
 
-  (** Opened modules in the current environment *)
-  let get_opens env =
-    let rec get = function
-      | Env_empty -> []
-      | Env_value (s, _, _) 
-      | Env_type (s, _, _)
-      | Env_extension (s, _, _)
-      | Env_module (s, _, _)
-      | Env_modtype (s, _, _)
-      | Env_class (s, _, _)
-      | Env_cltype (s, _, _)
-      | Env_constraints (s, _)
-      | Env_functor_arg (s, _) -> get s
-      | Env_open (s, path) -> path :: get s
-      | Env_copy_types (s, _) -> get s
-    in
-    get & summary env
-
-  let dump_summary env =
-    let rec dump = function
-      | Env_empty -> ()
-      | Env_value (s, _, _)
-      | Env_extension (s, _, _)
-      | Env_modtype (s, _, _)
-      | Env_class (s, _, _)
-      | Env_cltype (s, _, _)
-      | Env_constraints (s, _)
-      | Env_functor_arg (s, _) -> dump s
-      | Env_type (s, id, _) -> !!% "type %a@." Ident.format id; dump s
-      | Env_module (s, id, _) -> !!% "module %a@." Ident.format id; dump s
-      | Env_open (s, path) -> !!% "open %a@." Path.format path; dump s
-      | Env_copy_types (s, _) -> dump s
-    in
-    dump & Env.summary env
 end
 
 module Env = struct
