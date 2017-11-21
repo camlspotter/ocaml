@@ -25,7 +25,7 @@ let test env ty vdesc =
   Btype.backtrack snapshot;
   res
 
-let resolve_overloading exp ({loc} as lidloc) path = 
+let resolve_overloading exp ({loc=_} as lidloc) path = 
 (*
   Format.eprintf "resolve_overloading %a %a@." !Location.printer loc Printtyp.path path;
 *)
