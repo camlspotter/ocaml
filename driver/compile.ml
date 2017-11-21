@@ -75,6 +75,7 @@ let interface ppf sourcefile outputprefix =
           Compmisc.init_path false;
           Env.set_unit_name modulename;
           let initial_env = Compmisc.initial_env () in
+          let initial_env = Compmisc.leopard_init initial_env in
           let tsg = Typemod.type_interface sourcefile initial_env ast in
           let sg = tsg.sig_type in
           ignore (Includemod.signatures initial_env sg sg);
@@ -133,33 +134,34 @@ let implementation ppf sourcefile outputprefix =
             (Typemod.type_implementation sourcefile outputprefix modulename env)
         ++ print_if ppf Clflags.dump_typedtree
           Printtyped.implementation_with_coercion
-     in
+      in
       if !Clflags.print_types then begin
         Warnings.check_fatal ();
         Stypes.dump (Some (outputprefix ^ ".annot"))
       end else 
-
+  
       (* retype *)      
       let (typedtree, coercion) =
         if !Clflags.no_retype then (typedtree, coercion)
         else begin
-          Leopardtype.without_leopard (fun () ->
+          Leopardfeatures.without_leopard (fun () ->
               Compmisc.init_path false;
               Env.set_unit_name modulename;
               let env = Compmisc.initial_env() in
+              let env = Compmisc.leopard_init env in
               Untypeast.untype_structure typedtree
               ++ Profile.(record typing)
                 (Typemod.type_implementation sourcefile outputprefix modulename env))
         end
       in
-
+  
       (* -as-pp *)
       if !Clflags.as_pp then begin
         Warnings.check_fatal ();
         Stypes.dump (Some (outputprefix ^ ".annot"));
         pp_out (`Structure (Untypeast.untype_structure typedtree))
       end else
-
+  
       begin
         let bytecode, required_globals =
           (typedtree, coercion)

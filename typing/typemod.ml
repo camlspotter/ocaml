@@ -1675,7 +1675,7 @@ let type_toplevel_phrase env s =
   Env.reset_required_globals ();
   let (str, sg, env) =
     type_structure ~toplevel:true false None env s Location.none in
-  let str = Overload.resolve str in
+  let str = Unshadow.Alias.insert @@ Implicit.resolve @@ Overload.resolve str in
   let (str, _coerce) = ImplementationHooks.apply_hooks
       { Misc.sourcefile = "//toplevel//" } (str, Tcoerce_none)
   in
@@ -1787,7 +1787,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
     Warnings.parse_options false "-32-34-37-38-60";
   let (str, sg, finalenv) =
     type_structure initial_env ast (Location.in_file sourcefile) in
-  let str = Overload.resolve str in
+  let str = Unshadow.Alias.insert @@ Implicit.resolve @@ Overload.resolve str in
   let simple_sg = simplify_signature sg in
   if !Clflags.print_types then begin
     Typecore.force_delayed_checks ();

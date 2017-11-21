@@ -1,10 +1,5 @@
 module Overload = struct:
 
-  val %overload (+)   : 'a -> 'a -> 'a
-  val %overload (-)   : 'a -> 'a -> 'a
-  val %overload (/)   : 'a -> 'a -> 'a
-  val %overload ( * ) : 'a -> 'a -> 'a
-  
   module Int = struct:
     let (+) = (+)
     let (-) = (-)
@@ -17,6 +12,11 @@ module Overload = struct:
     let ( * ) = ( *. )
     let (/) = (/.)
 
+  val %overload (+)   : 'a -> 'a -> 'a
+  val %overload (-)   : 'a -> 'a -> 'a
+  val %overload (/)   : 'a -> 'a -> 'a
+  val %overload ( * ) : 'a -> 'a -> 'a
+  
   module Lib = struct
   end
     

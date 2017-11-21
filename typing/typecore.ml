@@ -2792,14 +2792,14 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
 (* ppx_curried_constr begin *)
         
    | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
-                (Nolabel, ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) when !Leopardtype.curried_constr ->
+                (Nolabel, ({ pexp_desc = Pexp_construct (lid, None) } as con)) :: xs) when !Leopardfeatures.curried_constr ->
        (* ! C a b *)
        type_construct_curried ?in_function env loc ty_expected 
          sexp.pexp_attributes
          con loc' xs
  
    | Pexp_apply({ pexp_desc = Pexp_ident {txt=Longident.Lident "!"; loc=loc'} }, 
-                (Nolabel, ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) when !Leopardtype.curried_constr ->
+                (Nolabel, ({ pexp_desc = Pexp_variant (l, None) } as e)) :: xs) when !Leopardfeatures.curried_constr ->
        (* ! `F a b *)
        let open Ast_helper in
        begin match xs with
@@ -2836,9 +2836,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
          We have to restrict this application contractions only to constructors,
          otherwise it causes typing problems. See https://github.com/camlspotter/ocaml/issues/6
       *)
-      (* when !Leopardtype.curried_constr && is_constructor_application x ->*)
       let try_contract_constructor_apps e =
-        if !Leopardtype.curried_constr then None
+        if !Leopardfeatures.curried_constr then None
         else if e.pexp_attributes <> [] then None
         else
           let rec f e = match e.pexp_desc with
@@ -2953,7 +2952,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env }
 (* ppx_curried_constr begin *)
 
-  | Pexp_construct(lid, None) when !Leopardtype.curried_constr -> 
+  | Pexp_construct(lid, None) when !Leopardfeatures.curried_constr -> 
       (* None  or   (Some) *)
       (* type_construct env loc lid sarg ty_expected sexp.pexp_attributes *)
       type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid
@@ -4243,11 +4242,13 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
 
 and type_application env funct sargs =
   (* funct.exp_type may be generic *)
+  (* jfuruse: omitted -> ty_fun *)
   let result_type omitted ty_fun =
     List.fold_left
       (fun ty_fun (l,ty,lv) -> newty2 lv (Tarrow(l,ty,ty_fun,Cok)))
       ty_fun omitted
   in
+  (* jfuruse: ty_fun may have label l or not *)
   let has_label l ty_fun =
     let ls, tvar = list_labels env ty_fun in
     tvar || List.mem l ls
@@ -4307,6 +4308,14 @@ and type_application env funct sargs =
         type_unknown_args ((l1, Some arg1) :: args) omitted ty2 sargl
   in
   let ignore_labels =
+    (* classic mode
+       or
+       * no tvar in the return type: arity is fixed 
+       * non optional labels in the function
+       * #function labels == #given args
+       * all the arguments lack labels
+       * some labels are omitted in application
+    *)
     !Clflags.classic ||
     begin
       let ls, tvar = list_labels env funct.exp_type in

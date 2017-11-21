@@ -7,4 +7,3 @@ let () =
   Printf.printf "%c\n" ("hello".[0]);
   Printf.printf "%d\n" ([|1;2;3|].[0]);
   ()
-    

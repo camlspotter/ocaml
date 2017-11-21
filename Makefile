@@ -59,7 +59,10 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
         -I middle_end/base_types -I asmcomp -I asmcomp/debug \
         -I driver -I toplevel
 
-COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 \
+# COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 \
+# 	  -warn-error A \
+#           -bin-annot -safe-string -strict-formats $(INCLUDES)
+COMPFLAGS=-strict-sequence -absname -w +a-4-9-41-42-44-45-48 \
 	  -warn-error A \
           -bin-annot -safe-string -strict-formats $(INCLUDES)
 LINKFLAGS=
@@ -83,7 +86,9 @@ UTILS=utils/config.cmo utils/misc.cmo \
   utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
   utils/consistbl.cmo \
   utils/strongly_connected_components.cmo \
-  utils/targetint.cmo
+  utils/targetint.cmo \
+  utils/leopardfeatures.cmo \
+  utils/leopardutils.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/syntaxerr.cmo \
@@ -92,7 +97,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/pprintast.cmo \
   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo \
-  parsing/leopardppx.cmo
+  parsing/leopardparsing.cmo parsing/leopardppx.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
@@ -103,14 +108,15 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/printtyp.cmo typing/includeclass.cmo \
   typing/mtype.cmo typing/envaux.cmo typing/includecore.cmo \
   typing/typedtreeIter.cmo typing/typedtreeMap.cmo \
-  typing/leopardtype.cmo \
   typing/tast_mapper.cmo \
   typing/cmt_format.cmo typing/untypeast.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/stypes.cmo typing/typedecl.cmo typing/typeopt.cmo typing/typecore.cmo \
   typing/typeclass.cmo \
+  typing/leopardtyping.cmo \
   typing/unshadow.cmo \
   typing/overload.cmo \
+  typing/implicit.cmo \
   typing/typemod.cmo
 
 COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \

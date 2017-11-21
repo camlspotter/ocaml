@@ -27,6 +27,10 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
 	List.map Some xs
 	```
 
+    ```ocaml
+	fun x -> Some @@ x + 1
+	```
+
 * User definable SML style simple overloading.
 
     ```ocaml
@@ -77,6 +81,11 @@ Effective set of compiler predicates: pkg_leopard,syntax,autolink,byte
 + leopardc '-I' '<OPAMROOT>/4.05.0/lib/leopard' '-as-pp'  'x.ml' > /tmp/ocamlppd1cbe5
 val x : 'a -> 'a option
 ```
+
+### Other versions
+
+OCamleopard based on other OCaml versions may be available at the repo
+`git://github.com/camlspotter/ocaml`, with branch names `<version>+leoaprd`.
 
 ## From a local source
 
