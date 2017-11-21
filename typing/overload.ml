@@ -49,10 +49,7 @@ let resolve_overloading exp ({loc} as lidloc) path =
         (* Using an overloaded value in the same module where it is defined
            is not allowed, since it is hard to get the instance search space.
         *)
-(*
         Location.raise_errorf ~loc "Overload value cannot be used in the module where it is defined"
-*)
-        assert false
     | Path.Pdot (p, _, _) -> p
     | Path.Papply _ -> assert false
   in
