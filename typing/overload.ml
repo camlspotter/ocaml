@@ -1,5 +1,6 @@
 (* open Compilerlib  *)
-open Leopardcomplib
+open Leopardparsing
+open Leopardtyping
 open Asttypes
 open Types
 open Typedtree

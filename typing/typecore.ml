@@ -3540,11 +3540,13 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
 
 and type_application env funct sargs =
   (* funct.exp_type may be generic *)
+  (* jfuruse: omitted -> ty_fun *)
   let result_type omitted ty_fun =
     List.fold_left
       (fun ty_fun (l,ty,lv) -> newty2 lv (Tarrow(l,ty,ty_fun,Cok)))
       ty_fun omitted
   in
+  (* jfuruse: ty_fun may have label l or not *)
   let has_label l ty_fun =
     let ls, tvar = list_labels env ty_fun in
     tvar || List.mem l ls
@@ -3604,6 +3606,14 @@ and type_application env funct sargs =
         type_unknown_args ((l1, Some arg1) :: args) omitted ty2 sargl
   in
   let ignore_labels =
+    (* classic mode
+       or
+       * no tvar in the return type: arity is fixed 
+       * non optional labels in the function
+       * #function labels == #given args
+       * all the arguments lack labels
+       * some labels are omitted in application
+    *)
     !Clflags.classic ||
     begin
       let ls, tvar = list_labels env funct.exp_type in

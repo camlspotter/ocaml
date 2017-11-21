@@ -102,7 +102,7 @@ PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/pprintast.cmo \
   parsing/ast_mapper.cmo parsing/ast_iterator.cmo parsing/attr_helper.cmo \
   parsing/builtin_attributes.cmo parsing/ast_invariants.cmo parsing/depend.cmo \
-  parsing/leopardppx.cmo
+  parsing/leopardparsing.cmo parsing/leopardppx.cmo
 
 TYPING=typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \
@@ -118,7 +118,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
   typing/includemod.cmo typing/typetexp.cmo typing/parmatch.cmo \
   typing/stypes.cmo typing/typedecl.cmo typing/typecore.cmo \
   typing/typeclass.cmo \
-  typing/leopardcomplib.cmo \
+  typing/leopardtyping.cmo \
   typing/unshadow.cmo \
   typing/overload.cmo \
   typing/implicit.cmo \

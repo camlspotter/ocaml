@@ -1,5 +1,6 @@
 open Leopardutils
-open Leopardcomplib
+open Leopardparsing
+open Leopardtyping
 
 open List
 open Asttypes
@@ -25,6 +26,7 @@ module Klabel : sig
     Env.t
     ->  Types.type_expr
     -> ((Asttypes.arg_label * Types.type_expr) list * Types.type_expr) list
+
 end = struct
   (** Constraint labels *)
     
@@ -72,6 +74,7 @@ end = struct
 end
 
 module Candidate : sig
+
   type t = {
     path : Path.t;
     expr : Typedtree.expression;
@@ -109,6 +112,7 @@ module Candidate : sig
     Env.t
     -> Location.t
     -> [< `In | `Just ] * Longident.t -> t list
+
 end = struct
   (*
   
@@ -258,17 +262,30 @@ module Spec : sig
   type t = t2 list (** [t2, .., t2] *)
   
   and t2 = 
-    | Opened of [`In | `Just] * Longident.t (** [opened M]. The values defined under module path [P.M] which is accessible as [M] by [open P] *)
+    | Opened of [`In | `Just] * Longident.t
+      (** [opened M]. The values defined under module path [P.M] 
+          which is accessible as [M] by [open P] *)
     | Direct of [`In | `Just] * Longident.t * Path.t option
-      (** [P] or [just P]. [P] is for the values defined under module [P] and [P]'s sub-modules. [just P] is for values defined just under module [P] and values defined in its sub-modules are not considered. *)
-    | Aggressive of t2 (** [aggressive t2]. Even normal function arrows are considered as constraints. *)
-    | Related (** [related]. The values defined under module [P] where data type defined in [P] appears in the type of the resolution target *)
+      (** [P] or [just P]. [P] is for the values defined under module [P] 
+          and [P]'s sub-modules. [just P] is for values defined just 
+          under module [P] and values defined in its sub-modules are not 
+          considered. *)
+    | Aggressive of t2
+      (** [aggressive t2]. Even normal function arrows are considered 
+          as constraints. *)
+    | Related
+      (** [related]. The values defined under module [P] where data type 
+          defined in [P] appears in the type of the resolution target *)
   (*
     | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
   *)
-    | Has_type of core_type * type_expr option (** [typeclass path]. Typeclass style resolution.  *) 
-    | Deriving of Longident.t (** [deriving M]. [M] must define [M.tuple], [M.object_] and [M.poly_variant] *)
-    | PPXDerive of Parsetree.expression * core_type * type_expr option (** [ppxderive ([%...] : ty)]. *)
+    | Has_type of core_type * type_expr option
+      (** [typeclass path]. Typeclass style resolution.  *) 
+    | Deriving of Longident.t
+      (** [deriving M]. [M] must define [M.tuple], [M.object_] 
+          and [M.poly_variant] *)
+    | PPXDerive of Parsetree.expression * core_type * type_expr option
+      (** [ppxderive ([%...] : ty)]. *)
         
   val to_string : t -> string
 
@@ -641,6 +658,16 @@ let get_candidates env loc spec ty =
 module Runtime = struct
   open Longident
 
+  (* Here, we cannot perform Ctype.unify easily, 
+     which may change the levels of generalized type variables.
+
+     After type inference finishes, we often have ill-formed types ty['a]
+     in type annotations, where 'a is generalized, but ty is not.
+
+     Unification beween such ty['a] with a completely generalized type ty'
+     makes 'a not generalized. Because of the ungeneralized type level of ty.
+  *)
+      
   (* Leopard.Implicits.Runtime *)
   let lident_implicits = Ldot (Lident "Leopard", "Implicits")
 
@@ -668,7 +695,13 @@ module Runtime = struct
     Ctype.generalize res.exp_type;
     res
 
-  let app e args = { e with exp_desc = Texp_apply (e, args) }
+  let app e args = { exp_desc= Texp_apply (e, args)
+                   ; exp_type = e.exp_type (* XXX incorrect *)
+                   ; exp_loc = Location.none
+                   ; exp_extra = []
+                   ; exp_env = e.exp_env
+                   ; exp_attributes = []
+                   }
  
   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
   let embed e =
@@ -684,12 +717,8 @@ module Runtime = struct
 
   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
   let from_Some e =
-    !!% "from_Some of %a@." Printtyp.type_scheme e.exp_type; 
     let f = gen_ident e.exp_env e.exp_loc lident_from_Some in
-    !!% "from_Some of f : %a@." Printtyp.type_scheme f.exp_type; 
-    let res = Typedtree.app e.exp_env f [Nolabel, e] in
-    !!% "from_Some of %a@." Printtyp.type_scheme e.exp_type;
-    res
+    Typedtree.app e.exp_env f [Nolabel, e]
 end
 
 (** Check it is [(<ty>, <spec>) Ppx_implicits.t] *)
@@ -752,7 +781,7 @@ module Klabel2 = struct
           (fun (cs, ty) -> (l,ty1)::cs, ty)
           (extract_aggressively env ty2)
     | _ -> [[], ty]
-  end
+end
 
 (* Fix the candidates by adding type dependent part *)
 let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label * type_expr * Spec.t * (expression -> expression)) list * type_expr) list =
@@ -1024,7 +1053,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
               in
               begin match f.exp_desc with
               | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
-                  prerr_endline "%imp";
+                  (* %imp l:x ... *)
                   let l = match repr_desc f.exp_type with
                     | Tarrow (l, _, _, _) -> l
                     | _ -> assert false
@@ -1041,8 +1070,14 @@ module MapArg : TypedtreeMap.MapArgument = struct
                       end
                   | [Some a], _ ->
                       begin match un_some a with
-                      | Some a -> { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
+                      | Some a ->
+                          (* THis case is correct? *)
+                          (* %imp ?l:a *)
+                          { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
                       | None -> 
+                          (* %imp ?l:a ... 
+                               => Runtime.get (Runtime.from_Some a) ...
+                          *)
                           { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights); exp_type = e.exp_type }
                       end
                   | _ -> e
@@ -1099,13 +1134,24 @@ module MapArg : TypedtreeMap.MapArgument = struct
                       (* exp_desc = Texp_function { f with cases= [case] }*)
                       exp_desc = Texp_function f 
                     } in
-            Forge.Exp.mark fname e
+            (* XXX needs a helper module *)
+            Typedtree.add_attribute "leopard_mark" 
+              (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (fname, None))))) e
         end
     | _ -> e
 
   let leave_expression e =
+    let open Parsetree in
     (* Handling derived implicits, part 2 of 2 *)
-    match Forge.Exp.partition_marks e & fun txt -> is_function_id txt with
+    let is_mark ({txt}, payload as a) = 
+      if txt <> "leopard_mark" then Either.Right a
+      else 
+        match payload with
+        (* XXX need a helper *)
+        | PStr [{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant (Pconst_string (s, _))}, _)}] when is_function_id s -> Either.Left s
+        | _ -> Either.Right a
+    in
+    match Typedtree.filter_attributes is_mark e with
     | [], e -> e
     | [txt], e ->
         (* Hack:
