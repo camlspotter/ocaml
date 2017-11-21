@@ -1,0 +1,15 @@
+opam-version: "1.2"
+version: "4.05.0"
+maintainer: "jun.furuse@gmail.com"
+authors: "Jun Furuse"
+homepage: "https://github.com/camlspotter/ocaml/blob/4.05.0%2Blepoard/README-leopard.md"
+bug-reports: "https://github.com/camlspotter/ocaml/issues"
+dev-repo: "git://github.com/camlspotter/ocaml#4.05.0+leopard"
+build: [
+  ["./configure" "--prefix" "%{prefix}%"]        
+  [make "core" "coreboot"]
+  [make "world.opt" "ocamlnat"] {ocaml-native}
+  [make "-C" "leopardlib"]
+  [make "-C" "leopardlib" opt] {ocaml-native}
+]
+available: [ocaml-version = "4.05.0"]

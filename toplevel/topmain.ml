@@ -151,6 +151,10 @@ module Options = Main_args.Make_bytetop_options (struct
   let _args0 = wrap_expand Arg.read_arg0
 
   let anonymous s = file_argument s
+
+  let _no_retype () = set no_retype ()
+  let _leopard    () = leopard_mode := Some true
+  let _no_leopard () = leopard_mode := Some false
 end);;
 
 

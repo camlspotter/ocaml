@@ -114,21 +114,23 @@ let rewrite kind ppxs ast =
 
 let apply_rewriters_str ?(restore = true) ~tool_name ast =
   match !Clflags.all_ppx with
-  | [] -> ast
+  | [] -> Leopardppx.structure ast
   | ppxs ->
       ast
       |> Ast_mapper.add_ppx_context_str ~tool_name
       |> rewrite Structure ppxs
       |> Ast_mapper.drop_ppx_context_str ~restore
+      |> Leopardppx.structure
 
 let apply_rewriters_sig ?(restore = true) ~tool_name ast =
   match !Clflags.all_ppx with
-  | [] -> ast
+  | [] -> Leopardppx.signature ast
   | ppxs ->
       ast
       |> Ast_mapper.add_ppx_context_sig ~tool_name
       |> rewrite Signature ppxs
       |> Ast_mapper.drop_ppx_context_sig ~restore
+      |> Leopardppx.signature
 
 let apply_rewriters ?restore ~tool_name
     (type a) (kind : a ast_kind) (ast : a) : a =

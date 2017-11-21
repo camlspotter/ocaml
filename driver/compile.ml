@@ -26,6 +26,20 @@ open Compenv
 
 let tool_name = "ocamlc"
 
+let pp_out = function
+  | `Structure str when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.structure str
+  | `Structure str ->
+      output_string stdout Config.ast_impl_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout str
+  | `Signature sg when !Clflags.as_pp_text ->
+      Format.printf "%a@." Pprintast.signature sg
+  | `Signature sg ->
+      output_string stdout Config.ast_intf_magic_number;
+      output_value stdout !Location.input_name;
+      output_value stdout sg
+
 let interface ppf sourcefile outputprefix =
   Profile.record_call sourcefile (fun () ->
     Compmisc.init_path false;
@@ -36,6 +50,11 @@ let interface ppf sourcefile outputprefix =
 
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
     if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
+
+    let initial_env = Compmisc.leopard_init initial_env in
+    (* -no-trans *)
+    if !Clflags.no_trans then pp_out (`Signature ast) else
+
     Profile.(record_call typing) (fun () ->
       let tsg = Typemod.type_interface sourcefile initial_env ast in
       if !Clflags.dump_typedtree then fprintf ppf "%a@." Printtyped.interface tsg;
@@ -47,6 +66,27 @@ let interface ppf sourcefile outputprefix =
       ignore (Includemod.signatures initial_env sg sg);
       Typecore.force_delayed_checks ();
       Warnings.check_fatal ();
+
+      (* retype *)
+      let tsg =
+        if !Clflags.no_retype then tsg
+        else begin
+          let ast = Untypeast.untype_signature tsg in
+          Compmisc.init_path false;
+          Env.set_unit_name modulename;
+          let initial_env = Compmisc.initial_env () in
+          let tsg = Typemod.type_interface sourcefile initial_env ast in
+          let sg = tsg.sig_type in
+          ignore (Includemod.signatures initial_env sg sg);
+          Typecore.force_delayed_checks ();
+          Warnings.check_fatal ();
+          tsg
+        end
+      in
+  
+      (* -as-pp *)
+      if !Clflags.as_pp then pp_out (`Signature (Untypeast.untype_signature tsg)) else
+
       if not !Clflags.print_types then begin
         let deprecated = Builtin_attributes.deprecated_of_sig ast in
         let sg =
@@ -72,7 +112,19 @@ let implementation ppf sourcefile outputprefix =
     let modulename = module_of_filename ppf sourcefile outputprefix in
     Env.set_unit_name modulename;
     let env = Compmisc.initial_env() in
+    let env = Compmisc.leopard_init env in
     try
+      (* -no-trans *)
+      if !Clflags.no_trans then begin
+        let str =
+          Pparse.parse_implementation ~tool_name ppf sourcefile
+          ++ print_if ppf Clflags.dump_parsetree Printast.implementation
+          ++ print_if ppf Clflags.dump_source Pprintast.structure
+        in
+        Warnings.check_fatal ();
+        pp_out (`Structure str) 
+      end else
+
       let (typedtree, coercion) =
         Pparse.parse_implementation ~tool_name ppf sourcefile
         ++ print_if ppf Clflags.dump_parsetree Printast.implementation
@@ -85,7 +137,30 @@ let implementation ppf sourcefile outputprefix =
       if !Clflags.print_types then begin
         Warnings.check_fatal ();
         Stypes.dump (Some (outputprefix ^ ".annot"))
-      end else begin
+      end else 
+
+      (* retype *)      
+      let (typedtree, coercion) =
+        if !Clflags.no_retype then (typedtree, coercion)
+        else begin
+          Leopardtype.without_leopard (fun () ->
+              Compmisc.init_path false;
+              Env.set_unit_name modulename;
+              let env = Compmisc.initial_env() in
+              Untypeast.untype_structure typedtree
+              ++ Profile.(record typing)
+                (Typemod.type_implementation sourcefile outputprefix modulename env))
+        end
+      in
+
+      (* -as-pp *)
+      if !Clflags.as_pp then begin
+        Warnings.check_fatal ();
+        Stypes.dump (Some (outputprefix ^ ".annot"));
+        pp_out (`Structure (Untypeast.untype_structure typedtree))
+      end else
+
+      begin
         let bytecode, required_globals =
           (typedtree, coercion)
           ++ Profile.(record transl)

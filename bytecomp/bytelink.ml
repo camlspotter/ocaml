@@ -563,10 +563,11 @@ let fix_exec_name name =
 (* Main entry point (build a custom runtime if needed) *)
 
 let link ppf objfiles output_name =
+  let leopard = if !Clflags.leopard_mode = Some true then ["leopard.cmo"] else [] in
   let objfiles =
     if !Clflags.nopervasives then objfiles
-    else if !Clflags.output_c_object then "stdlib.cma" :: objfiles
-    else "stdlib.cma" :: (objfiles @ ["std_exit.cmo"]) in
+    else if !Clflags.output_c_object then "stdlib.cma" :: leopard @ objfiles
+    else "stdlib.cma" :: (leopard @ objfiles @ ["std_exit.cmo"]) in
   let tolink = List.fold_right scan_file objfiles [] in
   let missing_modules =
     IdentSet.filter (fun id -> not (Ident.is_predef_exn id)) !missing_globals

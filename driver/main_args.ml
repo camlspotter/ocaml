@@ -776,6 +776,36 @@ let mk__ f =
   "<file>  Treat <file> as a file name (even if it starts with `-')"
 ;;
 
+let mk_as_pp f =
+  "-as-pp", Arg.Unit f,
+  " Work as a OCamleopard preprocessor"
+;;
+
+let mk_as_pp_text f =
+  "-as-pp-text", Arg.Unit f,
+  " Work as a OCamleopard preprocessor with human readable output"
+;;
+
+let mk_no_retype f =
+  "-no-retype", Arg.Unit f,
+  " Omit retype which makes OCamleopard safer"
+;;
+
+let mk_no_trans f =
+  "-no-trans", Arg.Unit f,
+  " Work as a OCamleopard preprocessor without any transformation"
+;;
+
+let mk_leopard f =
+  "-leopard", Arg.Unit f,
+  " Force Leopard mode, even if Leopard module is not found"
+;;
+
+let mk_no_leopard f =
+  "-no-leopard", Arg.Unit f,
+  " Disable Leopard mode, even if Leopard module is found"
+;;
+
 module type Common_options = sig
   val _absname : unit -> unit
   val _I : string -> unit
@@ -864,6 +894,14 @@ module type Compiler_options = sig
 
   val _args: string -> string array
   val _args0: string -> string array
+
+  (* OCamleopard *)
+  val _as_pp      : unit -> unit
+  val _as_pp_text : unit -> unit
+  val _no_retype  : unit -> unit
+  val _no_trans   : unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 
@@ -877,6 +915,11 @@ module type Toplevel_options = sig
   val _stdin : unit -> unit
   val _args : string -> string array
   val _args0 : string -> string array
+
+  (* OCamleopard *)
+  val _no_retype: unit -> unit
+  val _leopard    : unit -> unit
+  val _no_leopard : unit -> unit
 end
 ;;
 
@@ -1093,6 +1136,14 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    (* OCamleopard *)
+    mk_as_pp F._as_pp;
+    mk_as_pp_text F._as_pp_text;
+    mk_no_retype F._no_retype;
+    mk_no_trans F._no_trans;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1148,6 +1199,11 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    (* OCamleopard *)
+    mk_no_retype F._no_retype;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1289,6 +1345,14 @@ struct
 
     mk_args F._args;
     mk_args0 F._args0;
+
+    (* OCamleopard *)
+    mk_as_pp F._as_pp;
+    mk_as_pp_text F._as_pp_text;
+    mk_no_retype F._no_retype;
+    mk_no_trans F._no_trans;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard;
   ]
 end;;
 
@@ -1382,6 +1446,11 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dlinear F._dlinear;
     mk_dstartup F._dstartup;
     mk_dump_pass F._dump_pass;
+
+    (* OCamleopard *)
+    mk_no_retype F._no_retype;
+    mk_leopard F._leopard;
+    mk_no_leopard F._no_leopard
   ]
 end;;
 
