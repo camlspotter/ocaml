@@ -18,6 +18,11 @@ let flip f x y = f y x
   
 let conv_ident id = "__" ^ id.name ^ "__" ^ string_of_int id.stamp
 
+let aliases = ref ([]: (Ident.t * Ident.t) list)
+(* CR jfuruse: This is bizarre to have a ref which none of this module touches... *)
+
+let reset () = aliases := []
+
 let rec check_module_path env path =
   (* Format.eprintf "  checking %a@." Printtyp.path_verbose path; *)
   let lid = Untypeast.lident_of_path path in
@@ -26,9 +31,15 @@ let rec check_module_path env path =
   else begin
   (* Format.eprintf "    shadowed: found %a@." (Option.format Printtyp.path_verbose) path'; *)
     match path with
-    | Pident id -> 
-        let n = conv_ident id in
-        let id' = Ident.create n in
+    | Pident id ->
+        let id' = match List.assoc id !aliases with
+          | exception Not_found ->
+              let n = conv_ident id in
+              let id' = Ident.create n in
+              aliases := (id,id') :: !aliases;
+              id'
+          | id' -> id'
+        in
         `Shadowed (id, id', Pident id')
     | Pdot (p, n, x) -> 
         begin match check_module_path env p with
@@ -38,11 +49,6 @@ let rec check_module_path env path =
     end
     | _ -> assert false (* impos *)
   end
-
-let aliases = ref ([]: (Ident.t * Ident.t) list)
-(* CR jfuruse: This is bizarre to have a ref which none of this module touches... *)
-
-let reset () = aliases := []
 
 module Replace = struct
   module MapArg = struct
@@ -60,8 +66,7 @@ module Replace = struct
               begin match check_module_path env p with
               | `Accessible _ -> e
               | `Not_found _p ->  assert false (* impos *)
-              | `Shadowed (id, id', p) ->
-                  aliases := (id, id') :: !aliases;
+              | `Shadowed (_id, _id', p) ->
                   let p = Path.Pdot (p, n, i) in
                   let lid = Untypeast.lident_of_path p in
                   { e with exp_desc = Texp_ident (p, {txt=lid; loc}, vd) }
