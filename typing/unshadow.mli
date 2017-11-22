@@ -6,7 +6,7 @@ val reset : unit -> unit
 module Replace : sig
   val replace : expression -> expression
   (** replace identifiers inaccessible in the typing environment due to
-      shadowing by new identifier.  The old and new ident pair is recorded
+      shadowings by new identifiers.  The old and new ident pairs are recorded
       internally and used for [Alias.insert] to introduce the necessary
       module aliases *)
 end
