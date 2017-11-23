@@ -206,7 +206,13 @@ module XEnv : sig
 
   val dump_summary : Env.t -> unit
   (** Print type, module and open information to stderr *)
-    
+
+  val value_accessibility : 
+    Env.t ->
+    Path.t ->
+    [> `Accessible of Longident.t
+    | `NotFound
+    | `ShadowedBy of [> `Module | `Value ] * Path.t * Location.t ]
 end = struct
   open Types
   open Path
@@ -377,6 +383,27 @@ end = struct
     let mdecl = check_module env loc path in
     values_of_module ~recursive env path mdecl
 
+  let value_accessibility env path =
+    let lid = Untypeast.lident_of_path path in
+    let pd = try
+        Some (Env.lookup_value lid env)
+      with _ -> None
+    in 
+    match pd with
+    | None -> `NotFound
+    | Some (path', _) when path = path' -> `Accessible lid
+    | Some (path', d) ->
+        match path, path' with
+        | Path.Pdot (p,_,_), Path.Pdot (p',_,_) when p <> p' ->
+            let rec f p p' = match p, p' with
+              | Path.Pdot (p_,_,_), Path.Pdot (p_',_,_) when p_ <> p_' ->
+                  f p_ p_'
+              | _ ->
+                  let md = Env.find_module p' env in
+                  `ShadowedBy (`Module, p', md.Types.md_loc)
+            in
+            f p p'
+        | _ -> `ShadowedBy (`Value, path', d.Types.val_loc)
 end
 
 module Env = struct
