@@ -72,10 +72,30 @@ let resolve_overloading exp ({loc} as lidloc) path =
       (* Format.eprintf "RESOLVED: %a@." print_path path; *)
       let ity = Ctype.instance env vdesc.val_type in
       Ctype.unify env exp.exp_type ity; (* should succeed *)
-      Unshadow.Replace.replace 
-        { exp with 
-          exp_desc = Texp_ident (path, {lidloc with Asttypes.txt = Untypeast.lident_of_path path}, vdesc);
-          exp_type = exp.exp_type }
+      (* We do not try unshadowing, since
+           * It is complicated.
+           * It does not work in toplevel.
+
+         If the resolved value is shadowed and not accessible trivially,
+         we simply reject the expression.
+      *)
+      begin match Env.value_accessibility env path with
+      | `Accessible lid ->
+          { exp with 
+            exp_desc = Texp_ident (path, {lidloc with Asttypes.txt = lid}, vdesc);
+            exp_type = exp.exp_type }
+      | `ShadowedBy (vm, p, loc) ->
+          Location.raise_errorf ~loc:lidloc.loc
+            "@[<2>Overloading is resolved to %a,@ which is shadowed by %s %a@ defined at@ %a@]"
+            Path.format path
+            (match vm with `Value -> "value" | `Module -> "module")
+            Path.format p
+            Location.format loc
+      | `NotFound ->
+          Format.eprintf "value_accessibility: NotFound for %a@." Path.format path;
+          assert false
+      end
+
   | _ -> 
      Location.raise_errorf ~loc:lidloc.loc "Overload resolution failed: too ambiguous"
 

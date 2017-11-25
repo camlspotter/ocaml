@@ -390,9 +390,21 @@ end = struct
       with _ -> None
     in 
     match pd with
-    | None -> `NotFound
+    | None ->
+        let rec f l = match l with
+          | Longident.Ldot (l, _) ->
+              begin match Env.lookup_module ~load:true l env with
+              | exception Not_found -> f l
+              | p ->
+                  let md = Env.find_module p env in
+                  `ShadowedBy (`Module, p, md.Types.md_loc)
+              end                     
+          | _ -> `NotFound (* strange... *)
+        in
+        f lid
     | Some (path', _) when path = path' -> `Accessible lid
     | Some (path', d) ->
+        (* Found, but it is something different! *)
         match path, path' with
         | Path.Pdot (p,_,_), Path.Pdot (p',_,_) when p <> p' ->
             let rec f p p' = match p, p' with
