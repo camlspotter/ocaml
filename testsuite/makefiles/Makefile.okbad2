@@ -1,0 +1,73 @@
+#**************************************************************************
+#*                                                                        *
+#*                                 OCaml                                  *
+#*                                                                        *
+#*                 Xavier Clerc, SED, INRIA Rocquencourt                  *
+#*                                                                        *
+#*   Copyright 2010 Institut National de Recherche en Informatique et     *
+#*     en Automatique.                                                    *
+#*                                                                        *
+#*   All rights reserved.  This file is distributed under the terms of    *
+#*   the GNU Lesser General Public License version 2.1, with the          *
+#*   special exception on linking described in the file LICENSE.          *
+#*                                                                        *
+#**************************************************************************
+
+.PHONY: default
+default: compile
+
+# Same as Makefile.okbad, but
+#
+# * Only tests files with "ok" or "bad".  Other files are just compiled.
+# * Compiler crash is detected by grep "Fatal error"
+# * Compiled programs are executed even if there is no XXX.reference file
+
+# See run-file in Makefile.several for the use of mktemp
+.PHONY: compile
+compile: $(CMOS)
+	@for file in *.ml; do \
+	  if [ `echo $$file | grep principal` ]; \
+	  then PRIN="-principal -w +18+19 -warn-error A"; \
+	  else PRIN=""; fi; \
+          F="`basename $$file .ml`"; \
+	  if [ `echo $$file | grep bad` ]; then \
+	    printf " ... testing '$$file'"; \
+	    $(OCAMLC) -c -w a $$PRIN $$file 2>$$F.result \
+            && echo " => failed" \
+	    || if grep "Fatal error" $$F.result > /dev/null; then echo " => failed"; else echo " => passed"; fi; \
+	  elif [ `echo $$file | grep ok` ]; then \
+	    printf " ... testing '$$file'"; \
+	    test -f $$F.mli && $(OCAMLC) -c -w a $$PRIN $$F.mli; \
+	    $(OCAMLC) -c -w a $$PRIN $$file 2>/dev/null \
+	    && if test -e program.byte.exe; then \
+	         T="`mktemp -p .`"; \
+	         mv -f program.byte.exe "$$T"; \
+	         rm -f "$$T"; \
+	       fi \
+	    && rm -f program.byte program.byte.exe \
+	    && $(OCAMLC) $(CMOS) $$F.cmo -o program.byte$(EXE) \
+	    && $(OCAMLRUN) program.byte$(EXE) 2>$$F.result \
+	    && if [ -f  $$F.reference ]; then \
+	         $(DIFF) $$F.reference $$F.result >/dev/null; \
+	       fi \
+	    && if [ -f $$F.reference ]; then \
+	         test -e program.byte.exe && { \
+	           T="`mktemp -p .`"; \
+	           mv -f program.byte.exe "$$T"; \
+	           rm -f "$$T"; \
+	         } ; \
+	         rm -f program.byte program.byte.exe; \
+	         $(OCAMLC) $$F.cmo -o program.byte$(EXE) \
+	         && $(OCAMLRUN) program.byte$(EXE) >$$F.result \
+	         && $(DIFF) $$F.reference $$F.result >/dev/null; \
+	       fi \
+	    && echo " => passed" || echo " => failed"; \
+	  fi; \
+	done
+
+.PHONY: promote
+promote: defaultpromote
+
+.PHONY: clean
+clean: defaultclean
+	@rm -f program.byte program.byte.exe *.cm* *.result
