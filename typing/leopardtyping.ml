@@ -397,7 +397,7 @@ end = struct
               | exception Not_found -> f l
               | p ->
                   let md = Env.find_module p env in
-                  `ShadowedBy (`Module, p, md.Types.md_loc)
+                  `ShadowedBy (`Module, p, md.Types.md_loc);
               end                     
           | _ -> `NotFound (* strange... *)
         in
