@@ -48,7 +48,6 @@ let interface ppf sourcefile outputprefix =
     let modulename = module_of_filename ppf sourcefile outputprefix in
     Env.set_unit_name modulename;
     let initial_env = Compmisc.initial_env () in
-    let initial_env = Compmisc.leopard_init initial_env in
     let ast = Pparse.parse_interface ~tool_name ppf sourcefile in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
     if !Clflags.dump_source then fprintf ppf "%a@." Pprintast.signature ast;
@@ -76,7 +75,6 @@ let interface ppf sourcefile outputprefix =
           Compmisc.init_path false;
           Env.set_unit_name modulename;
           let initial_env = Compmisc.initial_env () in
-          let initial_env = Compmisc.leopard_init initial_env in
           let tsg = Typemod.type_interface sourcefile initial_env ast in
           let sg = tsg.sig_type in
           ignore (Includemod.signatures initial_env sg sg);
@@ -116,7 +114,6 @@ let implementation ~backend ppf sourcefile outputprefix =
     let modulename = module_of_filename ppf sourcefile outputprefix in
     Env.set_unit_name modulename;
     let env = Compmisc.initial_env() in
-    let env = Compmisc.leopard_init env in
     Compilenv.reset ?packname:!Clflags.for_package modulename;
     let cmxfile = outputprefix ^ ".cmx" in
     let objfile = outputprefix ^ ext_obj in
@@ -153,7 +150,6 @@ let implementation ~backend ppf sourcefile outputprefix =
               Compmisc.init_path false;
               Env.set_unit_name modulename;
               let env = Compmisc.initial_env() in
-              let env = Compmisc.leopard_init env in
               Untypeast.untype_structure typedtree
               ++ Profile.(record typing)
                 (Typemod.type_implementation sourcefile outputprefix modulename env))

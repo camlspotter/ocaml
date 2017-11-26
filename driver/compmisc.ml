@@ -49,21 +49,6 @@ let open_implicit_module m env =
              txt = Longident.parse m } in
   snd (Typemod.type_open_ Override env lid.loc lid)
 
-let initial_env () =
-  Ident.reinit();
-  let initial =
-    if Config.safe_string then Env.initial_safe_string
-    else if !Clflags.unsafe_string then Env.initial_unsafe_string
-    else Env.initial_safe_string
-  in
-  let env =
-    if !Clflags.nopervasives then initial else
-    open_implicit_module "Pervasives" initial
-  in
-  List.fold_left (fun env m ->
-    open_implicit_module m env
-  ) env (!implicit_modules @ List.rev !Clflags.open_modules)
-
 let is_leopardlib_available env =
   try
     ignore (Env.lookup_module ~load:true Longident.(Lident "Leopard") env); true
@@ -80,6 +65,24 @@ let leopard_init env =
   match !Clflags.leopard_mode with
   | Some true -> open_implicit_module "Leopard" env
   | _ -> env
+
+let initial_env () =
+  Ident.reinit();
+  let initial =
+    if Config.safe_string then Env.initial_safe_string
+    else if !Clflags.unsafe_string then Env.initial_unsafe_string
+    else Env.initial_safe_string
+  in
+  let env =
+    if !Clflags.nopervasives then initial else
+    open_implicit_module "Pervasives" initial
+  in
+  let env =
+    List.fold_left (fun env m ->
+        open_implicit_module m env
+      ) env (!implicit_modules @ List.rev !Clflags.open_modules)
+  in
+  leopard_init env
 
 let read_color_env ppf =
   try
