@@ -30,6 +30,11 @@ let resolve_overloading exp ({loc} as lidloc) path =
 (*
   Format.eprintf "resolve_overloading %a %a@." !Location.printer loc Printtyp.path path;
 *)
+  match Types.gen_vars exp.exp_type with
+  | _::_ ->
+      Location.raise_errorf ~loc "@[<2>Overloaded values cannot be used in polymorphic contexts,@ but this value is used as@ %a@]" Printtyp.type_scheme exp.exp_type
+  | [] ->
+
   let env = exp.exp_env in
 
   let name = get_name path in

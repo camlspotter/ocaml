@@ -32,13 +32,13 @@ compile: $(CMOS)
           F="`basename $$file .ml`"; \
 	  if [ `echo $$file | grep bad` ]; then \
 	    printf " ... testing '$$file'"; \
-	    $(OCAMLC) -c -w a $$PRIN $$file 2>$$F.result \
+	    $(OCAMLC) -c -w a $$PRIN $(ADD_COMPFLAGS) $$file 2>$$F.result \
             && echo " => failed" \
 	    || if grep "Fatal error" $$F.result > /dev/null; then echo " => failed"; else echo " => passed"; fi; \
 	  elif [ `echo $$file | grep ok` ]; then \
 	    printf " ... testing '$$file'"; \
-	    test -f $$F.mli && $(OCAMLC) -c -w a $$PRIN $$F.mli; \
-	    $(OCAMLC) -c -w a $$PRIN $$file 2>/dev/null \
+	    test -f $$F.mli && $(OCAMLC) -c -w a $(ADD_COMPFLAGS) $$PRIN $$F.mli; \
+	    $(OCAMLC) -c -w a $$PRIN $(ADD_COMPFLAGS) $$file 2>/dev/null \
 	    && if test -e program.byte.exe; then \
 	         T="`mktemp -p .`"; \
 	         mv -f program.byte.exe "$$T"; \
@@ -57,7 +57,7 @@ compile: $(CMOS)
 	           rm -f "$$T"; \
 	         } ; \
 	         rm -f program.byte program.byte.exe; \
-	         $(OCAMLC) $$F.cmo -o program.byte$(EXE) \
+	         $(OCAMLC) $(CMOS) $$F.cmo -o program.byte$(EXE) \
 	         && $(OCAMLRUN) program.byte$(EXE) >$$F.result \
 	         && $(DIFF) $$F.reference $$F.result >/dev/null; \
 	       fi \
