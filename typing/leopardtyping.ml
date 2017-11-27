@@ -175,12 +175,17 @@ end = struct
     let gvars' = uniq_by_id gvars in
     if List.length gvars <> List.length gvars' then assert false;
     let res = f () in
+    let rec generalize_var gv =
+      gv.level <- Btype.generic_level;
+      match gv.desc with
+      | Tlink t -> generalize_var t
+      | Tvar _ -> ()
+      | _ -> assert false
+    in
     let gvars'' = List.map (fun gv ->
         let gv' = Ctype.repr gv in
         match gv'.desc with
-        | Tvar _ ->
-            gv'.level <- Btype.generic_level;
-            gv'
+        | Tvar _ -> generalize_var gv; gv'
         | _ -> failwith "a generic variable are unified with non variable") gvars
     in
     if List.length gvars <> List.length (uniq_by_id gvars'') then
@@ -593,7 +598,7 @@ end = struct
         in
         let rety = Btype.newgenvar () in
         let apty = fold_right (fun (l,ty) t -> Btype.newgenty & Tarrow (l, ty, t, Cok)) atys rety in
-        !!% "@[<2>App:@ @[%a@]@ @[%a@]@]@." Printtyp.type_scheme fty Printtyp.type_scheme apty;
+        !!% "@[<2>App:@ @[%a@]@ and @[%a@]@]@." Printtyp.type_scheme fty Printtyp.type_scheme apty;
         Ctype.unify env fty apty;
         let e = 
         { exp_desc = Texp_apply (funct, map (fun (l,a) -> (l,Some a)) args)
@@ -604,7 +609,7 @@ end = struct
         ; exp_attributes = []
         }
         in
-        !!% "@[<2>Appx: =>@ @[%a@]@ @[%a@]@ code: %a@]@."
+        !!% "@[<2>Appx: =>@ @[%a@]@ and @[%a@]@ code: %a@]@."
           Printtyp.type_scheme fty Printtyp.type_scheme apty
           format_expression e
         ;

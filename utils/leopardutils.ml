@@ -51,6 +51,15 @@ module XFormat = struct
 
   let (!!%) = Format.eprintf
 
+  let rec list (sep : (unit, formatter, unit) format)  f ppf = function
+    | [] -> ()
+    | [x] -> f ppf x
+    | x::xs -> 
+        fprintf ppf "@[%a@]%t%a" 
+  	f x
+  	(fun ppf -> fprintf ppf sep)
+  	(list sep f) xs
+
   module Open = struct
     let (!!%) = (!!%)
 

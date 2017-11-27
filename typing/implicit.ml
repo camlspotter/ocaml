@@ -693,12 +693,8 @@ module Runtime = struct
     | _ -> false
 
 
-  let gen_ident env loc lid = 
-    let res = Ctype.with_def & fun () -> 
-        Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lid; loc})
-    in
-    Ctype.generalize res.exp_type;
-    res
+  let get_ident env loc lid = 
+    Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lid; loc})
 
 (*
   let app e args = { exp_desc= Texp_apply (e, args)
@@ -714,19 +710,19 @@ module Runtime = struct
     
   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
   let embed e =
-    let f = gen_ident e.exp_env e.exp_loc lident_embed in
+    let f = get_ident e.exp_env e.exp_loc lident_embed in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
     app f [Nolabel, e]
 
   (** [get e] builds [Leopard.Implicits.get <e>] *)
   let get e =
-    let f = gen_ident e.exp_env e.exp_loc lident_get in
+    let f = get_ident e.exp_env e.exp_loc lident_get in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
     app f [Nolabel, e]
 
   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
   let from_Some e =
-    let f = gen_ident e.exp_env e.exp_loc lident_from_Some in
+    let f = get_ident e.exp_env e.exp_loc lident_from_Some in
     app f [Nolabel, e]
 end
 
@@ -1050,114 +1046,121 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
   let is_function_id = String.is_prefix "__imp__arg__"
 
-  let enter_expression e = match e.exp_desc with
-    | Texp_apply (f, args) ->
-        (* Resolve omitted ?_x arguments *)
-        (* XXX cleanup *)
-        let opt e = match e.exp_desc with
-          | Texp_apply ( f, args ) ->
-              let un_some e = match e.exp_desc with
-                | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
-                | _ -> None
+  let enter_expression e =
+    let f () = 
+      match e.exp_desc with
+      | Texp_apply (f, args) ->
+          (* Resolve omitted ?_x arguments *)
+          (* XXX cleanup *)
+          let opt e = match e.exp_desc with
+            | Texp_apply ( f, args ) ->
+                let un_some e = match e.exp_desc with
+                  | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
+                  | _ -> None
+                in
+                begin match f.exp_desc with
+                | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
+                    (* %imp l:x ... *)
+                    let l = match repr_desc f.exp_type with
+                      | Tarrow (l, _, _, _) -> l
+                      | _ -> assert false
+                    in
+                    let (lefts, rights) =
+                      partition_map (fun (l',a) ->
+                          if l = l' then Either.Left a else Either.Right (l', a)) args
+                    in
+                    begin match lefts, rights with
+                    | [Some a], [] ->
+                        begin match un_some a with
+                        | Some a -> { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                        | None -> { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                        end
+                    | [Some a], _ ->
+                        begin match un_some a with
+                        | Some a ->
+                            (* THis case is correct? *)
+                            (* %imp ?l:a *)
+                            { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
+                        | None -> 
+                            (* %imp ?l:a ... 
+                                 => Runtime.get (Runtime.from_Some a) ...
+                            *)
+                            { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights); exp_type = e.exp_type }
+                        end
+                    | _ -> e
+                    end
+                | _ -> e
+                end
+            | _ -> e
+          in
+          opt
+            { e with
+              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+  
+      | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
+          (* Eeek, label with multiple cases? *)
+          warnf "%a: Unexpected label with multiple function cases"
+            Location.format e.exp_loc;
+          e
+  
+      | Texp_function ({ arg_label=l; cases= [case] } as f) ->
+          let p = case.c_lhs in
+          begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
+          | (_, None, _, _) -> e
+          | (type_, Some _spec, _conv, unconv) -> (* CR jfuruse: specs are ignored *)
+              (* This is an imp arg *)
+  
+              (* Build  fun ?d:(d as __imp_arg__) -> *)
+  
+              let loc = Location.ghost p.pat_loc in
+              let name = create_imp_arg_name () in
+              (* p ->     ===>   (p as fname) -> *)
+              let lident = Longident.Lident name in
+              let id = Ident.create name in
+              let path = Path.Pident id in
+              let vdesc =
+                { val_type = p.pat_type
+                ; val_kind = Val_reg
+                ; val_loc = loc
+                ; val_attributes = []  }
               in
-              begin match f.exp_desc with
-              | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
-                  (* %imp l:x ... *)
-                  let l = match repr_desc f.exp_type with
-                    | Tarrow (l, _, _, _) -> l
-                    | _ -> assert false
-                  in
-                  let (lefts, rights) =
-                    partition_map (fun (l',a) ->
-                        if l = l' then Either.Left a else Either.Right (l', a)) args
-                  in
-                  begin match lefts, rights with
-                  | [Some a], [] ->
-                      begin match un_some a with
-                      | Some a -> { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
-                      | None -> { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
-                      end
-                  | [Some a], _ ->
-                      begin match un_some a with
-                      | Some a ->
-                          (* THis case is correct? *)
-                          (* %imp ?l:a *)
-                          { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
-                      | None -> 
-                          (* %imp ?l:a ... 
-                               => Runtime.get (Runtime.from_Some a) ...
-                          *)
-                          { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights); exp_type = e.exp_type }
-                      end
-                  | _ -> e
-                  end
-              | _ -> e
-              end
-          | _ -> e
-        in
-        Types.keep_gen_vars (List.filter_map (function
-            | (_, Some a) -> Some a.exp_type
-            | _ -> None) args) & fun () ->
-        opt
-          { e with
-            exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
-
-
-    | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
-        (* Eeek, label with multiple cases? *)
-        warnf "%a: Unexpected label with multiple function cases"
-          Location.format e.exp_loc;
-        e
-
-    | Texp_function ({ arg_label=l; cases= [case] } as f) ->
-        let p = case.c_lhs in
-        begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
-        | (_, None, _, _) -> e
-        | (type_, Some _spec, _conv, unconv) -> (* CR jfuruse: specs are ignored *)
-            (* This is an imp arg *)
-
-            (* Build  fun ?d:(d as __imp_arg__) -> *)
-
-            let loc = Location.ghost p.pat_loc in
-            let name = create_imp_arg_name () in
-            (* p ->     ===>   (p as fname) -> *)
-            let lident = Longident.Lident name in
-            let id = Ident.create name in
-            let path = Path.Pident id in
-            let vdesc =
-              { val_type = p.pat_type
-              ; val_kind = Val_reg
-              ; val_loc = loc
-              ; val_attributes = []  }
-            in
-            let expr = unconv &
-              { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
-              ; exp_loc = Location.none
-              ; exp_extra = []
-              ; exp_type = p.pat_type
-              ; exp_env = p.pat_env
-              ; exp_attributes = []
-              }
-            in
-            derived_candidates := (name, { Candidate.path; (* <- not actually path. see expr field *)
-                                           expr;
-                                           type_;
-                                           aggressive = false } ) 
-                                  :: !derived_candidates;
-            let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
-            let _case = { case with c_lhs = p' } in
-            let e = { e with
-                      (* exp_desc = Texp_function { f with cases= [case] }*)
-                      exp_desc = Texp_function f 
-                    }
-            in
-
-            (* __imp_arg__ will be used for the internal resolutions *)
-            (* XXX needs a helper module *)
-            Typedtree.add_attribute "leopard_mark" 
-              (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
-        end
-    | _ -> e
+              let expr = unconv &
+                { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
+                ; exp_loc = Location.none
+                ; exp_extra = []
+                ; exp_type = p.pat_type
+                ; exp_env = p.pat_env
+                ; exp_attributes = []
+                }
+              in
+              derived_candidates := (name, { Candidate.path; (* <- not actually path. see expr field *)
+                                             expr;
+                                             type_;
+                                             aggressive = false } ) 
+                                    :: !derived_candidates;
+              let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
+              let _case = { case with c_lhs = p' } in
+              let e = { e with
+                        (* exp_desc = Texp_function { f with cases= [case] }*)
+                        exp_desc = Texp_function f 
+                      }
+              in
+  
+              (* __imp_arg__ will be used for the internal resolutions *)
+              (* XXX needs a helper module *)
+              Typedtree.add_attribute "leopard_mark" 
+                (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+          end
+      | _ -> e
+    in
+    Format.eprintf "Entering %a : %a@."
+      Typedtree.format_expression e
+      Printtyp.type_scheme e.exp_type;
+    let res = Types.keep_gen_vars [e.exp_type] f in
+    Format.eprintf "Exiting %a : %a@."
+      Typedtree.format_expression e
+      Printtyp.type_scheme e.exp_type;
+    res
 
   let leave_expression e =
     let open Parsetree in
