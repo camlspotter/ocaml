@@ -700,6 +700,7 @@ module Runtime = struct
     Ctype.generalize res.exp_type;
     res
 
+(*
   let app e args = { exp_desc= Texp_apply (e, args)
                    ; exp_type = e.exp_type (* XXX incorrect *)
                    ; exp_loc = Location.none
@@ -707,23 +708,26 @@ module Runtime = struct
                    ; exp_env = e.exp_env
                    ; exp_attributes = []
                    }
- 
+*)
+
+  let app e args = Typedtree.app e.exp_env e args
+    
   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
   let embed e =
     let f = gen_ident e.exp_env e.exp_loc lident_embed in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
-    app f [Nolabel, Some e]
+    app f [Nolabel, e]
 
   (** [get e] builds [Leopard.Implicits.get <e>] *)
   let get e =
     let f = gen_ident e.exp_env e.exp_loc lident_get in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
-    app f [Nolabel, Some e]
+    app f [Nolabel, e]
 
   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
   let from_Some e =
     let f = gen_ident e.exp_env e.exp_loc lident_from_Some in
-    Typedtree.app e.exp_env f [Nolabel, e]
+    app f [Nolabel, e]
 end
 
 (** Check it is [(<ty>, <spec>) Ppx_implicits.t] *)
@@ -733,7 +737,7 @@ let is_imp_arg_type env ty =
       Some (ty, spec)
   | _ -> None
 
-let check_arg env loc l ty
+let is_imp_arg env loc l ty
   : ( type_expr
       * Spec.t option
       * (expression -> expression)
@@ -769,7 +773,7 @@ module Klabel2 = struct
     let ty = Ctype.expand_head env ty in
     match repr_desc ty with
     | Tarrow(l, ty1, ty2, _) ->
-        begin match check_arg env Location.none l ty1 with
+        begin match is_imp_arg env Location.none l ty1 with
         | (_, Some _, _, _) ->
             let cs, ty = extract env ty2 in
             (l,ty1)::cs, ty
@@ -796,7 +800,7 @@ let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label
   in
   flip map (f type_) & fun (args, ty) ->
     (flip map args (fun (l,ty) ->
-      let (ty,specopt,conv,_unconv) = check_arg env loc l ty in
+      let (ty,specopt,conv,_unconv) = is_imp_arg env loc l ty in
       ( l
       , ty
       , (match specopt with
@@ -995,7 +999,7 @@ let resolve_omitted_imp_arg loc env a = match a with
       begin match is_none e with
       | None -> a (* explicitly applied *)
       | Some _ -> (* omitted *)
-          let (ty, specopt, conv, _unconv) = check_arg env loc l e.exp_type in
+          let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
           match specopt with
           | None -> a (* It is not imp arg *)
           | Some spec ->
@@ -1040,7 +1044,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
      into one  AST mapper, and one part must be scattered into 
      more than two places. Very hard to read. *)
 
-  let create_function_name = 
+  let create_imp_arg_name = 
     let x = ref 0 in
     fun () -> incr x; "__imp__arg__" ^ string_of_int !x
 
@@ -1091,6 +1095,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
               end
           | _ -> e
         in
+        Types.keep_gen_vars (List.filter_map (function
+            | (_, Some a) -> Some a.exp_type
+            | _ -> None) args) & fun () ->
         opt
           { e with
             exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
@@ -1104,14 +1111,18 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
     | Texp_function ({ arg_label=l; cases= [case] } as f) ->
         let p = case.c_lhs in
-        begin match check_arg p.pat_env p.pat_loc l p.pat_type with
+        begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
         | (_, None, _, _) -> e
         | (type_, Some _spec, _conv, unconv) -> (* CR jfuruse: specs are ignored *)
+            (* This is an imp arg *)
+
+            (* Build  fun ?d:(d as __imp_arg__) -> *)
+
             let loc = Location.ghost p.pat_loc in
-            let fname = create_function_name () in
+            let name = create_imp_arg_name () in
             (* p ->     ===>   (p as fname) -> *)
-            let lident = Longident.Lident fname in
-            let id = Ident.create fname in
+            let lident = Longident.Lident name in
+            let id = Ident.create name in
             let path = Path.Pident id in
             let vdesc =
               { val_type = p.pat_type
@@ -1128,20 +1139,23 @@ module MapArg : TypedtreeMap.MapArgument = struct
               ; exp_attributes = []
               }
             in
-            derived_candidates := (fname, { Candidate.path; (* <- not actually path. see expr field *)
-                                            expr;
-                                            type_;
-                                            aggressive = false } ) 
+            derived_candidates := (name, { Candidate.path; (* <- not actually path. see expr field *)
+                                           expr;
+                                           type_;
+                                           aggressive = false } ) 
                                   :: !derived_candidates;
-            let p' = { p with pat_desc = Tpat_alias (p, id, {txt=fname; loc})} in
+            let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
             let _case = { case with c_lhs = p' } in
             let e = { e with
                       (* exp_desc = Texp_function { f with cases= [case] }*)
                       exp_desc = Texp_function f 
-                    } in
+                    }
+            in
+
+            (* __imp_arg__ will be used for the internal resolutions *)
             (* XXX needs a helper module *)
             Typedtree.add_attribute "leopard_mark" 
-              (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (fname, None))))) e
+              (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
         end
     | _ -> e
 
