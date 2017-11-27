@@ -118,6 +118,12 @@ module XTypes : sig
     
   val close_gen_vars : type_expr -> unit
 
+  (** [keep_gen_vars tys f] performs [f] then retain the generic variables'
+      level of [tys] back.  It raises [Failure] when [f] modifies one of
+      these generic variables to non variable or unifies together.
+  *)
+  val keep_gen_vars : type_expr list -> (unit -> 'a) -> 'a
+
 end = struct
   open Types
   open Btype
@@ -162,6 +168,24 @@ end = struct
        (* eprintf "Closing %a@." Printtyp.type_expr gv *)
     | Tunivar _ -> ()
     | _ -> assert false
+
+  let keep_gen_vars tys f =
+    let gvars = gen_vars (Ctype.newty (Ttuple tys)) in
+    let uniq_by_id = List.sort_uniq (fun x y -> compare x.id y.id) in
+    let gvars' = uniq_by_id gvars in
+    if List.length gvars <> List.length gvars' then assert false;
+    let res = f () in
+    let gvars'' = List.map (fun gv ->
+        let gv' = Ctype.repr gv in
+        match gv'.desc with
+        | Tvar _ ->
+            gv'.level <- Btype.generic_level;
+            gv'
+        | _ -> failwith "a generic variable are unified with non variable") gvars
+    in
+    if List.length gvars <> List.length (uniq_by_id gvars'') then
+      failwith "generic variables are unified together";
+    res
 end
 
 module Types = struct
@@ -544,33 +568,6 @@ end = struct
       Format.eprintf "Typpx.Forge.Exp: %a is not accessible in this scope@." Longident.format lid;
       assert false
       
-  let some ev e =
-    check_constructor_is_for_path ev "Some" Predef.path_option;
-    Typecore.option_some e
-
-  let app env funct args =
-    match args with
-    | [] -> funct
-    | _ ->
-        let fty = funct.exp_type in
-        let atys = map (function
-            | (l,e) -> l, e.exp_type) args
-        in
-        let rety = Btype.newgenvar () in
-        let apty = fold_right (fun (l,ty) t -> Btype.newgenty & Tarrow (l, ty, t, Cok)) atys rety in
-        !!% "@[<2>App:@ @[%a@]@ @[%a@]@]@." Printtyp.raw_type_expr fty Printtyp.raw_type_expr apty;
-        Ctype.unify env fty apty;
-        !!% "@[<2>App: =>@ @[%a@]@ @[%a@]@." Printtyp.raw_type_expr fty Printtyp.raw_type_expr apty;
-        { exp_desc = Texp_apply (funct, map (fun (l,a) -> (l,Some a)) args)
-        ; exp_loc = Location.none
-        ; exp_extra = []
-        ; exp_type = rety
-        ; exp_env = env
-        ; exp_attributes = []
-        }
-    
-  open Asttypes
-  
   let add_attribute key v e =
     { e
       with exp_attributes= ( {txt=key; loc= Location.ghost e.exp_loc}
@@ -581,25 +578,7 @@ end = struct
     let xs, exp_attributes = partition_map f e.exp_attributes in
     xs,
     { e with exp_attributes }
-end
 
-module Typedtree = struct
-  include Typedtree
-  include XTypedtree
-
-  let check_constructor_is_for_path ev s path =
-    let lid = Longident.Lident s in
-    try
-      let cdesc = Env.lookup_constructor lid ev in
-      match (Ctype.repr cdesc.cstr_res).desc with
-      | Tconstr (p, _, _) when p = path -> ()
-      | _ -> 
-          Format.eprintf "Typpx.Forge.Exp: %a is not accessible in this scope@." Longident.format lid;
-          assert false
-    with Not_found ->
-      Format.eprintf "Typpx.Forge.Exp: %a is not accessible in this scope@." Longident.format lid;
-      assert false
-      
   let some ev e =
     check_constructor_is_for_path ev "Some" Predef.path_option;
     Typecore.option_some e
@@ -614,9 +593,9 @@ module Typedtree = struct
         in
         let rety = Btype.newgenvar () in
         let apty = fold_right (fun (l,ty) t -> Btype.newgenty & Tarrow (l, ty, t, Cok)) atys rety in
-        !!% "App:  %a  %a@." Printtyp.type_scheme fty Printtyp.type_scheme apty;
+        !!% "@[<2>App:@ @[%a@]@ @[%a@]@]@." Printtyp.type_scheme fty Printtyp.type_scheme apty;
         Ctype.unify env fty apty;
-        !!% "App:  => %a  %a@." Printtyp.type_scheme fty Printtyp.type_scheme apty;
+        let e = 
         { exp_desc = Texp_apply (funct, map (fun (l,a) -> (l,Some a)) args)
         ; exp_loc = Location.none
         ; exp_extra = []
@@ -624,7 +603,17 @@ module Typedtree = struct
         ; exp_env = env
         ; exp_attributes = []
         }
-    
+        in
+        !!% "@[<2>Appx: =>@ @[%a@]@ @[%a@]@ code: %a@]@."
+          Printtyp.type_scheme fty Printtyp.type_scheme apty
+          format_expression e
+        ;
+        e
+end
+
+module Typedtree = struct
+  include Typedtree
+  include XTypedtree
 end
 
 module Forge = struct
