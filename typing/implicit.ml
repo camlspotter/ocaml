@@ -1153,14 +1153,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
           end
       | _ -> e
     in
-    Format.eprintf "Entering %a : %a@."
-      Typedtree.format_expression e
-      Printtyp.type_scheme e.exp_type;
-    let res = Types.keep_gen_vars [e.exp_type] f in
-    Format.eprintf "Exiting %a : %a@."
-      Typedtree.format_expression e
-      Printtyp.type_scheme e.exp_type;
-    res
+    Types.keep_gen_vars [e.exp_type] f
 
   let leave_expression e =
     let open Parsetree in
