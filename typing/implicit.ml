@@ -534,7 +534,7 @@ end = struct
             | [Nolabel, e] -> 
                 begin match get_lid e with
                 | Some lid -> Deriving lid
-                | None -> raise_errorf ~loc:e.pexp_loc "deriving must take an module path" Location.format e.pexp_loc
+                | None -> raise_errorf ~loc:e.pexp_loc "deriving must take an module path"
                 end
             | _ -> raise_errorf ~loc:e.pexp_loc "deriving must take just one argument"
             end
@@ -695,34 +695,30 @@ module Runtime = struct
   let get_ident env loc lid = 
     Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lid; loc})
 
-(*
-  let app e args = { exp_desc= Texp_apply (e, args)
-                   ; exp_type = e.exp_type (* XXX incorrect *)
-                   ; exp_loc = Location.none
-                   ; exp_extra = []
-                   ; exp_env = e.exp_env
-                   ; exp_attributes = []
-                   }
-*)
+  let illtyped_app e args =
+    { e with
+      exp_desc= Texp_apply (e, List.map (fun (l,x) -> (l,Some x)) args)
+    ; exp_loc = Location.none
+    ; exp_extra = []
+    ; exp_attributes = []
+    }
 
-  let app e args = Typedtree.app e.exp_env e args
-    
   (** [embed e] builds [Leopard.Implicits.embed <e>] *)
   let embed e =
     let f = get_ident e.exp_env e.exp_loc lident_embed in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
-    app f [Nolabel, e]
+    illtyped_app f [Nolabel, e]
 
   (** [get e] builds [Leopard.Implicits.get <e>] *)
   let get e =
     let f = get_ident e.exp_env e.exp_loc lident_get in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
-    app f [Nolabel, e]
+    illtyped_app f [Nolabel, e]
 
   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
   let from_Some e =
     let f = get_ident e.exp_env e.exp_loc lident_from_Some in
-    app f [Nolabel, e]
+    illtyped_app f [Nolabel, e]
 end
 
 (** Check it is [(<ty>, <spec>) Ppx_implicits.t] *)
@@ -980,8 +976,36 @@ let resolve env loc spec ty = with_snapshot & fun () ->
   | Ok [es] ->
       match es with
       | [e] ->
-          prerr_endline "unshadow replace...";
-          Unshadow.Replace.replace e
+          let shadowed = ref [] in
+          let module I = TypedtreeIter.MakeIterator(struct
+              include TypedtreeIter.DefaultIteratorArgument
+              let enter_expression e = match e.exp_desc with
+                | Texp_ident (p, _, _) ->
+                    begin match Env.value_accessibility env (* or e.exp_env? *) p with
+                    | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
+                    | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
+                    | `Accessible _ -> ()
+                    end
+                | _ -> ()
+            end)
+          in
+          I.iter_expression e;
+          begin match !shadowed with
+          | [] -> e
+          | _ ->
+              let format_shadow ppf = function
+                | (_, (`Accessible _ | `NotFound)) -> assert false
+                | p, `ShadowedBy (mv, p', loc) ->
+                    Format.fprintf ppf "%a is shadowed by %s %a defined at %a"
+                      Path.format p
+                      (match mv with `Value -> "value" | `Module -> "module")
+                      Path.format p'
+                      Location.format loc
+              in
+              raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
+                Typedtree.format_expression e
+                (Format.list "@," format_shadow) !shadowed
+          end
       | _ -> assert false (* impos *)
 
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
@@ -1045,9 +1069,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
   let is_function_id = String.is_prefix "__imp__arg__"
 
-  let enter_expression e =
-    let f () = 
-      match e.exp_desc with
+  let enter_expression e = match e.exp_desc with
       | Texp_apply (f, args) ->
           (* Resolve omitted ?_x arguments *)
           (* XXX cleanup *)
@@ -1071,8 +1093,18 @@ module MapArg : TypedtreeMap.MapArgument = struct
                     begin match lefts, rights with
                     | [Some a], [] ->
                         begin match un_some a with
-                        | Some a -> { (Runtime.get a) with exp_env = e.exp_env; exp_type = e.exp_type }
-                        | None -> { (Runtime.get & Runtime.from_Some a) with exp_env = e.exp_env; exp_type = e.exp_type }
+                        | Some a ->
+                            (* <%imp> ?:Some a   =>   Runtime.get a *)
+                            { (Runtime.get a) with
+                              exp_env = e.exp_env
+                            ; exp_type = e.exp_type
+                            }
+                        | None ->
+                            (* <%imp> ?:a   =>  Runtime.(get (form_Some a)) *)
+                            { (Runtime.get & Runtime.from_Some a) with
+                              exp_env = e.exp_env
+                            ; exp_type = e.exp_type
+                            }
                         end
                     | [Some a], _ ->
                         begin match un_some a with
@@ -1151,8 +1183,6 @@ module MapArg : TypedtreeMap.MapArgument = struct
                 (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
           end
       | _ -> e
-    in
-    Types.keep_gen_vars [e.exp_type] f
 
   let leave_expression e =
     let open Parsetree in
