@@ -213,7 +213,7 @@ end = struct
           try
             Env.lookup_module ~load:true lid env
           with
-          | Not_found -> raise_errorf "%a: Unbound module %a." Location.format loc Longident.format lid
+          | Not_found -> raise_errorf ~loc "Unbound module %a." Longident.format lid
     in
     let paths = Env.values_of_module ~recursive env loc path in
     map (default_candidate_of_path env) paths
@@ -489,8 +489,8 @@ end = struct
      get_type_components x)
   
   (* CR jfuruse: need tests *)
-  let unmangle_spec_string s = 
-    if not & String.is_prefix prefix s then raise_errorf "Mangled spec string does not start with \"Spec_\": %s" s;
+  let unmangle_spec_string loc s = 
+    if not & String.is_prefix prefix s then raise_errorf ~loc "Mangled spec string does not start with \"Spec_\": %s" s;
     let s = String.sub s prefix_len (String.length s - prefix_len) in
     Mangle.unmangle s
   
@@ -524,9 +524,9 @@ end = struct
                 begin match e.pexp_desc with
                 | Pexp_ident lid ->
                     Has_type (Ast_helper.Typ.constr lid [], None)
-                | _ -> raise_errorf "has_type must take a type path"
+                | _ -> raise_errorf ~loc:e.pexp_loc "has_type must take a type path"
                 end
-            | _ -> raise_errorf "has_type must take just one argument"
+            | _ -> raise_errorf ~loc:e.pexp_loc "has_type must take just one argument"
             end
             
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "deriving"} }, args ) ->
@@ -534,18 +534,18 @@ end = struct
             | [Nolabel, e] -> 
                 begin match get_lid e with
                 | Some lid -> Deriving lid
-                | None -> raise_errorf "deriving must take an module path" Location.format e.pexp_loc
+                | None -> raise_errorf ~loc:e.pexp_loc "deriving must take an module path" Location.format e.pexp_loc
                 end
-            | _ -> raise_errorf "deriving must take just one argument"
+            | _ -> raise_errorf ~loc:e.pexp_loc "deriving must take just one argument"
             end
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "ppxderive"} }, args ) ->
             begin match args with
             | [Nolabel, e] ->
                 begin match e.pexp_desc with
                 | Pexp_constraint (e, cty) -> PPXDerive (e, cty, None)
-                | _ -> raise_errorf "ppxderive must take (e : t)"
+                | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take (e : t)"
                 end
-            | _ -> raise_errorf "ppxderive must take just one argument"
+            | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take just one argument"
             end
         | _ -> 
             let f,lid = flag_lid e in
@@ -555,12 +555,11 @@ end = struct
                       [Nolabel, e] ) -> 
             begin match get_lid e with
             | Some lid -> `Just, lid
-            | None -> raise_errorf "%a: just requires an argument" Location.format e.pexp_loc
+            | None -> raise_errorf ~loc:e.pexp_loc "Just requires an argument"
             end
         | Pexp_construct ({txt=lid}, None) -> `In, lid
         | _ ->
-            raise_errorf "%a: Illegal spec expression: %a" 
-              Location.format e.pexp_loc
+            raise_errorf ~loc:e.pexp_loc "Illegal spec expression: %a" 
               Pprintast.expression e
               
       in
@@ -581,13 +580,13 @@ end = struct
             Error (`String "spec must be an OCaml expression")
   
   let error loc = function
-    | `String s -> raise_errorf "%a: %s" Location.format loc s
+    | `String s -> raise_errorf ~loc "%s" s
     | `Failed_unmangle s -> 
-        raise_errorf "%a: Illegal spec encoding: %S" Location.format loc s
+        raise_errorf ~loc "Illegal spec encoding: %S" s
     | `Parse s ->
-        raise_errorf "%a: Spec parse failed: %S" Location.format loc s
+        raise_errorf ~loc "Spec parse failed: %S" s
     | `ParseExp (_, s) ->
-        raise_errorf "%a: Spec parse failed: %s" Location.format loc s
+        raise_errorf ~loc "Spec parse failed: %s" s
   
   let from_payload_ env = function
     | PStr s -> from_structure env s
@@ -620,14 +619,14 @@ end = struct
                    || for_all (function (_, Fpresent, _) -> true | _ -> false) fs);
             assign_type_components (map (fun (_,_,ty) -> ty) fs)
             & at_Error (error loc)
-            & unmangle_spec_string l
+            & unmangle_spec_string loc l
               >>= from_string
               >>= from_expression env
         | _ -> 
-            raise_errorf "%a: Illegal type for implicit spec" Location.format loc
+            raise_errorf ~loc "Illegal type for implicit spec"
         end
     | _ -> 
-        raise_errorf "%a: Illegal type for implicit spec" Location.format loc
+        raise_errorf ~loc "Illegal type for implicit spec"
   
   let to_core_type _loc spec = (* XXX we should use loc *)
     let open Ast_helper in
@@ -966,19 +965,16 @@ let resolve env loc spec ty = with_snapshot & fun () ->
   let open Resolve_result in
   match resolve loc env [([],ty,spec)] with
   | MayLoop es -> 
-      raise_errorf "%a:@ The experssion has type @[%a@] which is too ambiguous to resolve this implicit.@ @[<2>The following instances may cause infinite loop of the resolution:@ @[<2>%a@]@]"
-        Location.format loc
+      raise_errorf ~loc "The experssion has type @[%a@] which is too ambiguous to resolve this implicit.@ @[<2>The following instances may cause infinite loop of the resolution:@ @[<2>%a@]@]"
         Printtyp.type_expr ty
         (* CR jfuruse: should define a function for printing Typedtree.expression *)
         (List.format ",@," format_expression) es
   | Ok [] ->
-      raise_errorf "%a:@ no instance found for@ @[%a@]"
-        Location.format loc
+      raise_errorf ~loc "No instance found for@ @[%a@]"
         Printtyp.type_expr ty
   | Ok (_::_::_ as es) ->
       let es = map (function [e] -> e | _ -> assert false (* impos *)) es in
-      raise_errorf "%a: This implicit has too ambiguous type:@ @[%a@]@ @[<2>Following possible resolutions:@ @[<v>%a@]"
-        Location.format loc
+      raise_errorf ~loc "This implicit has too ambiguous type:@ @[%a@]@ @[<2>Following possible resolutions:@ @[<v>%a@]"
         Printtyp.type_expr ty
         (List.format "@," format_expression) es
   | Ok [es] ->
@@ -994,6 +990,9 @@ let resolve_omitted_imp_arg loc env a = match a with
   | ((Optional _ as l), Some e) ->
       begin match is_none e with
       | None -> a (* explicitly applied *)
+      | Some t when Types.gen_vars t <> [] ->
+          (* omitted and generalized *)
+          raise_errorf ~loc "Generalized implicit variable cannot be omitted"
       | Some _ -> (* omitted *)
           let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
           match specopt with
