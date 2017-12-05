@@ -1014,13 +1014,13 @@ let resolve_omitted_imp_arg loc env a = match a with
   | ((Optional _ as l), Some e) ->
       begin match is_none e with
       | None -> a (* explicitly applied *)
-      | Some t when Types.gen_vars t <> [] ->
-          (* omitted and generalized *)
-          raise_errorf ~loc "Generalized implicit variable cannot be omitted"
-      | Some _ -> (* omitted *)
+      | Some t -> (* omitted *)
           let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
           match specopt with
           | None -> a (* It is not imp arg *)
+          | Some _ when Types.gen_vars t <> [] ->
+              (* omitted and generalized *)
+              raise_errorf ~loc "Generalized implicit variable cannot be omitted"
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
               (* for retyping, e.exp_env is not suitable, since 
