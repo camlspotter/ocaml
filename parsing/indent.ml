@@ -185,7 +185,6 @@ let rec preprocess lexer lexbuf =
 
       let token = lexer lexbuf in
       let start_p = lexeme_start_p lexbuf in
-      let end_p   = lexeme_end_p   lexbuf in
 
       (* If we see a newline, check the stack and insert closing tokens
          if necessary! *)
@@ -255,13 +254,7 @@ let rec preprocess lexer lexbuf =
   
         (* We need to check the line against colon_pos. This can be different
            from the last token because of COMMENTs and DOCSTRINGs *)
-        | `Colon (colon_pos, _key), _ when in_the_same_line colon_pos start_p ->
-            (* error. After special : you must change a line *)
-            raise Syntaxerr.(Error (Expecting ({ Location.loc_start= start_p;
-                                                 loc_end= end_p;
-                                                 loc_ghost = false },
-                                               "newline")))
-  
+                    
         | `Some t, COLON ->
             begin match t with
             | COMMENT _ -> assert false (* impossible *)
