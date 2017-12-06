@@ -543,6 +543,8 @@ let package_type_of_module_type pmty =
 
 %token EOL
 
+%token COLONX
+
 /* Precedences and associativities.
 
 Tokens and rules have precedences.  A reduce/reduce conflict is resolved
@@ -607,7 +609,7 @@ The precedences must be listed from low to high.
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
           NEW PREFIXOP STRING TRUE UIDENT
           LBRACKETPERCENT LBRACKETPERCENTPERCENT
-
+          COLONX
 
 /* Entry points */
 
@@ -713,8 +715,12 @@ module_expr:
       { mkmod(Pmod_ident (mkrhs $1 1)) }
   | STRUCT attributes structure END
       { mkmod ~attrs:$2 (Pmod_structure(extra_str 3 $3)) }
+  | STRUCT COLONX attributes structure COLONX END
+      { mkmod ~attrs:$3 (Pmod_structure(extra_str 4 $4)) }
   | STRUCT attributes structure error
       { unclosed "struct" 1 "end" 4 }
+  | STRUCT COLONX attributes structure error
+      { unclosed "struct" 1 "implicit end by a newline" 5 }
   | FUNCTOR attributes functor_args MINUSGREATER module_expr
       { let modexp =
           List.fold_left
@@ -857,8 +863,12 @@ module_type:
       { mkmty(Pmty_ident (mkrhs $1 1)) }
   | SIG attributes signature END
       { mkmty ~attrs:$2 (Pmty_signature (extra_sig 3 $3)) }
+  | SIG COLONX attributes signature COLONX END
+      { mkmty ~attrs:$3 (Pmty_signature (extra_sig 4 $4)) }
   | SIG attributes signature error
       { unclosed "sig" 1 "end" 4 }
+  | SIG COLONX attributes signature error
+      { unclosed "sig:" 1 "implicit end by a newline" 5 }
   | FUNCTOR attributes functor_args MINUSGREATER module_type
       %prec below_WITH
       { let mty =
@@ -1053,8 +1063,12 @@ class_simple_expr:
       { mkclass(Pcl_constr(mkrhs $1 1, [])) }
   | OBJECT attributes class_structure END
       { mkclass ~attrs:$2 (Pcl_structure $3) }
+  | OBJECT COLONX attributes class_structure COLONX END
+      { mkclass ~attrs:$3 (Pcl_structure $4) }
   | OBJECT attributes class_structure error
       { unclosed "object" 1 "end" 4 }
+  | OBJECT COLONX attributes class_structure error
+      { unclosed "object:" 1 "implicit end by a newline" 5 }
   | LPAREN class_expr COLON class_type RPAREN
       { mkclass(Pcl_constraint($2, $4)) }
   | LPAREN class_expr COLON class_type error
@@ -1167,8 +1181,12 @@ class_signature:
       { mkcty(Pcty_constr (mkrhs $1 1, [])) }
   | OBJECT attributes class_sig_body END
       { mkcty ~attrs:$2 (Pcty_signature $3) }
+  | OBJECT COLONX attributes class_sig_body COLONX END
+      { mkcty ~attrs:$3 (Pcty_signature $4) }
   | OBJECT attributes class_sig_body error
       { unclosed "object" 1 "end" 4 }
+  | OBJECT COLONX attributes class_sig_body error
+      { unclosed "object:" 1 "implicit end by a newline" 5 }
   | class_signature attribute
       { Cty.attr $1 $2 }
   | extension
@@ -1333,7 +1351,7 @@ expr:
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
       { mkexp_attrs (Pexp_function(List.rev $4)) $2 }
-  | FUNCTION BEGIN ext_attributes opt_bar match_cases END /* OCamleopard */
+  | FUNCTION COLONX ext_attributes opt_bar match_cases COLONX END /* OCamleopard */
       { mkexp_attrs (Pexp_function(List.rev $5)) $3 }
   | FUN ext_attributes labeled_simple_pattern fun_def
       { let (l,o,p) = $3 in
@@ -1342,11 +1360,11 @@ expr:
       { mkexp_attrs (mk_newtypes $5 $7).pexp_desc $2 }
   | MATCH ext_attributes seq_expr WITH opt_bar match_cases
       { mkexp_attrs (Pexp_match($3, List.rev $6)) $2 }
-  | MATCH ext_attributes seq_expr WITH BEGIN opt_bar match_cases END /* OCamleopard */
+  | MATCH ext_attributes seq_expr WITH COLONX opt_bar match_cases COLONX END /* OCamleopard */
       { mkexp_attrs (Pexp_match($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH opt_bar match_cases
       { mkexp_attrs (Pexp_try($3, List.rev $6)) $2 }
-  | TRY ext_attributes seq_expr WITH BEGIN opt_bar match_cases END /* OCamleopard */
+  | TRY ext_attributes seq_expr WITH COLONX opt_bar match_cases COLONX END /* OCamleopard */
       { mkexp_attrs (Pexp_try($3, List.rev $7)) $2 }
   | TRY ext_attributes seq_expr WITH error
       { syntax_error() }
@@ -1445,12 +1463,14 @@ expr:
       { mkexp_attrs (Pexp_assert $3) $2 }
   | LAZY ext_attributes simple_expr %prec below_HASH
       { mkexp_attrs (Pexp_lazy $3) $2 }
-  | LAZY DO ext_attributes seq_expr DONE /* OCamleopard: should be LAZY BEGIN .. END but this is ambiguous with the above original rule. */
-      { mkexp_attrs (Pexp_lazy $4) $3 }
   | OBJECT ext_attributes class_structure END
       { mkexp_attrs (Pexp_object $3) $2 }
+  | OBJECT COLONX ext_attributes class_structure COLONX END
+      { mkexp_attrs (Pexp_object $4) $3 }
   | OBJECT ext_attributes class_structure error
       { unclosed "object" 1 "end" 4 }
+  | OBJECT COLONX ext_attributes class_structure error
+      { unclosed "object:" 1 "implicit end by a newline" 5 }
   | expr attribute
       { Exp.attr $1 $2 }
   | UNDERSCORE
@@ -1471,11 +1491,18 @@ simple_expr:
       { unclosed "(" 1 ")" 3 }
   | BEGIN ext_attributes seq_expr END
       { wrap_exp_attrs (reloc_exp $3) $2 (* check location *) }
+  | BEGIN COLONX ext_attributes seq_expr COLONX END
+      { wrap_exp_attrs (reloc_exp $4) $3 (* check location *) }
   | BEGIN ext_attributes END
       { mkexp_attrs (Pexp_construct (mkloc (Lident "()") (symbol_rloc ()),
                                None)) $2 }
+  | BEGIN COLONX ext_attributes COLONX END
+      { mkexp_attrs (Pexp_construct (mkloc (Lident "()") (symbol_rloc ()),
+                               None)) $3 }
   | BEGIN ext_attributes seq_expr error
       { unclosed "begin" 1 "end" 4 }
+  | BEGIN COLONX ext_attributes seq_expr error
+      { unclosed ":" 2 "implicit end by a newline" 5 }
   | LPAREN seq_expr type_constraint RPAREN
       { mkexp_constraint $2 $3 }
   | simple_expr DOT label_longident

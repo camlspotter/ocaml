@@ -1,5 +1,6 @@
 open Lexing
 open Parser
+open Leopardutils
 
 let to_string = function
   | AMPERAMPER             -> "AMPERAMPER"
@@ -123,6 +124,7 @@ let to_string = function
   | HASHOP s               -> "HASHOP " ^ s
   | DOCSTRING _            -> "DOCSTRING .."
   | DOTOP s                -> "DOTOP " ^ s
+  | COLONX                 -> "COLONX"
 
 (** state *)
 
@@ -215,19 +217,19 @@ let rec preprocess lexer lexbuf =
                       (to_string token)
                       (column p);
                   (* insert a closing token *)
-                  Queue.add
+                  List.iter (flip Queue.add queue)
                     begin match t' with
-                    | DO       -> DONE
-                    | ELSE     -> END
-                    | FUNCTION -> END
-                    | OBJECT   -> END
-                    | SIG      -> END
-                    | STRUCT   -> END
-                    | THEN     -> END
-                    | WITH     -> END
-                    | LAZY     -> DONE
+                    | DO       -> [ COLONX; END; DONE ]
+                    | LAZY     -> [ COLONX; END ]
+                    | ELSE     -> [ COLONX; END ]
+                    | FUNCTION -> [ COLONX; END ]
+                    | OBJECT   -> [ COLONX; END ]
+                    | SIG      -> [ COLONX; END ]
+                    | STRUCT   -> [ COLONX; END ]
+                    | THEN     -> [ COLONX; END ]
+                    | WITH     -> [ COLONX; END ]
                     | _ -> assert false
-                    end queue;
+                    end;
                   close true is (* maybe we have more to close *)
                 end
           in
@@ -264,14 +266,14 @@ let rec preprocess lexer lexbuf =
             begin match t with
             | COMMENT _ -> assert false (* impossible *)
             | DOCSTRING _ -> assert false (* impossible *)
-                
-            | DO
+
+            | THEN
             | ELSE
+            | DO
             | FUNCTION
             | OBJECT
             | SIG
             | STRUCT
-            | THEN
             | WITH 
             | LAZY ->
                 (* This is a special colon! *)
@@ -287,30 +289,13 @@ let rec preprocess lexer lexbuf =
                        require special BEGIN..END instead to help parsing. 
                        
                        For let:, we keep the COLON. 
-                     *)
-                    begin match t with
-                    | ELSE | FUNCTION | THEN | WITH -> 
-                       (* We need to extend the parser to handle
-                            * function begin <cases> end
-                            * try/match ... with begin <cases> end
-                        *)
-                       [ BEGIN ]
-                    | LAZY -> 
-                        (* lazy: need to be handled a bit differently,
-                           since 
-                             lazy: [@x] e
-                           should not be translated to
-                             lazy begin [@x] e end
-                           which is a valid expression in OCaml and is not
-                           equivalent with
-                             lazy [@x] begin e end
-                           Therefore, we introduce a special syntax
-                           for indent desugaring:
-                             lazy do ... done
-                        *)   
-                        [ DO ]
-                    | _ -> []
-                    end
+                    *)
+                    match t with
+                    | THEN -> [ BEGIN; COLONX ] 
+                    | ELSE -> [ BEGIN; COLONX ] 
+                    | LAZY -> [ BEGIN; COLONX ] 
+                    | DO -> [ BEGIN; COLONX ] 
+                    | _ -> [ COLONX ]
                 end
   
             | _ -> 
