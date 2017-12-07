@@ -543,7 +543,13 @@ let package_type_of_module_type pmty =
 
 %token EOL
 
+/* OCamleopard */
 %token COLONX
+%token COLONPERCENT
+%token COLONPERCENTPERCENT
+%token COLONAT
+%token COLONATAT
+%token COLONATATAT
 
 /* Precedences and associativities.
 

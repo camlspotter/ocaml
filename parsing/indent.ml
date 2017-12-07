@@ -125,6 +125,11 @@ let to_string = function
   | DOCSTRING _            -> "DOCSTRING .."
   | DOTOP s                -> "DOTOP " ^ s
   | COLONX                 -> "COLONX"
+  | COLONPERCENT           -> "COLONPERCENT"
+  | COLONPERCENTPERCENT    -> "COLONPERCENTPERCENT"
+  | COLONAT                -> "COLONAT"
+  | COLONATAT              -> "COLONATAT"
+  | COLONATATAT            -> "COLONATATAT"
 
 (** state *)
 
@@ -227,6 +232,11 @@ let rec preprocess lexer lexbuf =
                     | STRUCT   -> [ COLONX; END ]
                     | THEN     -> [ COLONX; END ]
                     | WITH     -> [ COLONX; END ]
+                    | LBRACKETPERCENT
+                    | LBRACKETPERCENTPERCENT
+                    | LBRACKETAT
+                    | LBRACKETATAT
+                    | LBRACKETATATAT -> [ RBRACKET ]
                     | _ -> assert false
                     end;
                   close true is (* maybe we have more to close *)
@@ -254,7 +264,25 @@ let rec preprocess lexer lexbuf =
   
         (* We need to check the line against colon_pos. This can be different
            from the last token because of COMMENTs and DOCSTRINGs *)
-                    
+
+        | _, (COLONPERCENT | COLONPERCENTPERCENT | COLONAT | COLONATAT | COLONATATAT) ->
+            (* This is a special colon for attributes or extensions *)
+            begin match !indent with
+            | None -> assert false (* impossible *)
+            | Some p -> 
+                let token = match token with
+                  | COLONPERCENT        -> LBRACKETPERCENT
+                  | COLONPERCENTPERCENT -> LBRACKETPERCENTPERCENT
+                  | COLONAT             -> LBRACKETAT
+                  | COLONATAT           -> LBRACKETATAT
+                  | COLONATATAT         -> LBRACKETATATAT
+                  | _ -> assert false
+                in
+                previous_token := `Colon (p, token);
+                stack := (p, token) :: !stack;
+                [ token ] 
+            end
+          
         | `Some t, COLON ->
             begin match t with
             | COMMENT _ -> assert false (* impossible *)

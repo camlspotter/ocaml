@@ -523,6 +523,14 @@ rule token = parse
             { INFIXOP3(Lexing.lexeme lexbuf) }
   | '#' (symbolchar | '#') +
             { HASHOP(Lexing.lexeme lexbuf) }
+
+  (* OCamleopard *)
+  | ":@" { COLONAT }
+  | ":@@"  { COLONATAT }
+  | ":@@@" { COLONATATAT }
+  | ":%"   { COLONPERCENT }
+  | ":%%"  { COLONPERCENTPERCENT }
+
   | eof { EOF }
   | _
       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
