@@ -45,21 +45,10 @@ compile: $(CMOS)
 	         rm -f "$$T"; \
 	       fi \
 	    && rm -f program.byte program.byte.exe \
-	    && $(OCAMLC) $(CMOS) $$F.cmo -o program.byte$(EXE) \
+	    && $(OCAMLC) $(ADD_LINKFLAGS) $(CMOS) $$F.cmo -o program.byte$(EXE) \
 	    && $(OCAMLRUN) program.byte$(EXE) 2>$$F.result \
 	    && if [ -f  $$F.reference ]; then \
 	         $(DIFF) $$F.reference $$F.result >/dev/null; \
-	       fi \
-	    && if [ -f $$F.reference ]; then \
-	         test -e program.byte.exe && { \
-	           T="`mktemp -p .`"; \
-	           mv -f program.byte.exe "$$T"; \
-	           rm -f "$$T"; \
-	         } ; \
-	         rm -f program.byte program.byte.exe; \
-	         $(OCAMLC) $(CMOS) $$F.cmo -o program.byte$(EXE) \
-	         && $(OCAMLRUN) program.byte$(EXE) >$$F.result \
-	         && $(DIFF) $$F.reference $$F.result >/dev/null; \
 	       fi \
 	    && echo " => passed" || echo " => failed"; \
 	  fi; \
