@@ -9,3 +9,5 @@ test3.cmo : leopard.cmi
 test3.cmx : leopard.cmx
 test4.cmo : leopard.cmi
 test4.cmx : leopard.cmx
+test5.cmo : leopard.cmi
+test5.cmx : leopard.cmx

@@ -5,7 +5,7 @@ OCAMLOPT= $(OCAMLRUN) ../ocamlopt $(OPTIONS)
 OCAMLDEP= $(OCAMLRUN) ../tools/ocamldep
 
 .PHONY: all
-all: leopard.cmo test.exe test2.exe test3.exe test4.exe
+all: leopard.cmo test.exe test2.exe test3.exe test4.exe test5.exe
 
 .PHONY: opt
 opt: leopard.cmx 
@@ -22,9 +22,12 @@ test3.exe: leopard.cmo test3.cmo
 test4.exe: leopard.cmo test4.cmo 
 	$(OCAMLC) -o $@ leopard.cmo test4.cmo
 
+test5.exe: leopard.cmo test5.cmo 
+	$(OCAMLC) -o $@ leopard.cmo test5.cmo
+
 .PHONY: clean
 clean:
-	rm -f *.cm*
+	rm -f *.cm* *.exe
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
