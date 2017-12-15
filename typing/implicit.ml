@@ -1031,31 +1031,6 @@ let resolve_omitted_imp_arg loc env a = match a with
       end
   | _ -> a
 
-(*
-let resolve_imp_prim_arg loc env retty a = match a with
-  (* (l, None, Optional) means curried *)
-  | ((Optional _ as l), Some e) ->
-      begin match is_none e with
-      | None -> (* explicitly applied *)
-          `Left (Runtime.get e)
-      | Some _ -> (* omitted *)
-          let (ty, specopt, _conv, _unconv) = check_arg env loc l e.exp_type in
-          match specopt with
-          | None -> `Right a (* It is not imp arg *)
-          | Some spec ->
-              let e' = resolve env loc spec ty in
-              prerr_endline "resolve done";
-              (* for retyping, e.exp_env is not suitable, since 
-                 it is made by Typecore.option_none with Env.initial_safe_string
-              *)
-              (* XXX retype is not performed *)
-              let e'' = retype env e' retty in
-              prerr_endline "retype done";
-              `Left e''
-      end
-  | _ -> `Right a
-         *)
-
 module MapArg : TypedtreeMap.MapArgument = struct
   include TypedtreeMap.DefaultMapArgument
 
@@ -1069,64 +1044,66 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
   let is_function_id = String.is_prefix "__imp__arg__"
 
+  let un_some e = match e.exp_desc with
+    | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
+    | _ -> None
+
+  let fix_no_args e = match e.exp_desc with
+    | Texp_apply (x, []) -> { e with exp_desc = x.exp_desc }
+    | _ -> e
+
+  (* XXX weak. Only checked by the Longidents *)
+  (* Leopard.Implicits.get (Leopard.Implicits.embed e'') => e'' *)
+  let get_embed e = match e.exp_desc with
+    | Texp_apply ( { exp_desc= Texp_ident (_, {txt=lid}, _) }, [ Nolabel, Some e' ] ) when lid = Runtime.lident_get ->
+        begin match e'.exp_desc with
+        | Texp_apply ( { exp_desc= Texp_ident (_, {txt=lid}, _) }, [ Nolabel, Some e'' ] ) when lid = Runtime.lident_embed -> e''
+        | _ -> e
+        end
+    | _ -> e
+    
+  let opt e = match e.exp_desc with
+    | Texp_apply ( f, args ) ->
+        begin match f.exp_desc with
+        | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
+            (* <%imp> l:x ... *)
+            let l = match repr_desc f.exp_type with
+              | Tarrow (l, _, _, _) -> l
+              | _ -> assert false
+            in
+            begin match
+              partition_map (fun (l',a) ->
+                  if l = l' then Either.Left a
+                  else Either.Right (l', a)
+                ) args
+            with
+            | [Some a], args ->
+                fix_no_args & begin match un_some a with
+                  | Some a ->
+                      (* <%imp> ?l:Some a x ..   =>  Runtime.get a x .. *)
+                      { e with
+                        exp_desc = Texp_apply (get_embed & Runtime.get a, args)
+                      ; exp_type = e.exp_type }
+                  | None -> 
+                      (* <%imp> ?l:a x .. 
+                                 => Runtime.get (Runtime.from_Some a) x ..
+                      *)
+                      { e with
+                        exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, args)
+                      ; exp_type = e.exp_type }
+                  end
+            | _ -> e
+            end
+        | _ -> e
+        end
+    | _ -> e
+
   let enter_expression e = match e.exp_desc with
       | Texp_apply (f, args) ->
           (* Resolve omitted ?_x arguments *)
           (* XXX cleanup *)
-          let opt e = match e.exp_desc with
-            | Texp_apply ( f, args ) ->
-                let un_some e = match e.exp_desc with
-                  | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
-                  | _ -> None
-                in
-                begin match f.exp_desc with
-                | Texp_ident (_path, _lidloc, { val_kind= Val_prim { Primitive.prim_name = "%imp" }}) ->
-                    (* %imp l:x ... *)
-                    let l = match repr_desc f.exp_type with
-                      | Tarrow (l, _, _, _) -> l
-                      | _ -> assert false
-                    in
-                    let (lefts, rights) =
-                      partition_map (fun (l',a) ->
-                          if l = l' then Either.Left a else Either.Right (l', a)) args
-                    in
-                    begin match lefts, rights with
-                    | [Some a], [] ->
-                        begin match un_some a with
-                        | Some a ->
-                            (* <%imp> ?:Some a   =>   Runtime.get a *)
-                            { (Runtime.get a) with
-                              exp_env = e.exp_env
-                            ; exp_type = e.exp_type
-                            }
-                        | None ->
-                            (* <%imp> ?:a   =>  Runtime.(get (form_Some a)) *)
-                            { (Runtime.get & Runtime.from_Some a) with
-                              exp_env = e.exp_env
-                            ; exp_type = e.exp_type
-                            }
-                        end
-                    | [Some a], _ ->
-                        begin match un_some a with
-                        | Some a ->
-                            (* THis case is correct? *)
-                            (* %imp ?l:a *)
-                            { e with exp_desc = Texp_apply (Runtime.get a, rights); exp_type = e.exp_type }
-                        | None -> 
-                            (* %imp ?l:a ... 
-                                 => Runtime.get (Runtime.from_Some a) ...
-                            *)
-                            { e with exp_desc = Texp_apply (Runtime.get & Runtime.from_Some a, rights); exp_type = e.exp_type }
-                        end
-                    | _ -> e
-                    end
-                | _ -> e
-                end
-            | _ -> e
-          in
-          opt
-            { e with
-              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+          opt { e with
+            exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
   
       | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
           (* Eeek, label with multiple cases? *)
