@@ -1048,6 +1048,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
     | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
     | _ -> None
 
+  (* Fix 0 arg application *)
   let fix_no_args e = match e.exp_desc with
     | Texp_apply (x, []) -> { e with exp_desc = x.exp_desc }
     | _ -> e
@@ -1103,7 +1104,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
           (* Resolve omitted ?_x arguments *)
           (* XXX cleanup *)
           opt { e with
-            exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+                exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
   
       | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
           (* Eeek, label with multiple cases? *)
