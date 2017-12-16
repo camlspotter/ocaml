@@ -1,3 +1,4 @@
+(* simple overloading *)
 module Add = struct
   let int = (+)
   let float = (+.)
