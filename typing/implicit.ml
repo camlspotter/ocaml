@@ -660,7 +660,7 @@ let derived_candidates = ref []
 (* CR jfuruse: this is very slow, since it computes everything each time. *)
 let get_candidates env loc spec ty =
   let f = Spec.candidates env loc spec in
-  Candidate.uniq & f ty @ map snd !derived_candidates
+  Candidate.uniq & f ty @ map (fun (_,x,_,_) -> x) !derived_candidates
 
 module Runtime = struct
   open Longident
@@ -915,7 +915,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
 
           | Error e -> raise e (* unexpected *)
 
-          | Ok _ ->
+          | Ok () ->
               if Debug.debug_resolve then
                 !!% "    ok: %a@." Printtyp.type_expr ity;
 
@@ -947,6 +947,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
                 match resolve problems with
                 | Resolve_result.MayLoop es -> Resolve_result.MayLoop es
                 | Resolve_result.Ok res_list ->
+                    (* split the sub problems *)
                     let build res =
                       let args, res = split_at (length cs) res in
                       Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
@@ -955,18 +956,15 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
   in
   resolve problems
 
-(* XXX derived_candidates is a global state *)
 (* Shadowing check
 
-   Shadow check cannot find the derived_candidates, since they are not listed
-   in the original environment! 
+   Shadow check can find the derived_candidates, since they are added to `env`.
 *)
 let shadow_check env loc e =
   let shadowed = ref [] in
   let module I = TypedtreeIter.MakeIterator(struct
       include TypedtreeIter.DefaultIteratorArgument
       let enter_expression e = match e.exp_desc with
-        | Texp_ident (_, {txt=Longident.Lident n}, _) when List.mem_assoc n !derived_candidates -> ()
         | Texp_ident (p, _, _) -> 
             begin match Env.value_accessibility env p with
             | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
@@ -1027,10 +1025,39 @@ let resolve env loc spec ty = with_snapshot & fun () ->
           shadow_check env loc e;
           e
 
+let resolve env loc spec ty = 
+  let e = resolve env loc spec ty in
+  (* Now we replay the type unifications! *)
+  (* But generalized variables must be protected! *)
+  let gvars = gen_vars ty in
+  let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
+  close_gen_vars ty;
+  if Debug.debug_resolve then 
+    !!% "Replaying %a against %a@." 
+      Typedtree.format_expression e
+      Printtyp.type_scheme ty;
+  let ue = Untypeast.(default_mapper.expr default_mapper) e in
+  let te = Typecore.type_expression env ue in
+  if Debug.debug_resolve then 
+    !!% "Replaying %a : %a against %a@." 
+      Typedtree.format_expression te
+      Printtyp.type_scheme te.exp_type
+      Printtyp.type_scheme ty;
+  Ctype.unify env te.exp_type ty;
+  (* recover gvars *)
+  List.iter (fun (gv, desc) -> gv.desc <- desc; gv.level <- Btype.generic_level) gvar_descs;
+  if Debug.debug_resolve then 
+    !!% "Replay result: %a@." 
+      Printtyp.type_scheme te.exp_type;
+  te
+
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
+      (* Add derived candidates to the environment *)
+      let env =
+        List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
       begin match is_none e with
       | None -> a (* explicitly applied *)
       | Some _t -> (* omitted *)
@@ -1147,10 +1174,14 @@ module MapArg : TypedtreeMap.MapArgument = struct
         ; exp_attributes = []
         }
     in
-    derived_candidates := (name, { Candidate.path; (* <- not actually path. see expr field *)
-                                   expr;
-                                   type_;
-                                   aggressive = false } ) 
+    derived_candidates := (name
+                          , { Candidate.path; (* <- not actually path. see expr field *)
+                              expr;
+                              type_;
+                              aggressive = false } 
+                          , id
+                          , vdesc
+                          ) 
                           :: !derived_candidates;
     let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
     let case = { case with c_lhs = p' } in
@@ -1185,7 +1216,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
            Remove the association of `"__imp_arg__0"` and the candidate of
            `__imp_arg__0` from `derived_candidates`.
         *)
-        derived_candidates := filter (fun (fid, _) -> fid <> txt) !derived_candidates;
+        derived_candidates := filter (fun (fid, _, _, _) -> fid <> txt) !derived_candidates;
         e
     | _ -> assert false (* impos *)
 
