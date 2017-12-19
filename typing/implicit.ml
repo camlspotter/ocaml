@@ -854,23 +854,23 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
     Resolve_result.concat
     & map (try_cand trace ty problems) cs
     
-  and try_cand trace ty problems (path, expr, (cs,vty)) =
+  and try_cand trace ity problems (path, expr, (cs,vty)) =
 
-    let org_tysize = Tysize.size ty in 
+    let org_tysize = Tysize.size ity in 
 
     match assoc_opt path trace with
     | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
         (* recursive call of path and the type size is not strictly decreasing *)
         if Debug.debug_resolve then begin
           !!% "  Checking %a <> ... using %a ... oops@."
-            Printtyp.type_expr ty
+            Printtyp.type_expr ity
             Path.format path;
           !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
             Path.format path
             Printtyp.type_expr ty'
             (Tysize.(to_string & size ty'))
-            Printtyp.type_expr ty
-            (Tysize.(to_string & size ty));
+            Printtyp.type_expr ity
+            (Tysize.(to_string & size ity));
         end;
 
         Resolve_result.Ok []
@@ -879,11 +879,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
         (* CR jfuruse: Older binding of `path` in `trace` is no longer useful. 
            Replace instead of add? 
         *)
-        let trace' = (path, ty) :: trace in 
-
-        (* These type instantiations are done in the current level,
-           completely unrelated with the levels used for the implicit values! *)
-        let ity = Ctype.instance env ty in
+        let trace' = (path, ity) :: trace in 
 
         let ivty, cs =
           match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
@@ -922,7 +918,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
               if Debug.debug_resolve then
                 !!% "    ok: %a@." Printtyp.type_expr ity;
 
-              let new_tysize = Tysize.size ty in
+              let new_tysize = Tysize.size ity in
 
               if Tysize.(has_var new_tysize
                          && has_var org_tysize
