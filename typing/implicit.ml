@@ -7,10 +7,8 @@ open Asttypes
 
 module Debug : sig
   val debug_resolve : bool
-  val debug_unif : bool
 end = struct
   let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
-  let debug_unif    = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_UNIF"
 end
 
 module Klabel : sig
@@ -207,16 +205,21 @@ end = struct
       | `Just -> false
       | `In -> true
     in
-    let path = match popt with
-      | Some p -> p
+    let path_opt = match popt with
+      | Some _ -> popt
       | None -> 
           try
-            Env.lookup_module ~load:true lid env
+            Some (Env.lookup_module ~load:true lid env)
           with
-          | Not_found -> raise_errorf ~loc "Unbound module %a." Longident.format lid
+          | Not_found ->
+              (* Derived implicit does not require the candidate space *)
+              None
     in
-    let paths = Env.values_of_module ~recursive env loc path in
-    map (default_candidate_of_path env) paths
+    match path_opt with
+    | None -> []
+    | Some path ->
+        let paths = Env.values_of_module ~recursive env loc path in
+        map (default_candidate_of_path env) paths
   
   let cand_opened env loc (flg,lid) =
     let opens = Env.get_opens env in
@@ -657,7 +660,7 @@ let derived_candidates = ref []
 (* CR jfuruse: this is very slow, since it computes everything each time. *)
 let get_candidates env loc spec ty =
   let f = Spec.candidates env loc spec in
-  Candidate.uniq & f ty @ map snd !derived_candidates
+  Candidate.uniq & f ty @ map (fun (_,x,_,_) -> x) !derived_candidates
 
 module Runtime = struct
   open Longident
@@ -832,127 +835,169 @@ type trace = (Path.t * type_expr) list
 (** Used instance history. This is used to check the same instance is
     not used with types with not strictly decreasing size. *)
 
-let rec resolve loc env : (trace * type_expr * Spec.t) list -> Resolve_result.t = function
-  | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
-  | (trace,ty,spec)::problems ->
-      let cs = get_candidates env loc spec ty in
-      if Debug.debug_unif then begin
-        !!% "Candidates:@.";
-        iter (!!% "  %a@." Candidate.format) cs
-      end;
-      let cs = concat_map (fun c ->
-        map (fun x -> c.Candidate.path, c.Candidate.expr, x) & extract_candidate spec env loc c
+let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_result.t =
+  let rec resolve = function
+    | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
+    | p::ps -> resolve_a_problem p ps
+
+  and resolve_a_problem (trace,ty,spec) problems =
+    let cs = get_candidates env loc spec ty in
+    if Debug.debug_resolve then begin
+      !!% "Candidates:@.";
+      iter (!!% "  %a@." Candidate.format) cs
+    end;
+    let cs = concat_map (fun c ->
+        map (fun x -> c.Candidate.path, c.Candidate.expr, x) 
+        & extract_candidate spec env loc c
       ) cs
-      in
-      Resolve_result.concat
-      & flip map cs
-      & resolve_cand loc env trace ty problems
+    in
+    Resolve_result.concat
+    & map (try_cand trace ty problems) cs
+    
+  and try_cand trace ity problems (path, expr, (cs,vty)) =
 
-(* CR jfuruse: Once given, loc is constant *)
-and resolve_cand loc env trace ty problems (path, expr, (cs,vty)) =
+    let org_tysize = Tysize.size ity in 
 
-  let org_tysize = Tysize.size ty in 
-
-  match assoc_opt path trace with
-  | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
-      (* recursive call of path and the type size is not strictly decreasing *)
-      if Debug.debug_unif then begin
-        !!% "  Checking %a <> ... using %a ... oops@."
-          Printtyp.type_expr ty
-          Path.format path;
-        !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
-          Path.format path
-          Printtyp.type_expr ty'
-          (Tysize.(to_string & size ty'))
-          Printtyp.type_expr ty
-          (Tysize.(to_string & size ty));
-      end;
-      
-      Resolve_result.Ok []
-
-  | _ ->
-      (* CR jfuruse: Older binding of path is no longer useful. Replace instead of add? *)
-      let trace' = (path, ty) :: trace in 
-
-      (* These type instantiations are done in the current level,
-         completely unrelated with the levels used for the implicit values! *)
-      let ity = Ctype.instance env ty in
-     
-      let ivty, cs =
-        match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
-        | [] -> assert false (* impos *)
-        | ivty :: ictys ->
-            ivty, map2 (fun (l,_,spec,conv) icty -> (l,icty,spec,conv)) cs ictys
-      in
-
-      with_snapshot & fun () ->
-        if Debug.debug_unif then begin
-          !!% "  Checking %a <> %a, using %a ...@."
+    match assoc_opt path trace with
+    | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
+        (* recursive call of path and the type size is not strictly decreasing *)
+        if Debug.debug_resolve then begin
+          !!% "  Checking %a <> ... using %a ... oops@."
             Printtyp.type_expr ity
-            Printtyp.type_expr ivty
             Path.format path;
+          !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
+            Path.format path
+            Printtyp.type_expr ty'
+            (Tysize.(to_string & size ty'))
+            Printtyp.type_expr ity
+            (Tysize.(to_string & size ity));
         end;
-        match protect & fun () -> Ctype.unify env ity ivty with
-        | Error (Ctype.Unify utrace) ->
-            if Debug.debug_unif then begin
-              !!% "    no@.";
-              !!% "      Reason: @[%a@]@."
-                (fun ppf utrace -> Printtyp.report_unification_error ppf
-                  env utrace
-                  (fun ppf -> fprintf ppf "Unification error ")
-                  (fun ppf -> fprintf ppf "with"))
-                utrace;
 
-              !!% "    Type 1: @[%a@]@." Printtyp.raw_type_expr  ity;
-              !!% "    Type 2: @[%a@]@." Printtyp.raw_type_expr  ivty
+        Resolve_result.Ok []
 
-            end;
-            Resolve_result.Ok [] (* no solution *)
-                   
-        | Error e -> raise e (* unexpected *)
+    | _ ->
+        (* CR jfuruse: Older binding of `path` in `trace` is no longer useful. 
+           Replace instead of add? 
+        *)
+        let trace' = (path, ity) :: trace in 
 
-        | Ok _ ->
-            if Debug.debug_unif then
-              !!% "    ok: %a@." Printtyp.type_expr ity;
-            
-            let new_tysize = Tysize.size ty in
+        (* Instantiate the candidate types *)
+        let ivty, cs =
+          match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
+          | [] -> assert false (* impos *)
+          | ivty :: ictys ->
+              ivty, map2 (fun (l,_,spec,conv) icty -> (l,icty,spec,conv)) cs ictys
+        in
 
-            if Tysize.(has_var new_tysize
-                       && has_var org_tysize
-                       && not & lt new_tysize org_tysize)
-            then begin
-              if Debug.debug_unif then begin
-                !!% "    Tysize vars not strictly decreasing %s => %s@."
-                  (Tysize.to_string org_tysize)
-                  (Tysize.to_string new_tysize)
+        with_snapshot & fun () ->
+          if Debug.debug_resolve then begin
+            !!% "  Checking %a <> %a, using %a ...@."
+              Printtyp.type_expr ity
+              Printtyp.type_expr ivty
+              Path.format path;
+          end;
+          match protect & fun () -> Ctype.unify env ity ivty with
+          | Error (Ctype.Unify utrace) ->
+              if Debug.debug_resolve then begin
+                !!% "    no@.";
+                !!% "      Reason: @[%a@]@."
+                  (fun ppf utrace -> Printtyp.report_unification_error ppf
+                    env utrace
+                    (fun ppf -> fprintf ppf "Unification error ")
+                    (fun ppf -> fprintf ppf "with"))
+                  utrace;
+
+                !!% "    Type 1: @[%a@]@." Printtyp.raw_type_expr  ity;
+                !!% "    Type 2: @[%a@]@." Printtyp.raw_type_expr  ivty
+
               end;
-                 (* CR jfuruse: this is reported ambiguousity *) 
-              Resolve_result.MayLoop [expr]
-            end else
+              Resolve_result.Ok [] (* no solution *)
 
-              (* Add the sub-problems *)
-              let problems = map (fun (_,ty,spec,_conv) -> (trace',ty,spec)) cs @ problems in
+          | Error e -> raise e (* unexpected *)
 
-              if Debug.debug_unif then
-                !!% "    subproblems: [ @[<v>%a@] ]@."
-                  (List.format "@," (fun ppf (_,ty,spec,_) ->
-                    Format.fprintf ppf "%a / %s"
-                      Printtyp.type_scheme ty
-                      (Spec.to_string spec))) cs;
-              
-              match resolve loc env problems with
-              | Resolve_result.MayLoop es -> Resolve_result.MayLoop es
-              | Resolve_result.Ok res_list ->
-                  let build res =
-                    let args, res = split_at (length cs) res in
-                    Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
-                  in
-                  Resolve_result.Ok (map build res_list)
+          | Ok () ->
+              if Debug.debug_resolve then
+                !!% "    ok: %a@." Printtyp.type_expr ity;
+
+              let new_tysize = Tysize.size ity in
+
+              if Tysize.(has_var new_tysize
+                         && has_var org_tysize
+                         && not & lt new_tysize org_tysize)
+              then begin
+                if Debug.debug_resolve then begin
+                  !!% "    Tysize vars not strictly decreasing %s => %s@."
+                    (Tysize.to_string org_tysize)
+                    (Tysize.to_string new_tysize)
+                end;
+                (* CR jfuruse: this is reported ambiguousity *) 
+                Resolve_result.MayLoop [expr]
+              end else
+
+                (* Add the sub-problems *)
+                let problems = map (fun (_,ty,spec,_conv) -> (trace',ty,spec)) cs @ problems in
+
+                if Debug.debug_resolve then
+                  !!% "    subproblems: [ @[<v>%a@] ]@."
+                    (List.format "@," (fun ppf (_,ty,spec,_) ->
+                      Format.fprintf ppf "%a / %s"
+                        Printtyp.type_scheme ty
+                        (Spec.to_string spec))) cs;
+
+                match resolve problems with
+                | Resolve_result.MayLoop es -> Resolve_result.MayLoop es
+                | Resolve_result.Ok res_list ->
+                    (* split the sub problems *)
+                    let build res =
+                      let args, res = split_at (length cs) res in
+                      Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
+                    in
+                    Resolve_result.Ok (map build res_list)
+  in
+  resolve problems
+
+(* Shadowing check
+
+   Shadow check can find the derived_candidates, since they are added to `env`.
+*)
+let shadow_check env loc e =
+  let shadowed = ref [] in
+  let module I = TypedtreeIter.MakeIterator(struct
+      include TypedtreeIter.DefaultIteratorArgument
+      let enter_expression e = match e.exp_desc with
+        | Texp_ident (p, _, _) -> 
+            begin match Env.value_accessibility env p with
+            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
+            | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
+            | `Accessible _ -> ()
+            end
+        | _ -> ()
+    end)
+  in
+  I.iter_expression e;
+  match !shadowed with
+  | [] -> ()
+  | _ ->
+      let format_shadow ppf = function
+        | (_, (`Accessible _ | `NotFound)) -> assert false
+        | p, `ShadowedBy (mv, p', loc) ->
+            Format.fprintf ppf "%a is shadowed by %s %a defined at %a"
+              Path.format p
+              (match mv with `Value -> "value" | `Module -> "module")
+              Path.format p'
+              Location.format loc
+      in
+      raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
+        Typedtree.format_expression e
+        (Format.list "@," format_shadow) !shadowed
 
 let resolve env loc spec ty = with_snapshot & fun () ->
 
   if Debug.debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
 
+  (* Protect the generalized type variables by temporarily unified by unique types,
+     so that they can be unifiable only with themselves.
+  *)
   close_gen_vars ty;
 
   if Debug.debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
@@ -975,52 +1020,50 @@ let resolve env loc spec ty = with_snapshot & fun () ->
         (List.format "@," format_expression) es
   | Ok [es] ->
       match es with
+      | [] | _::_::_ -> assert false (* impos *)
       | [e] ->
-          let shadowed = ref [] in
-          let module I = TypedtreeIter.MakeIterator(struct
-              include TypedtreeIter.DefaultIteratorArgument
-              let enter_expression e = match e.exp_desc with
-                | Texp_ident (p, _, _) ->
-                    begin match Env.value_accessibility env (* or e.exp_env? *) p with
-                    | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
-                    | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
-                    | `Accessible _ -> ()
-                    end
-                | _ -> ()
-            end)
-          in
-          I.iter_expression e;
-          begin match !shadowed with
-          | [] -> e
-          | _ ->
-              let format_shadow ppf = function
-                | (_, (`Accessible _ | `NotFound)) -> assert false
-                | p, `ShadowedBy (mv, p', loc) ->
-                    Format.fprintf ppf "%a is shadowed by %s %a defined at %a"
-                      Path.format p
-                      (match mv with `Value -> "value" | `Module -> "module")
-                      Path.format p'
-                      Location.format loc
-              in
-              raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
-                Typedtree.format_expression e
-                (Format.list "@," format_shadow) !shadowed
-          end
-      | _ -> assert false (* impos *)
+          shadow_check env loc e;
+          e
+
+let resolve env loc spec ty = 
+  let e = resolve env loc spec ty in
+  (* Now we replay the type unifications! *)
+  (* But generalized variables must be protected! *)
+  let gvars = gen_vars ty in
+  let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
+  close_gen_vars ty;
+  if Debug.debug_resolve then 
+    !!% "Replaying %a against %a@." 
+      Typedtree.format_expression e
+      Printtyp.type_scheme ty;
+  let ue = Untypeast.(default_mapper.expr default_mapper) e in
+  let te = Typecore.type_expression env ue in
+  if Debug.debug_resolve then 
+    !!% "Replaying %a : %a against %a@." 
+      Typedtree.format_expression te
+      Printtyp.type_scheme te.exp_type
+      Printtyp.type_scheme ty;
+  Ctype.unify env te.exp_type ty;
+  (* recover gvars *)
+  List.iter (fun (gv, desc) -> gv.desc <- desc; gv.level <- Btype.generic_level) gvar_descs;
+  if Debug.debug_resolve then 
+    !!% "Replay result: %a@." 
+      Printtyp.type_scheme te.exp_type;
+  te
 
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
+      (* Add derived candidates to the environment *)
+      let env =
+        List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
       begin match is_none e with
       | None -> a (* explicitly applied *)
-      | Some t -> (* omitted *)
+      | Some _t -> (* omitted *)
           let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
           match specopt with
           | None -> a (* It is not imp arg *)
-          | Some _ when Types.gen_vars t <> [] ->
-              (* omitted and generalized *)
-              raise_errorf ~loc "Generalized implicit arguments cannot be omitted"
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
               (* for retyping, e.exp_env is not suitable, since 
@@ -1105,51 +1148,54 @@ module MapArg : TypedtreeMap.MapArgument = struct
      at this stage!
    *)
   let add_derived_candidate e case p type_ unconv =
-        (* This is an imp arg *)
+    (* This is an imp arg *)
   
-        (* Build  fun ?d:(d as __imp_arg__) -> *)
+    (* Build  fun ?d:(d as __imp_arg__) -> *)
   
-        let loc = Location.ghost p.pat_loc in
-        let name = create_imp_arg_name () in
-        (* p ->     ===>   (p as fname) -> *)
-        let lident = Longident.Lident name in
-        let id = Ident.create name in
-        let path = Path.Pident id in
-        let vdesc =
-          { val_type = p.pat_type
-          ; val_kind = Val_reg
-          ; val_loc = loc
-          ; val_attributes = []  }
-        in
-        let expr =
-          unconv
-          & { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
-            ; exp_loc = Location.none
-            ; exp_extra = []
-            ; exp_type = p.pat_type
-            ; exp_env = p.pat_env
-            ; exp_attributes = []
-            }
-        in
-        derived_candidates := (name, { Candidate.path; (* <- not actually path. see expr field *)
-                                       expr;
-                                       type_;
-                                       aggressive = false } ) 
-                              :: !derived_candidates;
-        let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
-        let _case = { case with c_lhs = p' } in
-        let e = match e.exp_desc with
-          | Texp_function f ->
-              (* exp_desc = Texp_function { f with cases= [case] }*)
-              { e with exp_desc = Texp_function f }
-          | _ -> assert false
-        in
-  
-        (* __imp_arg__ will be used for the internal resolutions *)
-        (* XXX needs a helper module *)
-        Typedtree.add_attribute
-          "leopard_mark" 
-          (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+    let loc = Location.ghost p.pat_loc in
+    let name = create_imp_arg_name () in
+    (* p ->     ===>   (p as fname) -> *)
+    let lident = Longident.Lident name in
+    let id = Ident.create name in
+    let path = Path.Pident id in
+    let vdesc =
+      { val_type = p.pat_type
+      ; val_kind = Val_reg
+      ; val_loc = loc
+      ; val_attributes = []  }
+    in
+    let expr =
+      unconv
+      & { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
+        ; exp_loc = Location.none
+        ; exp_extra = []
+        ; exp_type = p.pat_type
+        ; exp_env = p.pat_env
+        ; exp_attributes = []
+        }
+    in
+    derived_candidates := (name
+                          , { Candidate.path; (* <- not actually path. see expr field *)
+                              expr;
+                              type_;
+                              aggressive = false } 
+                          , id
+                          , vdesc
+                          ) 
+                          :: !derived_candidates;
+    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
+    let case = { case with c_lhs = p' } in
+    let e = match e.exp_desc with
+      | Texp_function f ->
+          { e with exp_desc = Texp_function { f with cases= [case] }}
+      | _ -> assert false
+    in
+    
+    (* __imp_arg__ will be used for the internal resolutions *)
+    (* XXX needs a helper module *)
+    Typedtree.add_attribute
+      "leopard_mark" 
+      (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
 
   let clean_derived_candidates e =
     let open Parsetree in
@@ -1170,7 +1216,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
            Remove the association of `"__imp_arg__0"` and the candidate of
            `__imp_arg__0` from `derived_candidates`.
         *)
-        derived_candidates := filter (fun (fid, _) -> fid <> txt) !derived_candidates;
+        derived_candidates := filter (fun (fid, _, _, _) -> fid <> txt) !derived_candidates;
         e
     | _ -> assert false (* impos *)
 
