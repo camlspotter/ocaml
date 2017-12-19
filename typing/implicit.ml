@@ -881,6 +881,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
         *)
         let trace' = (path, ity) :: trace in 
 
+        (* Instantiate the candidate types *)
         let ivty, cs =
           match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
           | [] -> assert false (* impos *)
@@ -929,7 +930,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
                     (Tysize.to_string org_tysize)
                     (Tysize.to_string new_tysize)
                 end;
-                   (* CR jfuruse: this is reported ambiguousity *) 
+                (* CR jfuruse: this is reported ambiguousity *) 
                 Resolve_result.MayLoop [expr]
               end else
 
@@ -954,10 +955,51 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
   in
   resolve problems
 
+(* XXX derived_candidates is a global state *)
+(* Shadowing check
+
+   Shadow check cannot find the derived_candidates, since they are not listed
+   in the original environment! 
+*)
+let shadow_check env loc e =
+  let shadowed = ref [] in
+  let module I = TypedtreeIter.MakeIterator(struct
+      include TypedtreeIter.DefaultIteratorArgument
+      let enter_expression e = match e.exp_desc with
+        | Texp_ident (_, {txt=Longident.Lident n}, _) when List.mem_assoc n !derived_candidates -> ()
+        | Texp_ident (p, _, _) -> 
+            begin match Env.value_accessibility env p with
+            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
+            | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
+            | `Accessible _ -> ()
+            end
+        | _ -> ()
+    end)
+  in
+  I.iter_expression e;
+  match !shadowed with
+  | [] -> ()
+  | _ ->
+      let format_shadow ppf = function
+        | (_, (`Accessible _ | `NotFound)) -> assert false
+        | p, `ShadowedBy (mv, p', loc) ->
+            Format.fprintf ppf "%a is shadowed by %s %a defined at %a"
+              Path.format p
+              (match mv with `Value -> "value" | `Module -> "module")
+              Path.format p'
+              Location.format loc
+      in
+      raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
+        Typedtree.format_expression e
+        (Format.list "@," format_shadow) !shadowed
+
 let resolve env loc spec ty = with_snapshot & fun () ->
 
   if Debug.debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
 
+  (* Protect the generalized type variables by temporarily unified by unique types,
+     so that they can be unifiable only with themselves.
+  *)
   close_gen_vars ty;
 
   if Debug.debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
@@ -980,41 +1022,10 @@ let resolve env loc spec ty = with_snapshot & fun () ->
         (List.format "@," format_expression) es
   | Ok [es] ->
       match es with
+      | [] | _::_::_ -> assert false (* impos *)
       | [e] ->
-          (* Shadow check cannot find the derived_candidates, since they are not listed
-             in the original environment! *)
-          let shadowed = ref [] in
-          let module I = TypedtreeIter.MakeIterator(struct
-              include TypedtreeIter.DefaultIteratorArgument
-              let enter_expression e = match e.exp_desc with
-                | Texp_ident (_, {txt=Longident.Lident n}, _) when List.mem_assoc n !derived_candidates -> ()
-                | Texp_ident (p, _, _) -> 
-                    begin match Env.value_accessibility env (* or e.exp_env? *) p with
-                    | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
-                    | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
-                    | `Accessible _ -> ()
-                    end
-                | _ -> ()
-            end)
-          in
-          I.iter_expression e;
-          begin match !shadowed with
-          | [] -> e
-          | _ ->
-              let format_shadow ppf = function
-                | (_, (`Accessible _ | `NotFound)) -> assert false
-                | p, `ShadowedBy (mv, p', loc) ->
-                    Format.fprintf ppf "%a is shadowed by %s %a defined at %a"
-                      Path.format p
-                      (match mv with `Value -> "value" | `Module -> "module")
-                      Path.format p'
-                      Location.format loc
-              in
-              raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
-                Typedtree.format_expression e
-                (Format.list "@," format_shadow) !shadowed
-          end
-      | _ -> assert false (* impos *)
+          shadow_check env loc e;
+          e
 
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
 let resolve_omitted_imp_arg loc env a = match a with
