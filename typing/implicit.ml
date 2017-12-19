@@ -847,13 +847,14 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
       iter (!!% "  %a@." Candidate.format) cs
     end;
     let cs = concat_map (fun c ->
-        map (fun x -> c.Candidate.path, c.Candidate.expr, x) & extract_candidate spec env loc c
+        map (fun x -> c.Candidate.path, c.Candidate.expr, x) 
+        & extract_candidate spec env loc c
       ) cs
     in
     Resolve_result.concat
-    & map (resolve_cand trace ty problems) cs
+    & map (try_cand trace ty problems) cs
     
-  and resolve_cand trace ty problems (path, expr, (cs,vty)) =
+  and try_cand trace ty problems (path, expr, (cs,vty)) =
 
     let org_tysize = Tysize.size ty in 
 
@@ -875,7 +876,9 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
         Resolve_result.Ok []
 
     | _ ->
-        (* CR jfuruse: Older binding of path is no longer useful. Replace instead of add? *)
+        (* CR jfuruse: Older binding of `path` in `trace` is no longer useful. 
+           Replace instead of add? 
+        *)
         let trace' = (path, ty) :: trace in 
 
         (* These type instantiations are done in the current level,
