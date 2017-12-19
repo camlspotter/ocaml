@@ -838,19 +838,21 @@ type trace = (Path.t * type_expr) list
 let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_result.t =
   let rec resolve = function
     | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
-    | (trace,ty,spec)::problems ->
-        let cs = get_candidates env loc spec ty in
-        if Debug.debug_resolve then begin
-          !!% "Candidates:@.";
-          iter (!!% "  %a@." Candidate.format) cs
-        end;
-        let cs = concat_map (fun c ->
-            map (fun x -> c.Candidate.path, c.Candidate.expr, x) & extract_candidate spec env loc c
-          ) cs
-        in
-        Resolve_result.concat
-        & map (resolve_cand trace ty problems) cs
+    | p::ps -> resolve_a_problem p ps
 
+  and resolve_a_problem (trace,ty,spec) problems =
+    let cs = get_candidates env loc spec ty in
+    if Debug.debug_resolve then begin
+      !!% "Candidates:@.";
+      iter (!!% "  %a@." Candidate.format) cs
+    end;
+    let cs = concat_map (fun c ->
+        map (fun x -> c.Candidate.path, c.Candidate.expr, x) & extract_candidate spec env loc c
+      ) cs
+    in
+    Resolve_result.concat
+    & map (resolve_cand trace ty problems) cs
+    
   and resolve_cand trace ty problems (path, expr, (cs,vty)) =
 
     let org_tysize = Tysize.size ty in 
