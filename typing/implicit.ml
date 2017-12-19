@@ -835,122 +835,128 @@ type trace = (Path.t * type_expr) list
 (** Used instance history. This is used to check the same instance is
     not used with types with not strictly decreasing size. *)
 
-let rec resolve loc env : (trace * type_expr * Spec.t) list -> Resolve_result.t = function
-  | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
-  | (trace,ty,spec)::problems ->
-      let cs = get_candidates env loc spec ty in
-      if Debug.debug_resolve then begin
-        !!% "Candidates:@.";
-        iter (!!% "  %a@." Candidate.format) cs
-      end;
-      let cs = concat_map (fun c ->
-        map (fun x -> c.Candidate.path, c.Candidate.expr, x) & extract_candidate spec env loc c
+let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_result.t =
+  let rec resolve = function
+    | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
+    | p::ps -> resolve_a_problem p ps
+
+  and resolve_a_problem (trace,ty,spec) problems =
+    let cs = get_candidates env loc spec ty in
+    if Debug.debug_resolve then begin
+      !!% "Candidates:@.";
+      iter (!!% "  %a@." Candidate.format) cs
+    end;
+    let cs = concat_map (fun c ->
+        map (fun x -> c.Candidate.path, c.Candidate.expr, x) 
+        & extract_candidate spec env loc c
       ) cs
-      in
-      Resolve_result.concat
-      & flip map cs
-      & resolve_cand loc env trace ty problems
+    in
+    Resolve_result.concat
+    & map (try_cand trace ty problems) cs
+    
+  and try_cand trace ty problems (path, expr, (cs,vty)) =
 
-(* CR jfuruse: Once given, loc is constant *)
-and resolve_cand loc env trace ty problems (path, expr, (cs,vty)) =
+    let org_tysize = Tysize.size ty in 
 
-  let org_tysize = Tysize.size ty in 
-
-  match assoc_opt path trace with
-  | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
-      (* recursive call of path and the type size is not strictly decreasing *)
-      if Debug.debug_resolve then begin
-        !!% "  Checking %a <> ... using %a ... oops@."
-          Printtyp.type_expr ty
-          Path.format path;
-        !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
-          Path.format path
-          Printtyp.type_expr ty'
-          (Tysize.(to_string & size ty'))
-          Printtyp.type_expr ty
-          (Tysize.(to_string & size ty));
-      end;
-      
-      Resolve_result.Ok []
-
-  | _ ->
-      (* CR jfuruse: Older binding of path is no longer useful. Replace instead of add? *)
-      let trace' = (path, ty) :: trace in 
-
-      (* These type instantiations are done in the current level,
-         completely unrelated with the levels used for the implicit values! *)
-      let ity = Ctype.instance env ty in
-     
-      let ivty, cs =
-        match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
-        | [] -> assert false (* impos *)
-        | ivty :: ictys ->
-            ivty, map2 (fun (l,_,spec,conv) icty -> (l,icty,spec,conv)) cs ictys
-      in
-
-      with_snapshot & fun () ->
+    match assoc_opt path trace with
+    | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
+        (* recursive call of path and the type size is not strictly decreasing *)
         if Debug.debug_resolve then begin
-          !!% "  Checking %a <> %a, using %a ...@."
-            Printtyp.type_expr ity
-            Printtyp.type_expr ivty
+          !!% "  Checking %a <> ... using %a ... oops@."
+            Printtyp.type_expr ty
             Path.format path;
+          !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
+            Path.format path
+            Printtyp.type_expr ty'
+            (Tysize.(to_string & size ty'))
+            Printtyp.type_expr ty
+            (Tysize.(to_string & size ty));
         end;
-        match protect & fun () -> Ctype.unify env ity ivty with
-        | Error (Ctype.Unify utrace) ->
-            if Debug.debug_resolve then begin
-              !!% "    no@.";
-              !!% "      Reason: @[%a@]@."
-                (fun ppf utrace -> Printtyp.report_unification_error ppf
-                  env utrace
-                  (fun ppf -> fprintf ppf "Unification error ")
-                  (fun ppf -> fprintf ppf "with"))
-                utrace;
 
-              !!% "    Type 1: @[%a@]@." Printtyp.raw_type_expr  ity;
-              !!% "    Type 2: @[%a@]@." Printtyp.raw_type_expr  ivty
+        Resolve_result.Ok []
 
-            end;
-            Resolve_result.Ok [] (* no solution *)
-                   
-        | Error e -> raise e (* unexpected *)
+    | _ ->
+        (* CR jfuruse: Older binding of `path` in `trace` is no longer useful. 
+           Replace instead of add? 
+        *)
+        let trace' = (path, ty) :: trace in 
 
-        | Ok _ ->
-            if Debug.debug_resolve then
-              !!% "    ok: %a@." Printtyp.type_expr ity;
-            
-            let new_tysize = Tysize.size ty in
+        (* These type instantiations are done in the current level,
+           completely unrelated with the levels used for the implicit values! *)
+        let ity = Ctype.instance env ty in
 
-            if Tysize.(has_var new_tysize
-                       && has_var org_tysize
-                       && not & lt new_tysize org_tysize)
-            then begin
+        let ivty, cs =
+          match Ctype.instance_list env (vty::map (fun (_,ty,_spec,_conv) -> ty) cs) with
+          | [] -> assert false (* impos *)
+          | ivty :: ictys ->
+              ivty, map2 (fun (l,_,spec,conv) icty -> (l,icty,spec,conv)) cs ictys
+        in
+
+        with_snapshot & fun () ->
+          if Debug.debug_resolve then begin
+            !!% "  Checking %a <> %a, using %a ...@."
+              Printtyp.type_expr ity
+              Printtyp.type_expr ivty
+              Path.format path;
+          end;
+          match protect & fun () -> Ctype.unify env ity ivty with
+          | Error (Ctype.Unify utrace) ->
               if Debug.debug_resolve then begin
-                !!% "    Tysize vars not strictly decreasing %s => %s@."
-                  (Tysize.to_string org_tysize)
-                  (Tysize.to_string new_tysize)
+                !!% "    no@.";
+                !!% "      Reason: @[%a@]@."
+                  (fun ppf utrace -> Printtyp.report_unification_error ppf
+                    env utrace
+                    (fun ppf -> fprintf ppf "Unification error ")
+                    (fun ppf -> fprintf ppf "with"))
+                  utrace;
+
+                !!% "    Type 1: @[%a@]@." Printtyp.raw_type_expr  ity;
+                !!% "    Type 2: @[%a@]@." Printtyp.raw_type_expr  ivty
+
               end;
-                 (* CR jfuruse: this is reported ambiguousity *) 
-              Resolve_result.MayLoop [expr]
-            end else
+              Resolve_result.Ok [] (* no solution *)
 
-              (* Add the sub-problems *)
-              let problems = map (fun (_,ty,spec,_conv) -> (trace',ty,spec)) cs @ problems in
+          | Error e -> raise e (* unexpected *)
 
+          | Ok _ ->
               if Debug.debug_resolve then
-                !!% "    subproblems: [ @[<v>%a@] ]@."
-                  (List.format "@," (fun ppf (_,ty,spec,_) ->
-                    Format.fprintf ppf "%a / %s"
-                      Printtyp.type_scheme ty
-                      (Spec.to_string spec))) cs;
-              
-              match resolve loc env problems with
-              | Resolve_result.MayLoop es -> Resolve_result.MayLoop es
-              | Resolve_result.Ok res_list ->
-                  let build res =
-                    let args, res = split_at (length cs) res in
-                    Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
-                  in
-                  Resolve_result.Ok (map build res_list)
+                !!% "    ok: %a@." Printtyp.type_expr ity;
+
+              let new_tysize = Tysize.size ty in
+
+              if Tysize.(has_var new_tysize
+                         && has_var org_tysize
+                         && not & lt new_tysize org_tysize)
+              then begin
+                if Debug.debug_resolve then begin
+                  !!% "    Tysize vars not strictly decreasing %s => %s@."
+                    (Tysize.to_string org_tysize)
+                    (Tysize.to_string new_tysize)
+                end;
+                   (* CR jfuruse: this is reported ambiguousity *) 
+                Resolve_result.MayLoop [expr]
+              end else
+
+                (* Add the sub-problems *)
+                let problems = map (fun (_,ty,spec,_conv) -> (trace',ty,spec)) cs @ problems in
+
+                if Debug.debug_resolve then
+                  !!% "    subproblems: [ @[<v>%a@] ]@."
+                    (List.format "@," (fun ppf (_,ty,spec,_) ->
+                      Format.fprintf ppf "%a / %s"
+                        Printtyp.type_scheme ty
+                        (Spec.to_string spec))) cs;
+
+                match resolve problems with
+                | Resolve_result.MayLoop es -> Resolve_result.MayLoop es
+                | Resolve_result.Ok res_list ->
+                    let build res =
+                      let args, res = split_at (length cs) res in
+                      Typedtree.app expr.exp_env expr (map2 (fun (l,_,_,conv) a -> (l,conv a)) cs args) :: res
+                    in
+                    Resolve_result.Ok (map build res_list)
+  in
+  resolve problems
 
 let resolve env loc spec ty = with_snapshot & fun () ->
 
@@ -1024,11 +1030,6 @@ let resolve_omitted_imp_arg loc env a = match a with
           let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
           match specopt with
           | None -> a (* It is not imp arg *)
-(*
-          | Some _ when Types.gen_vars t <> [] ->
-              (* omitted and generalized *)
-              raise_errorf ~loc "Generalized implicit arguments cannot be omitted"
-*)
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
               (* for retyping, e.exp_env is not suitable, since 
