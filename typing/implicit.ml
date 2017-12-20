@@ -254,10 +254,36 @@ end = struct
 *)
 end
 
-module Crelated = struct end
+module Crelated = struct
+
+  let cand_related env loc ty =  (* XXX not the entire type but the instantiation of the type variable! *)
+    let rec find_paths ty = match Types.repr_desc ty with
+      | Types.Tconstr (p, _, _) ->
+          let mp = match p with
+            | Path.Pdot (p, _, _) -> p
+            | Path.Pident _ -> Path.Pident (Ident.create_persistent "Pervasives") (* XXX move to a library module *)
+            | _ -> assert false
+          in
+          mp :: begin match Env.find_type_expansion p env with
+          | (_, body, _) -> find_paths body
+          | exception Not_found -> []
+          end
+      | _ -> []
+    in
+    let paths = find_paths ty in
+    if Debug.debug_resolve then begin
+      !!% "cand_related: modules: @[%a@]@."
+        (Format.list "@," Path.format) paths;
+    end;
+    map (Candidate.default_candidate_of_path env)
+    & concat_map (Env.values_of_module ~recursive:false env loc) paths
+end
+
+(*
 module Chastype = struct end
 module Cderiving = struct end
 module Cppxderive = struct end
+*)
 
 module Spec : sig
   (**
@@ -287,13 +313,13 @@ module Spec : sig
           where [P.M] is accessible as [M] by [open P].
       *)
 
+    | Related
+      (** [related]. The values defined under module [P] where data type 
+          defined in [P] appears in the type of the resolution target *)
 (*
     | Aggressive of t2
       (** [aggressive t2]. Even normal function arrows are considered 
           as constraints. *)
-    | Related
-      (** [related]. The values defined under module [P] where data type 
-          defined in [P] appears in the type of the resolution target *)
   (*
     | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
   *)
@@ -319,10 +345,10 @@ end = struct
   and t2 = 
     | Direct of [`In | `Just] * Longident.t * Path.t option
     | Opened of [`In | `Just] * Longident.t
+    | Related
 
 (*
     | Aggressive of t2
-    | Related
   (*
     | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
   *)
@@ -340,8 +366,8 @@ end = struct
       | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
       | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
       | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
+      | Related -> "related"
 (*
-        | Related -> "related"
       | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
   (*
       | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
@@ -362,10 +388,10 @@ end = struct
   let (* rec *) is_static = function
     | Opened _ -> true
     | Direct _ -> true
+    | Related -> false
 (*
     | Has_type _ -> true
     | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
-    | Related -> false
     | Deriving _ -> false
     | PPXDerive _ -> false
 *)
@@ -375,12 +401,13 @@ end = struct
   open Candidate
       
   let (* rec *) cand_static env loc : t2 -> t list = function
+    | Opened (f,x) -> cand_opened env loc (f,x)
+    | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
+    | _ -> assert false (* impos *)
 (*
       | Aggressive x ->
         map (fun x -> { x with aggressive = true }) & cand_static env loc x
 *)
-    | Opened (f,x) -> cand_opened env loc (f,x)
-    | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
 (*
   (*
     | Name (_, rex, t2) -> cand_name rex & fun () -> cand_static env loc t2
@@ -390,12 +417,11 @@ end = struct
   *)
     | Has_type _ -> assert false (* impos *)
     | spec when is_static spec -> assert false (* impos *)
-    | _ -> assert false (* impos *)
 *)
   
-  let (* rec *) cand_dynamic _env _loc _ty = function
-  (*
+  let (* rec *) cand_dynamic env loc ty = function
     | Related -> Crelated.cand_related env loc ty
+  (*
   *)
 (*
       | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
@@ -461,8 +487,8 @@ end = struct
       | Direct (`Just, _l, _) -> []
       | Opened (`In, _l) -> []
       | Opened (`Just, _l) -> []
+      | Related -> []
 (*
-        | Related -> []
       | Aggressive x -> t2 x
   (*
       | Name (_s, _re, x) -> t2 x
@@ -488,8 +514,8 @@ end = struct
     and t2 tys x = match x with
       | Direct _ -> tys, x
       | Opened _ -> tys, x
-(*
       | Related -> tys, x
+(*
       | Aggressive x ->
           let tys, x = t2 tys x in
           tys, Aggressive x
@@ -547,13 +573,13 @@ end = struct
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
                       [Nolabel, e] ) ->
             let f,l = flag_lid e in Opened (f,l)
+        | Pexp_ident {txt=Lident "related"} -> Related
   (*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
                       ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
   *)
 (*
-        | Pexp_ident {txt=Lident "related"} -> Related
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "has_type"} }, args ) ->
              begin match args with
             | [Nolabel, e] ->
