@@ -267,13 +267,18 @@ module Spec : sig
   
   *)
   
-  open Parsetree
+  (* open Parsetree *)
   open Types
   
   (** spec dsl *)
   type t = t2 list (** [t2, .., t2] *)
   
   and t2 = 
+    | Direct of [`In | `Just] * Longident.t * Path.t option
+      (** [P] or [just P]. [P] is for the values defined under module accessible
+          by the name [P] and [P]'s sub-modules. [just P] is for values defined 
+          just under module accessible by the named [P] and values defined 
+          in its sub-modules are not considered. *)
     | Opened of [`In | `Just] * Longident.t
       (** [opened M]. The values defined in module path [P.M] or its sub modules
           where [P.M] is accessible as [M] by [open P].
@@ -281,11 +286,8 @@ module Spec : sig
           [opened (just M)]. The values defined in module path [P.M]
           where [P.M] is accessible as [M] by [open P].
       *)
-    | Direct of [`In | `Just] * Longident.t * Path.t option
-      (** [P] or [just P]. [P] is for the values defined under module accessible
-          by the name [P] and [P]'s sub-modules. [just P] is for values defined 
-          just under module accessible by the named [P] and values defined 
-          in its sub-modules are not considered. *)
+
+(*
     | Aggressive of t2
       (** [aggressive t2]. Even normal function arrows are considered 
           as constraints. *)
@@ -302,20 +304,23 @@ module Spec : sig
           and [M.poly_variant] *)
     | PPXDerive of Parsetree.expression * core_type * type_expr option
       (** [ppxderive ([%...] : ty)]. *)
+*)
         
   val to_string : t -> string
 
   val candidates : Env.t -> Location.t -> t -> type_expr -> Candidate.t list
 end = struct
 
-  open Parsetree
-  open Types
+  (* open Parsetree *)
+  (* open Types *)
   
   type t = t2 list
   
   and t2 = 
-    | Opened of [`In | `Just] * Longident.t
     | Direct of [`In | `Just] * Longident.t * Path.t option
+    | Opened of [`In | `Just] * Longident.t
+
+(*
     | Aggressive of t2
     | Related
   (*
@@ -324,6 +329,7 @@ end = struct
     | Has_type of core_type * type_expr option
     | Deriving of Longident.t
     | PPXDerive of Parsetree.expression * core_type * type_expr option
+*)
         
   let to_string = 
     let rec t = function
@@ -334,7 +340,8 @@ end = struct
       | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
       | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
       | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
-      | Related -> "related"
+(*
+        | Related -> "related"
       | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
   (*
       | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
@@ -347,28 +354,34 @@ end = struct
           Format.asprintf "ppxderive (%a : %a)"
             Pprintast.expression e
             Pprintast.core_type cty
+*)
     in
     t 
 
   (** "Dynamic" means that candidates are dependent on the target type *)
-  let rec is_static = function
+  let (* rec *) is_static = function
     | Opened _ -> true
     | Direct _ -> true
+(*
     | Has_type _ -> true
     | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
     | Related -> false
     | Deriving _ -> false
     | PPXDerive _ -> false
+*)
       
   (** spec to candidates *)
   
   open Candidate
       
-  let rec cand_static env loc : t2 -> t list = function
-    | Aggressive x ->
+  let (* rec *) cand_static env loc : t2 -> t list = function
+(*
+      | Aggressive x ->
         map (fun x -> { x with aggressive = true }) & cand_static env loc x
+*)
     | Opened (f,x) -> cand_opened env loc (f,x)
     | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
+(*
   (*
     | Name (_, rex, t2) -> cand_name rex & fun () -> cand_static env loc t2
   *)
@@ -378,12 +391,15 @@ end = struct
     | Has_type _ -> assert false (* impos *)
     | spec when is_static spec -> assert false (* impos *)
     | _ -> assert false (* impos *)
+*)
   
-  let rec cand_dynamic env loc ty = function
+  let (* rec *) cand_dynamic _env _loc _ty = function
   (*
     | Related -> Crelated.cand_related env loc ty
   *)
-    | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
+(*
+      | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
+*)
   (*
     | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
   *)
@@ -392,10 +408,12 @@ end = struct
     | PPXDerive (_e, _cty, None) -> assert false (* impos *)
     | PPXDerive (e, _cty, Some temp_ty) -> Cppxderive.cand_derive env loc e temp_ty ty 
   *)
-    | Opened _ | Direct _ | Has_type _ ->
+    | Opened _ | Direct _ (* | Has_type _ *) ->
         (* they are static *)
         assert false (* impos *)
+(*
     | _ -> assert false
+*)
   
   let candidates env loc ts =
     let statics, dynamics = partition is_static ts in
@@ -443,7 +461,8 @@ end = struct
       | Direct (`Just, _l, _) -> []
       | Opened (`In, _l) -> []
       | Opened (`Just, _l) -> []
-      | Related -> []
+(*
+        | Related -> []
       | Aggressive x -> t2 x
   (*
       | Name (_s, _re, x) -> t2 x
@@ -451,6 +470,7 @@ end = struct
       | Has_type (cty, _ty) -> [cty]
       | Deriving _p -> []
       | PPXDerive (_e, cty, _) -> [cty]
+*)
     in
     t 
   
@@ -468,6 +488,7 @@ end = struct
     and t2 tys x = match x with
       | Direct _ -> tys, x
       | Opened _ -> tys, x
+(*
       | Related -> tys, x
       | Aggressive x ->
           let tys, x = t2 tys x in
@@ -490,6 +511,7 @@ end = struct
           | _ -> assert false (* impos *)
           end
       | PPXDerive (_e, _cty, Some _) -> assert false (* impos *)
+*)
     in
     match t tys t0 with
     | [], t0 -> t0
@@ -518,8 +540,10 @@ end = struct
         | Pexp_tuple xs -> map t2 xs
         | _ -> [t2 e]
       and t2 e = match e.pexp_desc with
+(*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
                       [Nolabel, e] ) -> Aggressive (t2 e)
+*)
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
                       [Nolabel, e] ) ->
             let f,l = flag_lid e in Opened (f,l)
@@ -528,6 +552,7 @@ end = struct
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
                       ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
   *)
+(*
         | Pexp_ident {txt=Lident "related"} -> Related
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "has_type"} }, args ) ->
              begin match args with
@@ -558,6 +583,7 @@ end = struct
                 end
             | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take just one argument"
             end
+*)
         | _ -> 
             let f,lid = flag_lid e in
             Direct (f, lid, None)
