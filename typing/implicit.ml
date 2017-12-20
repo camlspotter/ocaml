@@ -257,6 +257,7 @@ end
 module Crelated = struct
 
   let cand_related env loc ty =  (* XXX not the entire type but the instantiation of the type variable! *)
+    (* XXX no inf loop even with rectypes? *)
     let rec find_paths ty = match Types.repr_desc ty with
       | Types.Tconstr (p, _, _) ->
           let mp = match p with
