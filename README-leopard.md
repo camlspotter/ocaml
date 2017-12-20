@@ -36,7 +36,7 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
     ```ocaml
 	(1 + 2, 1.2 + 3.4)
 	```
-	
+
 * Easily overridable array access operators such as `x.[i]` and `x.(i)`.
 
     ```ocaml
@@ -68,8 +68,8 @@ Even with these enhancements, it is designed to be compatible with OCaml as poss
 
 ## Two phased typing to minimize extension bugs
 
-To minimize the compilation bugs caused by its extensions, 
-OCamleopard has a two phased type checking: 
+To minimize the compilation bugs caused by its extensions,
+OCamleopard has a two phased type checking:
 in the first typing phase, the input program is type-checked by OCamleopard's extended type system.
 Then, the typed AST is transformed to a vanilla OCaml code.
 This output is type checked again in the second typing phase by the type checker without any OCamleopard extensions to make sure that the output of OCamleopard is at least OCaml type safe.
@@ -80,7 +80,7 @@ OCamleopard is a standalone compiler, but it is also usable as a preprocessor to
 ## From Git repo with OPAM
 
 ```shell
-$ opam pin add leopard git://github.com/camlspotter/ocaml#4.05.0+leopard
+$ opam pin add leopard git://github.com/camlspotter/ocaml#4.06.0+leopard
 ```
 
 Once installed, you can check it working:
@@ -93,8 +93,8 @@ val x : 'a -> 'a option
 $ ocamlfind ocamlc -verbose -package leopard -syntax leopard -i x.ml
 Effective set of preprocessor predicates: preprocessor,syntax,leopard
 Effective set of compiler predicates: pkg_leopard,syntax,autolink,byte
-+ ocamlc.opt -verbose -i -I <OPAMROOT>/4.05.0/lib/leopard -pp "leopardc '-I' '<OPAMROOT>/4.05.0/lib/leopard' '-as-pp' " x.ml
-+ leopardc '-I' '<OPAMROOT>/4.05.0/lib/leopard' '-as-pp'  'x.ml' > /tmp/ocamlppd1cbe5
++ ocamlc.opt -verbose -i -I <OPAMROOT>/4.06.0/lib/leopard -pp "leopardc '-I' '<OPAMROOT>/4.06.0/lib/leopard' '-as-pp' " x.ml
++ leopardc '-I' '<OPAMROOT>/4.06.0/lib/leopard' '-as-pp'  'x.ml' > /tmp/ocamlppd1cbe5
 val x : 'a -> 'a option
 ```
 
@@ -144,26 +144,6 @@ you have to set an environment variable `OCAMLFIND_COMMANDS`
 OCAMLFIND_COMMANDS='ocamlc=leopardc ocamlopt=leopardopt ocamldep=leoparddep
 ```
 
-### Work with Findlib (i.e. `ocamlfind`) (Plan B)
-
-You MAY ALSO add the following lines to `findlib.conf` by hand:
-
-```
-ocamlc(leopard)="leopardc"
-ocamlopt(leopard)="leopardopt"
-ocamldep(leopard)="leoparddep"
-ocamldoc(leopard)="leoparddoc"
-```
-
-then give `-toolchain leopard` option to `ocamlfind` commands. For example,
-
-```shell
-$ ocamlfind -toolchain leopard ocamlc /tmp/x.ml
-```
-
-In OPAM environment, `findlib.conf` should be found at the directry 
-which `opam config var lib` prints out.
-
 ## As a preprocessor
 
 OCamleopard can be used as a preprocessor which transforms OCamleopard
@@ -174,7 +154,7 @@ then the output is passed to the genuine OCaml compilers.
 
 Note that the same preprocessor option `-pp "leopardc -as-pp" CANNOT be used
 for dependency analysis (`ocamldep`), since `leopardc -as-pp` tries to type
-check the target module.  This usually fails because the modules on which 
+check the target module.  This usually fails because the modules on which
 the targets depend are not compiled yet at the dependncy analysis.
 Instead, `ocamldep` must have an option `-pp "leopardc -as-pp -no-trans"`:
 
@@ -203,17 +183,17 @@ $ ocamlfind ocamlopt -package leopard -syntax leopard /tmp/x.ml
 $ ocamlfind ocamldep -package leopard -syntax leoparddep /tmp/x.ml
 ```
 
-Note that you have to provide a different syntax option `-syntax leoparddep` 
+Note that you have to provide a different syntax option `-syntax leoparddep`
 for `ocamldep`.
 
 ### Preprocessing now depends on types of other modules
 
-Note that when OCamleopard is used as a preprocessor 
+Note that when OCamleopard is used as a preprocessor
 with its type system extensions,
-its preprocessing is dependent not only on the source code itself 
-but also on its type environment: the types of the modules it depends on.
+the preprocessing is dependent not only on the source code itself
+but also on its type environment: the types (`.cmi` files) of the modules it depends on.
 You may need to add this extra preprocessing dependency over other modules
-to your build system, if such a build system assumes preprocessing is 
+to your build system, if such a build system assumes preprocessing is
 purely dependent on the source code (i.e. `jbuilder`).
 
 # Additional command line options
@@ -223,9 +203,9 @@ options to the original OCaml compilers and tools.
 
 ## `-as-pp`
 
-Option `-as-pp` makes compilers as preprocessors.  Instead of generating
-object files it prints out the result of their program transformations in
-vanilla OCaml binary untyped AST, so that they can be type double-checked 
+Option `-as-pp` changes compilers into preprocessors.  Instead of generating
+object files, it prints out the result of their program transformations in
+vanilla OCaml binary untyped AST, so that they can be type double-checked
 and compiled by the genuine OCaml compilers.
 
 ## `-as-pp-text`
@@ -244,8 +224,8 @@ compilers.
 
 Compiler modification is a subtle work and there is always a risk of mistake,
 and such a mistake may affect the behaviour of the compiled programs
-in unexpected ways.  OCamleopard tries to minimize the risk 
-by type double-checking: once its program transformation is done, 
+in unexpected ways.  OCamleopard tries to minimize the risk
+by double type checking: once its program transformation is done,
 the final typed AST is untyped back to a untyped AST, then type-checked
 again by its type system without any OCamleopard extensions, which should be
 identical to the genuine OCaml compiler's.  Thus OCamleopard at least assures
@@ -255,11 +235,11 @@ Option `-no-retype` omits this type double-check for compilation speed.
 
 ## `-no-trans`
 
-The main use of `-no-trans` is to feed OCamleopard programs to 
+The main use of `-no-trans` is to feed OCamleopard programs to
 `ocamldep` dependency analyzer.
 
 Option `-no-trans` disables OCamleopard program transformation.
-This option makes compilers as preprocessors just like `-as-pp`, but
+This option turns ompilers into preprocessors just like `-as-pp`, but
 it only desugars OCamleopard syntactic sugar and does not perform
 its program transformation.
 The output, if successful, is a valid vanilla OCaml binary untyped AST.
@@ -270,16 +250,17 @@ The output of `-no-trans` can be compiled by OCamleopard compilers.
 
 ## `-leopard`, `-no-leopard`
 
-Force "Leopard" mode enabled or disabled, 
+Force "Leopard" mode (see below) enabled or disabled,
 no matter whether module named `Leopard` is in the load path or not.
 
 # "Leopard" mode
 
-Some of the extensions of OCamleopard requires its library module named `Leopard`. 
+Some of the extensions of OCamleopard requires its library module named `Leopard`.
 They are enabled only in "Leopard" mode, when the compiler finds the module in its loading path.
 
 In Leopard mode, the module `Leopard` is automatically opened and linked just like
-`Pervasives` of vanilla OCaml, unless `-nopervasives` option is given.
+`Pervasives` of vanilla OCaml.
+This linking can be disabled by giving `-nopervasives` option.
 
 # Syntax with Python style indentation rules
 
@@ -294,7 +275,7 @@ Note that even with these Python style indentation keywords, OCamleopard's synta
 
 ## Example
 
-Special keywords end with `:` introduce implicit blocks based on 
+Special keywords end with `:` introduce implicit blocks based on
 the code indentation.
 
 The following program using two special keywords `then:` and `else:`:
@@ -314,14 +295,14 @@ in
 is equivalent to the original OCaml code below:
 
 ```ocaml
-let f e = 
+let f e =
   if e then begin              (* <- begin inserted *)
     print_endline "true!";
     42
   end else begin               (* <- end and begin inserted *)
     print_endline "false!";
     -1
-  end                          (* <- end inserted *)  
+  end                          (* <- end inserted *)
 in
 ...
 ```
@@ -361,8 +342,8 @@ match xs with
   | A -> 4
   | B -> 5         (* EOF implicitly closes the begin *)
 ```
-                       
-is equlivalent with 
+
+is equlivalent with
 
 ```ocaml
 match xs with
@@ -377,7 +358,7 @@ match xs with
   | B -> 5
   end
 ```
-You can see more samples at `testsuite/tests/parsing-indent/t01ok.ml` of the OCamleopard 
+You can see more samples at `testsuite/tests/parsing-indent/t01ok.ml` of the OCamleopard
 source code.
 
 ## Special keywords
@@ -393,8 +374,8 @@ Auto-insertion of the corresponding ending keywords for the following:
 
 ## When the implicit closings are inserted?
 
-The implicit closing of a special keyword `xxx:` happens when 
-the indentation level goes to *less than* or *equal to* 
+The implicit closing of a special keyword `xxx:` happens when
+the indentation level goes to *less than* or *equal to*
 the indentation level where the special keyword is introduced:
 
 ```ocaml
@@ -417,7 +398,7 @@ Note that this is not the horizontal level of the special keyword:
 ```ocaml
 match x with
   p -> function:   (* indent level 2 at p. Not 7 at function: *)
-    | A -> 1       (* level 4. No closing happens *) 
+    | A -> 1       (* level 4. No closing happens *)
     | B -> 2
 | q -> ...         (* Level 0. *)
 ```
@@ -435,17 +416,17 @@ match x with
 
 ### Indentation of the line starts with `|`
 
-The indentation level of the line which starts with the vertical bar `|` 
+The indentation level of the line which starts with the vertical bar `|`
 for the pattern matches is treated a bit differently, in order to support
 the common indentation convention of or-patterns: they are often leveled
-at the same with `match`, `funciton` and `try`. 
+at the same with `match`, `funciton` and `try`.
 
 At the lines starts with `|`, the auto closing only happens when their
-indentation levels are *strictly less than* those of the lines with 
+indentation levels are *strictly less than* those of the lines with
 the corresponding special keywords:
 
 ```ocaml
-let rec f x = 
+let rec f x =
   match x mod 3, x mod 5 with:    (* level 2. Introduces an implicit begin. *)
   | 0, 0 -> print_string "fizbuz" (* level 2. This does not close the implicit begin *)
   | 0, _ -> print_string "fiz"    (* level 2. *)
@@ -457,7 +438,7 @@ let rec f x =
 is equivalent to
 
 ```ocaml
-let rec f x = 
+let rec f x =
   begin match x mod 3, x mod 5 with
   | 0, 0 -> print_string "fizbuz"
   | 0, _ -> print_string "fiz"
@@ -478,7 +459,7 @@ for i = 0 to 100 do:
   print_int i;                   (* ; appears at the end of do: indentation block *)
 print_endline "printed 100!"
 ```
-            
+
 is equilvalent to
 
 ```ocaml
@@ -518,8 +499,8 @@ function:
 | p -> e
 ```
 
-The line changing is mandatory. `function: [@blahblah]` may look better 
-but it is not possible for the current implementation approach 
+The line changing is mandatory. `function: [@blahblah]` may look better
+but it is not possible for the current implementation approach
 as a simple lexer level converter.
 
 ## Behind the scene
@@ -542,7 +523,7 @@ end
 ```
 
 This variant is actually used for the desugared version of `match ... with:`.
-Technically, for lexer based filter, it is hard to insert `begin` in front 
+Technically, for lexer based filter, it is hard to insert `begin` in front
 of `match` when it sees `with:` in its token stream.
 
 # Variant constructors as functions in both uncurried and curried form
@@ -597,7 +578,7 @@ module Loaded = struct
 end
 ```
 
-The instances of an overloaded value must be defined in the sub modules of 
+The instances of an overloaded value must be defined in the sub modules of
 the module defines it, with the same name:
 
 ```ocaml
@@ -616,7 +597,7 @@ Now the uses of `Loaded.(+)` are resolved to one of these instances, depending o
 
 ```ocaml
 open Loaded
-let _ = 
+let _ =
   assert (1 + 2 = 3);
   assert (1.2 + 3.4 = 4.6) (* See it is not +. but + !!! *)
 ```
@@ -625,18 +606,18 @@ The example of overloaded functions can be found at `testsuite/tests/overload/t0
 
 # Enhanced array access expressions such as `x.[e]` and `x.(e)`
 
-In Leopard mode, OCamleopard changes the desugaring of array access expressions such as 
+In Leopard mode, OCamleopard changes the desugaring of array access expressions such as
 `x.[e]` and `x.(e)` so that they can be easily overridden, and more importantly, overloadable!
 
-* `x.[e]` is desugarred using `__string_get` or `__string_unsafe_get` 
+* `x.[e]` is desugarred using `__string_get` or `__string_unsafe_get`
                    instead of `String.get` or `String.unsafe_get`.
-* `x.[e] <- e'` is desugarred using `__string_set` or `__string_unsafe_set` 
+* `x.[e] <- e'` is desugarred using `__string_set` or `__string_unsafe_set`
                               instead of `String.set` or `String.unsafe_set`.
 * `x.(e)` is desugarred using `__array_get` or `__array_unsafe_get`
               instead of `Array.get` or `Array.unsafe_get`.
 * `x.(e) <- e'` is desugarred using `__array_get` or `__array_unafe_get`
               instead of `Array.set` or `Array.unsafe_set`.
-* The same applies to `x.{e}` and `x.{e} <- e'`: 
+* The same applies to `x.{e}` and `x.{e} <- e'`:
   to `__bigarray_(genarray|array[123])_(unsafe_)?(get|set)` (please decypher the regular expression).
 
 The default definition of these `__(array|string)_(unsafe)?(get|set)`
@@ -649,8 +630,8 @@ The following operator like syntax sugars are also introduced:
 * `(.())` and `(.()<-)` are desugarred to `__array_(unsafe_)?(set|get)`.
 * `(.{})` and `(.{}<-)` are desugarred to `__bigarray_(unsafe_)?(set|get)`.
 
-They cannot be simple identifiers but syntax sugars because 
-we have to change the meaning of them from safe versions (`__xxx_(get|set)`) 
+They cannot be simple identifiers but syntax sugars because
+we have to change the meaning of them from safe versions (`__xxx_(get|set)`)
 to unsafe versions (`__xxx_unsafe_(get|set)`), if `-unsafe` compiler option is given.
 
 These sugars also apply to patterns, therefore if you want to redefine

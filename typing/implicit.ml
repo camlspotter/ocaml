@@ -432,8 +432,8 @@ end = struct
     | _ -> assert false
 *)
   
-  let candidates env loc ts =
-    let statics, dynamics = partition is_static ts in
+  let candidates env loc t =
+    let statics, dynamics = partition is_static t in
     let statics = concat_map (cand_static env loc) statics in
     if Debug.debug_resolve then begin
       !!% "debug_resolve: static candidates@.";
@@ -768,7 +768,7 @@ module Runtime = struct
     illtyped_app f [Nolabel, e]
 end
 
-(** Check it is [(<ty>, <spec>) Ppx_implicits.t] *)
+(** Check it is `(<ty>, <spec>) Ppx_implicits.t` and returns `Some (ty, spec)` *)
 let is_imp_arg_type env ty = 
   match expand_repr_desc env ty with
   | Tconstr (p, [ty; spec], _) when Runtime.is_imp_t_path p ->
