@@ -144,6 +144,7 @@ end = struct
       | Not_found -> Hashtbl.add tbl x.path x) xs;
     Hashtbl.to_list tbl |> map snd
 
+  (* Finds out modules named `lids` under the specified module or the current scope *)
   let module_lids_in_open_path env lids = function
     | None -> 
         (* Finds lids in the current scope, but only defined ones in the current scope level.
@@ -159,18 +160,22 @@ end = struct
           with
           | _ -> None)
     | Some open_ ->
-        (*  !!% "open %a@." Path.format open_; *)
-(*
-        let mdecl = Env.find_module open_ env in (* It should succeed *)
-        let sg = Env.scrape_sg env mdecl in
-        let env = Env.open_signature Fresh open_ sg Env.empty in
-*)
-        match Env.open_signature Fresh open_ Env.empty (* I doubt it does not work *) with
+        (* !!% "module_lids_in_open_path %a@." Path.format open_; *)
+        match 
+          try
+            (* None is returned only when the `path` referrs a functor.
+               If the path is not found, it raises `Not_found` *)
+            Env.open_signature Fresh open_ env (* I doubt it does not work *) 
+          with
+          | Not_found -> None
+        with
         | None -> assert false
         | Some env ->
             flip filter_map lids (fun lid ->
                 try
-                  Some (Env.lookup_module ~load:true (*?*) lid env)
+                  (* This may find `lid` defined out of `open_` *)
+                  let p = Env.lookup_module ~load:true (*?*) lid env in
+                  if Path.is_prefix_of open_ p then Some p else None
                 with
                 | _ -> None)
 
@@ -228,20 +233,19 @@ end = struct
       flip iter opens & !!% "  %a@." Path.format
     end;
     let paths = 
-      concat 
-      & map (module_lids_in_open_path env [lid]) 
+      concat_map (module_lids_in_open_path env [lid])
       & None :: map (fun x -> Some x) opens
     in
     if Debug.debug_resolve then begin
       !!% "debug_resolve: cand_opened cand modules@.";
       flip iter paths & !!% "  %a@." Path.format
     end;
-    concat & map (fun path ->
+    flip concat_map paths & fun path ->
       let lid = Untypeast.lident_of_path path in
       cand_direct env loc
         & match flg with
         | `Just -> `Just, lid, Some path
-        | `In -> `In, lid, Some path) paths
+        | `In -> `In, lid, Some path
   
   
 (*
@@ -271,13 +275,17 @@ module Spec : sig
   
   and t2 = 
     | Opened of [`In | `Just] * Longident.t
-      (** [opened M]. The values defined under module path [P.M] 
-          which is accessible as [M] by [open P] *)
+      (** [opened M]. The values defined in module path [P.M] or its sub modules
+          where [P.M] is accessible as [M] by [open P].
+
+          [opened (just M)]. The values defined in module path [P.M]
+          where [P.M] is accessible as [M] by [open P].
+      *)
     | Direct of [`In | `Just] * Longident.t * Path.t option
-      (** [P] or [just P]. [P] is for the values defined under module [P] 
-          and [P]'s sub-modules. [just P] is for values defined just 
-          under module [P] and values defined in its sub-modules are not 
-          considered. *)
+      (** [P] or [just P]. [P] is for the values defined under module accessible
+          by the name [P] and [P]'s sub-modules. [just P] is for values defined 
+          just under module accessible by the named [P] and values defined 
+          in its sub-modules are not considered. *)
     | Aggressive of t2
       (** [aggressive t2]. Even normal function arrows are considered 
           as constraints. *)
@@ -391,13 +399,13 @@ end = struct
   
   let candidates env loc ts =
     let statics, dynamics = partition is_static ts in
-    let statics = concat & map (cand_static env loc) statics in
+    let statics = concat_map (cand_static env loc) statics in
     if Debug.debug_resolve then begin
       !!% "debug_resolve: static candidates@.";
       flip iter statics & fun x ->
         !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
     end;
-    let dynamics ty = concat & map (cand_dynamic env loc ty) dynamics in
+    let dynamics ty = concat_map (cand_dynamic env loc ty) dynamics in
     fun ty -> uniq & statics @ dynamics ty
       
 end

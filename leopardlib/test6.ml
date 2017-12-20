@@ -14,5 +14,3 @@ let f = add (List.hd !r) (List.hd !r)
    BUG (already fixed): Apart from it is ok or not, the resolution result is never reflected to 
    the type of `r`. 
 *)
-
-   
