@@ -7,4 +7,5 @@ module Add = struct:
 
 let r = ref [] (* The variable should be unified with int *)
 
-let f = add (List.hd !r) (List.hd !r)
+let f = try add (List.hd !r) (List.hd !r) with Failure "hd" -> 0
+
