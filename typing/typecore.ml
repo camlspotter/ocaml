@@ -4559,7 +4559,8 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
       (* (C..) a1 a2 a3    =>  C (a1,a2,a3) *)
       (* (C..) a1 a2 a3 a4 =>  C (a1,a2,a3) a4 *)
       let open Ast_helper in
-      let patterns, sarg, remain = 
+      let patterns, sarg, remain =
+        (* XXXX Locations! *)
         let xi i = Exp.ident {txt=Longident.Lident ("x" ^ string_of_int i); loc=Location.none} in
         let pi i = Pat.var {txt="x" ^ string_of_int i; loc=Location.none} in
         let rec loop i xs =
@@ -4584,7 +4585,7 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
         begin match args with
         | [] -> assert false
         | [sarg] -> sarg
-        | args -> Exp.tuple args 
+        | args -> Exp.tuple args (* XXX Location! *)
         end,
         remain
       in
@@ -4635,7 +4636,8 @@ and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
   | 0 -> (* None *)
       type_construct env loc lid None ty_expected sexp.pexp_attributes
   | 1 -> (* (Some) => fun x -> Some x *)
-      let sexp = 
+      let sexp =
+        (* XXX Locations! *)
         let open Ast_helper in
         let p = Pat.var {txt= "x"; loc= Location.none } in
         let x = Exp.ident {txt= Longident.Lident "x"; loc= Location.none } in
@@ -4654,6 +4656,7 @@ and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
           in
           loop [] n
         in
+        (* XXX Locations! *)
         let names = make_n n (fun i -> "x" ^ string_of_int i) in
         let p = Pat.(tuple (List.map (fun txt -> var {txt; loc= Location.none}) names)) in
         let x = Exp.(tuple (List.map (fun txt -> ident {txt= Longident.Lident txt; loc= Location.none }) names)) in
