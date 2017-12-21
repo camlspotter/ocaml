@@ -314,16 +314,14 @@ module Spec : sig
           where [P.M] is accessible as [M] by [open P].
       *)
 
-    | Related
+    | Related of Parsetree.core_type * Types.type_expr option
       (** [related]. The values defined under module [P] where data type 
           defined in [P] appears in the type of the resolution target *)
 (*
     | Aggressive of t2
       (** [aggressive t2]. Even normal function arrows are considered 
           as constraints. *)
-  (*
     | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
-  *)
     | Has_type of core_type * type_expr option
       (** [typeclass path]. Typeclass style resolution.  *) 
     | Deriving of Longident.t
@@ -346,7 +344,7 @@ end = struct
   and t2 = 
     | Direct of [`In | `Just] * Longident.t * Path.t option
     | Opened of [`In | `Just] * Longident.t
-    | Related
+    | Related of Parsetree.core_type * Types.type_expr option
 
 (*
     | Aggressive of t2
@@ -367,12 +365,10 @@ end = struct
       | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
       | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
       | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
-      | Related -> "related"
+      | Related (_,_) -> "related" (* "(related : %a)" Pprintast.core_type cty *)
 (*
       | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
-  (*
       | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
-  *)
       | Has_type (cty, _) -> 
           Format.asprintf "has_type (%a)"
             Pprintast.core_type cty
@@ -389,7 +385,7 @@ end = struct
   let (* rec *) is_static = function
     | Opened _ -> true
     | Direct _ -> true
-    | Related -> false
+    | Related (_,_) -> false
 (*
     | Has_type _ -> true
     | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
@@ -421,16 +417,10 @@ end = struct
 *)
   
   let (* rec *) cand_dynamic env loc ty = function
-    | Related -> Crelated.cand_related env loc ty
+    | Related (_,_) -> Crelated.cand_related env loc ty
   (*
-  *)
-(*
       | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
-*)
-  (*
     | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
-  *)
-  (*
     | Deriving lid -> Cderiving.cand_deriving env loc ty lid
     | PPXDerive (_e, _cty, None) -> assert false (* impos *)
     | PPXDerive (e, _cty, Some temp_ty) -> Cppxderive.cand_derive env loc e temp_ty ty 
@@ -488,12 +478,10 @@ end = struct
       | Direct (`Just, _l, _) -> []
       | Opened (`In, _l) -> []
       | Opened (`Just, _l) -> []
-      | Related -> []
+      | Related (_,_) -> (* [cty] *) []
 (*
       | Aggressive x -> t2 x
-  (*
       | Name (_s, _re, x) -> t2 x
-  *)
       | Has_type (cty, _ty) -> [cty]
       | Deriving _p -> []
       | PPXDerive (_e, cty, _) -> [cty]
@@ -515,16 +503,13 @@ end = struct
     and t2 tys x = match x with
       | Direct _ -> tys, x
       | Opened _ -> tys, x
-      | Related -> tys, x
+      | Related (_,_) -> tys, x
 (*
       | Aggressive x ->
           let tys, x = t2 tys x in
-          tys, Aggressive x
-  (*
       | Name (s, re, x) ->
           let tys, x = t2 tys x in
           tys, Name (s, re, x)
-  *)
       | Has_type (cty, None) ->
           begin match tys with
           | ty::tys -> tys, Has_type (cty, Some ty)
@@ -574,13 +559,11 @@ end = struct
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
                       [Nolabel, e] ) ->
             let f,l = flag_lid e in Opened (f,l)
-        | Pexp_ident {txt=Lident "related"} -> Related
+        | Pexp_ident {txt=Lident "related"} -> Related (assert false, assert false)
   (*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
                       ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
-  *)
-(*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "has_type"} }, args ) ->
              begin match args with
             | [Nolabel, e] ->
