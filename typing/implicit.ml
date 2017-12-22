@@ -5,12 +5,9 @@ open Leopardtyping
 open List
 open Asttypes
 
-module Debug : sig
-  val debug_resolve : bool
-end = struct
-  let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
-end
+let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
 
+(*
 module Klabel : sig
 
   val is_klabel : Asttypes.arg_label -> [> `Normal | `Optional ] option
@@ -70,7 +67,8 @@ end = struct
   *)
 
 end
-
+*)
+    
 module Candidate : sig
 
   type t = {
@@ -84,40 +82,13 @@ module Candidate : sig
 
   val uniq : t list -> t list
 
-  val module_lids_in_open_path :
-    Env.t
-    -> Longident.t list
-    -> Path.t option
-    -> Path.t list
-
-  val expr_of_path :
-    ?loc:Location.t
-    -> Env.t
-    -> Path.t
-    -> Typedtree.expression
-
-  val default_candidate_of_path :
-    Env.t
-    -> Path.t
-    -> t
-
-  val cand_direct :
-    Env.t
-    -> Location.t
-    -> [< `In | `Just ] * Longident.t -> t list
-
-  val cand_opened :
-    Env.t
-    -> Location.t
-    -> [< `In | `Just ] * Longident.t -> t list
-
   val cands_of_module :
     Env.t
     -> Location.t
-    -> bool
-    -> Path.t
+    -> bool (*+ recursive *)
+    -> Path.t (*+ module path *)
     -> t list
-
+    
   val mods_direct :
     Env.t
     -> Longident.t
@@ -126,6 +97,11 @@ module Candidate : sig
   val mods_opened :
     Env.t
     -> Longident.t
+    -> Path.t list
+      
+  val mods_related :
+    Env.t
+    -> Types.type_expr
     -> Path.t list
       
 end = struct
@@ -234,13 +210,9 @@ end = struct
         (* Derived implicit does not require the candidate space *)
         []
 
-  let cand_direct env loc (flg,lid) =
-    let recursive = match flg with `In -> true | `Just -> false in
-    concat_map (cands_of_module env loc recursive) & mods_direct env lid
-
   let mods_opened env lid =
     let opens = Env.get_opens env in
-    if Debug.debug_resolve then begin
+    if debug_resolve then begin
       !!% "debug_resolve: mods_opened opened paths@.";
       flip iter opens & !!% "  %a@." Path.format
     end;
@@ -248,22 +220,16 @@ end = struct
       concat_map (module_lids_in_open_path env [lid])
       & None :: map (fun x -> Some x) opens
     in
-    if Debug.debug_resolve then begin
+    if debug_resolve then begin
       !!% "debug_resolve: mods_opened cand modules@.";
       flip iter paths & !!% "  %a@." Path.format
     end;
     paths
 
-  let cand_opened env loc (flg,lid) =
-    concat_map (cands_of_module env loc (match flg with `In -> true | `Just -> false)) 
-    & mods_opened env lid
 (*
   let cand_name rex f =
     f () |> filter (fun x -> Re_pcre.pmatch ~rex & Longident.to_string & (* Typpx. *) Untypeast.lident_of_path x.path)
 *)
-end
-
-module Crelated = struct
 
   let mods_related env hint_ty =
     (* XXX no inf loop even with rectypes? *)
@@ -282,16 +248,11 @@ module Crelated = struct
       | _ -> []
     in
     let paths = find_paths hint_ty in
-    if Debug.debug_resolve then begin
+    if debug_resolve then begin
       !!% "cand_related: modules: @[%a@]@."
         (Format.list "@," Path.format) paths;
     end;
     paths
-
-  let cand_related env loc flg hint_ty =
-    concat_map (Candidate.cands_of_module env loc (match flg with `In -> true | `Just -> false)) 
-    & mods_related env hint_ty
-
 end
 
 module Spec : sig
@@ -315,10 +276,14 @@ module Spec : sig
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
 
+  type filter =
+    | Substr of string (** Only the values whose name contain the string in it *) 
+
   type traversal = 
     { module_specifier : module_specifier
     ; recursive : bool (** Includes the values defined in the sub-modules,
                            or just the toplevel values defined in the module *)
+    ; filters : filter list
     }
 
   type t = traversal list
@@ -341,16 +306,25 @@ end = struct
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
 
+  type filter =
+    | Substr of string (** Only the values whose name contain the string in it *) 
+
   type traversal = 
     { module_specifier : module_specifier
     ; recursive : bool (** Includes the values defined in the sub-modules,
                            or just the toplevel values defined in the module *)
+    ; filters : filter list
     }
 
   type t = traversal list
 
   let to_string =
-    let rec t trs = String.concat ", " (map traversal trs)
+    let rec t trs = String.concat ", " (map filters trs)
+    and filters ({ filters } as t) =
+      let f filter str = match filter with
+        | Substr s -> Printf.sprintf "substr %S (%s)" s str
+      in
+      List.fold_right f filters & traversal t
     and traversal { module_specifier=ms; recursive } =
       if recursive then module_specifier ms
       else Printf.sprintf "just (%s)" (module_specifier ms)
@@ -374,11 +348,18 @@ end = struct
   let mods env = function
     | Direct x -> mods_direct env x
     | Opened x -> mods_opened env x
-    | Related (_,Some ty) -> Crelated.mods_related env ty
+    | Related (_,Some ty) -> mods_related env ty
     | Related (_,None) -> assert false
 
-  let cands env loc { module_specifier; recursive } =
-    concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
+  let apply_filter f cs =
+    let eval_filter f c = match f with
+      | Substr s -> String.is_substring ~needle:s & Path.to_string c.path
+    in
+    filter (eval_filter f) cs
+
+  let cands env loc { module_specifier; recursive; filters } =
+    List.fold_right apply_filter filters
+    & concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
 
   let candidates env loc t = uniq & concat_map (cands env loc) t
 
@@ -394,7 +375,6 @@ module Specconv : sig
   open Types
 
   val from_type_expr : Env.t -> Location.t -> type_expr -> Spec.t
-  val from_payload_to_core_type : Location.t -> Parsetree.payload -> Parsetree.core_type
 end = struct
 
   open Parsetree
@@ -459,16 +439,30 @@ end = struct
     let open Longident in
     try
       let rec t e = match e.pexp_desc with
-        | Pexp_tuple xs -> map traversal xs
-        | _ -> [traversal e]
+        | Pexp_tuple xs -> map filters xs
+        | _ -> [filters e]
+      and filters e = match e.pexp_desc with
+        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "substr"} },
+                      [(Nolabel, e1); (Nolabel, e2)] ) ->
+            let f = match e1.pexp_desc with
+              | Pexp_constant (Pconst_string (s, _)) -> Substr s
+              | _ -> 
+                  raise_errorf ~loc:e1.pexp_loc "Filter must be a string constant: "
+                    Pprintast.expression e1
+            in
+            let t = filters e2 in
+            { t with filters = f :: t.filters }
+        | _ -> traversal e
       and traversal e = match e.pexp_desc with
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "just"} },
                       [Nolabel, e] ) -> 
             { module_specifier = module_specifier e
-            ; recursive = true }
+            ; recursive = true
+            ; filters = [] }
         | _ ->
             { module_specifier = module_specifier e
-            ; recursive = false }
+            ; recursive = false
+            ; filters = [] }
       and module_specifier e = match e.pexp_desc with
         | Pexp_construct ({txt=lid}, None) -> Direct lid
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
@@ -796,7 +790,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
 
   and resolve_a_problem (trace,ty,spec) problems =
     let cs = get_candidates env loc spec in
-    if Debug.debug_resolve then begin
+    if debug_resolve then begin
       !!% "Candidates:@.";
       iter (!!% "  %a@." Candidate.format) cs
     end;
@@ -815,7 +809,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
     match assoc_opt path trace with
     | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
         (* recursive call of path and the type size is not strictly decreasing *)
-        if Debug.debug_resolve then begin
+        if debug_resolve then begin
           !!% "  Checking %a <> ... using %a ... oops@."
             Printtyp.type_expr ity
             Path.format path;
@@ -844,7 +838,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
         in
 
         with_snapshot & fun () ->
-          if Debug.debug_resolve then begin
+          if debug_resolve then begin
             !!% "  Checking %a <> %a, using %a ...@."
               Printtyp.type_expr ity
               Printtyp.type_expr ivty
@@ -852,7 +846,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
           end;
           match protect & fun () -> Ctype.unify env ity ivty with
           | Error (Ctype.Unify utrace) ->
-              if Debug.debug_resolve then begin
+              if debug_resolve then begin
                 !!% "    no@.";
                 !!% "      Reason: @[%a@]@."
                   (fun ppf utrace -> Printtyp.report_unification_error ppf
@@ -870,7 +864,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
           | Error e -> raise e (* unexpected *)
 
           | Ok () ->
-              if Debug.debug_resolve then
+              if debug_resolve then
                 !!% "    ok: %a@." Printtyp.type_expr ity;
 
               let new_tysize = Tysize.size ity in
@@ -879,7 +873,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
                          && has_var org_tysize
                          && not & lt new_tysize org_tysize)
               then begin
-                if Debug.debug_resolve then begin
+                if debug_resolve then begin
                   !!% "    Tysize vars not strictly decreasing %s => %s@."
                     (Tysize.to_string org_tysize)
                     (Tysize.to_string new_tysize)
@@ -891,7 +885,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
                 (* Add the sub-problems *)
                 let problems = map (fun (_,ty,spec,_conv) -> (trace',ty,spec)) cs @ problems in
 
-                if Debug.debug_resolve then
+                if debug_resolve then
                   !!% "    subproblems: [ @[<v>%a@] ]@."
                     (List.format "@," (fun ppf (_,ty,spec,_) ->
                       Format.fprintf ppf "%a / %s"
@@ -947,14 +941,14 @@ let shadow_check env loc e =
 
 let resolve env loc spec ty = with_snapshot & fun () ->
 
-  if Debug.debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
+  if debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
 
   (* Protect the generalized type variables by temporarily unified by unique types,
      so that they can be unifiable only with themselves.
   *)
   close_gen_vars ty;
 
-  if Debug.debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
+  if debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
 
   (* CR jfuruse: Only one value at a time so far *)
   let open Resolve_result in
@@ -986,13 +980,13 @@ let resolve env loc spec ty =
   let gvars = gen_vars ty in
   let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
   close_gen_vars ty;
-  if Debug.debug_resolve then
+  if debug_resolve then
     !!% "Replaying %a against %a@."
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
   let ue = Untypeast.(default_mapper.expr default_mapper) e in
   let te = Typecore.type_expression env ue in
-  if Debug.debug_resolve then
+  if debug_resolve then
     !!% "Replaying %a : %a against %a@."
       Typedtree.format_expression te
       Printtyp.type_scheme te.exp_type
@@ -1000,7 +994,7 @@ let resolve env loc spec ty =
   Ctype.unify env te.exp_type ty;
   (* recover gvars *)
   List.iter (fun (gv, desc) -> gv.desc <- desc; gv.level <- Btype.generic_level) gvar_descs;
-  if Debug.debug_resolve then
+  if debug_resolve then
     !!% "Replay result: %a@."
       Printtyp.type_scheme te.exp_type;
   te

@@ -170,11 +170,13 @@ module List = struct
 end
 
 module XString = struct
-  open String
-
-  let is_prefix p s = try sub s 0 (length p) = p with _ -> false
-
   let drop len str = String.sub str len (String.length str - len)
+
+  let is_prefix ?(from=0) sub str =
+    let sublen = String.length sub in
+    try 
+      String.sub str from sublen = sub
+    with _ -> false
 
   let is_prefix' ?(from=0) sub str =
     let sublen = String.length sub in
@@ -182,6 +184,18 @@ module XString = struct
       if String.sub str from sublen = sub then Some (drop (from + sublen) str)
       else None
     with _ -> None
+
+  let is_substring ?from:(pos=0) ~needle:sub str =
+    let str_len = String.length str in
+    let sub_len = String.length sub in
+    if pos + sub_len > str_len then false
+    else 
+      let rec iter pos = 
+        if pos + sub_len > str_len then false
+        else if is_prefix ~from:pos sub str then true
+        else iter (pos+1)
+      in
+      iter pos
 end 
 
 module String = struct
