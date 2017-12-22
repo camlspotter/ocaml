@@ -27,7 +27,7 @@ module Klabel : sig
 
 end = struct
   (** Constraint labels *)
-    
+
   open Types
 
   (* Constraint labels must start with '_' *)
@@ -35,9 +35,9 @@ end = struct
     | Labelled s when s.[0] = '_' -> Some `Normal
     | Optional s when s.[0] = '_' -> Some `Optional
     | _ -> None
-  
+
   (* Constraint labels must precede the other arguments *)
-  let rec extract env ty = 
+  let rec extract env ty =
     let ty = Ctype.expand_head env ty in
     match repr_desc ty with
     | Tarrow(l, ty1, ty2, _) when is_klabel l <> None ->
@@ -60,7 +60,7 @@ end = struct
           (fun (cs, ty) -> (l,ty1)::cs, ty)
           (extract_aggressively env ty2)
     | _ -> [[], ty]
-  
+
   (*
   let rec get_args ty =
     let ty = Ctype.expand_head env ty in
@@ -68,7 +68,7 @@ end = struct
     | Tarrow(l, ty1, ty2, _) -> (l,ty1)::get_args ty2
     | _ -> []
   *)
-  
+
 end
 
 module Candidate : sig
@@ -104,36 +104,53 @@ module Candidate : sig
   val cand_direct :
     Env.t
     -> Location.t
-    -> [< `In | `Just ] * Longident.t * Path.t option -> t list
+    -> [< `In | `Just ] * Longident.t -> t list
 
   val cand_opened :
     Env.t
     -> Location.t
     -> [< `In | `Just ] * Longident.t -> t list
 
+  val cands_of_module :
+    Env.t
+    -> Location.t
+    -> bool
+    -> Path.t
+    -> t list
+
+  val mods_direct :
+    Env.t
+    -> Longident.t
+    -> Path.t list
+      
+  val mods_opened :
+    Env.t
+    -> Longident.t
+    -> Path.t list
+      
 end = struct
   (*
-  
+
     Instance search space specification DSL, mangling to and back from
     OCaml type definitions.
-  
+
   *)
   open Path
   open Types
-  
+
   type t = {
     path       : Path.t;
     expr       : Typedtree.expression;
     type_      : Types.type_expr;
     aggressive : bool
   }
-  
+
   let format ppf c =
     Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
       Path.format c.path
       Typedtree.format_expression c.expr
       Printtyp.type_scheme c.type_
-      
+
   let uniq xs =
     let tbl = Hashtbl.create 107 in
     iter (fun x ->
@@ -146,7 +163,7 @@ end = struct
 
   (* Finds out modules named `lids` under the specified module or the current scope *)
   let module_lids_in_open_path env lids = function
-    | None -> 
+    | None ->
         (* Finds lids in the current scope, but only defined ones in the current scope level.
              * Persistent ones are excluded
              * Sub-modules are excluded
@@ -161,11 +178,11 @@ end = struct
           | _ -> None)
     | Some open_ ->
         (* !!% "module_lids_in_open_path %a@." Path.format open_; *)
-        match 
+        match
           try
             (* None is returned only when the `path` referrs a functor.
                If the path is not found, it raises `Not_found` *)
-            Env.open_signature Fresh open_ env (* I doubt it does not work *) 
+            Env.open_signature Fresh open_ env (* I doubt it does not work *)
           with
           | Not_found -> None
         with
@@ -195,8 +212,8 @@ end = struct
     ; exp_env = env
     ; exp_attributes = []
     }
-    
-  let default_candidate_of_path env path = 
+
+  let default_candidate_of_path env path =
     try
       let vdesc = Env.find_value path env in
       let type_ = vdesc.val_type in
@@ -204,50 +221,42 @@ end = struct
       { path; expr; type_; aggressive= false }
     with
     | Not_found -> assert false (* impos *)
-  
-  let cand_direct env loc (flg,lid,popt) =
-    let recursive = match flg with
-      | `Just -> false
-      | `In -> true
-    in
-    let path_opt = match popt with
-      | Some _ -> popt
-      | None -> 
-          try
-            Some (Env.lookup_module ~load:true lid env)
-          with
-          | Not_found ->
-              (* Derived implicit does not require the candidate space *)
-              None
-    in
-    match path_opt with
-    | None -> []
-    | Some path ->
-        let paths = Env.values_of_module ~recursive env loc path in
-        map (default_candidate_of_path env) paths
-  
-  let cand_opened env loc (flg,lid) =
+
+  let cands_of_module env loc recursive mpath =
+    let paths = Env.values_of_module ~recursive env loc mpath in
+    map (default_candidate_of_path env) paths
+
+  let mods_direct env lid =
+    try
+      [Env.lookup_module ~load:true lid env]
+    with
+    | Not_found ->
+        (* Derived implicit does not require the candidate space *)
+        []
+
+  let cand_direct env loc (flg,lid) =
+    let recursive = match flg with `In -> true | `Just -> false in
+    concat_map (cands_of_module env loc recursive) & mods_direct env lid
+
+  let mods_opened env lid =
     let opens = Env.get_opens env in
     if Debug.debug_resolve then begin
-      !!% "debug_resolve: cand_opened opened paths@.";
+      !!% "debug_resolve: mods_opened opened paths@.";
       flip iter opens & !!% "  %a@." Path.format
     end;
-    let paths = 
+    let paths =
       concat_map (module_lids_in_open_path env [lid])
       & None :: map (fun x -> Some x) opens
     in
     if Debug.debug_resolve then begin
-      !!% "debug_resolve: cand_opened cand modules@.";
+      !!% "debug_resolve: mods_opened cand modules@.";
       flip iter paths & !!% "  %a@." Path.format
     end;
-    flip concat_map paths & fun path ->
-      let lid = Untypeast.lident_of_path path in
-      cand_direct env loc
-        & match flg with
-        | `Just -> `Just, lid, Some path
-        | `In -> `In, lid, Some path
-  
-  
+    paths
+
+  let cand_opened env loc (flg,lid) =
+    concat_map (cands_of_module env loc (match flg with `In -> true | `Just -> false)) 
+    & mods_opened env lid
 (*
   let cand_name rex f =
     f () |> filter (fun x -> Re_pcre.pmatch ~rex & Longident.to_string & (* Typpx. *) Untypeast.lident_of_path x.path)
@@ -256,7 +265,7 @@ end
 
 module Crelated = struct
 
-  let cand_related env loc hint_ty =  (* XXX not the entire type but the instantiation of the type variable! *)
+  let mods_related env hint_ty =
     (* XXX no inf loop even with rectypes? *)
     Format.eprintf "hint type: %a@." Printtyp.type_scheme hint_ty;
     let rec find_paths ty = match Types.repr_desc ty with
@@ -277,180 +286,108 @@ module Crelated = struct
       !!% "cand_related: modules: @[%a@]@."
         (Format.list "@," Path.format) paths;
     end;
-    map (Candidate.default_candidate_of_path env)
-    & concat_map (Env.values_of_module ~recursive:false env loc) paths
-end
+    paths
 
-(*
-module Chastype = struct end
-module Cderiving = struct end
-module Cppxderive = struct end
-*)
+  let cand_related env loc flg hint_ty =
+    concat_map (Candidate.cands_of_module env loc (match flg with `In -> true | `Just -> false)) 
+    & mods_related env hint_ty
+
+end
 
 module Spec : sig
   (**
-  
+
     Instance search space specification DSL, magling to and back from
     OCaml type definitions.
-  
+
   *)
-  
-  (* open Parsetree *)
-  open Types
-  
-  (** spec dsl *)
-  type t = t2 list (** [t2, .., t2] *)
-  
-  and t2 = 
-    | Direct of [`In | `Just] * Longident.t * Path.t option
-      (** [P] or [just P]. [P] is for the values defined under module accessible
-          by the name [P] and [P]'s sub-modules. [just P] is for values defined 
-          just under module accessible by the named [P] and values defined 
-          in its sub-modules are not considered. *)
-    | Opened of [`In | `Just] * Longident.t
-      (** [opened M]. The values defined in module path [P.M] or its sub modules
-          where [P.M] is accessible as [M] by [open P].
 
-          [opened (just M)]. The values defined in module path [P.M]
-          where [P.M] is accessible as [M] by [open P].
+  type module_specifier = 
+    | Direct of Longident.t
+      (** [M] is the module accessible by name [M] in the resolution context. *)
+    | Opened of Longident.t
+      (** [opened M] are the modules accessible by name [P.M] in the resolution context,
+          where [P] are opened.
       *)
-
     | Related of Parsetree.core_type * Types.type_expr option
-      (** [related]. The values defined under module [P] where data type 
-          defined in [P] appears in the type of the resolution target *)
-(*
-    | Aggressive of t2
-      (** [aggressive t2]. Even normal function arrows are considered 
-          as constraints. *)
-    | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
-    | Has_type of core_type * type_expr option
-      (** [typeclass path]. Typeclass style resolution.  *) 
-    | Deriving of Longident.t
-      (** [deriving M]. [M] must define [M.tuple], [M.object_] 
-          and [M.poly_variant] *)
-    | PPXDerive of Parsetree.expression * core_type * type_expr option
-      (** [ppxderive ([%...] : ty)]. *)
-*)
-        
+      (** [(related : 'a)], it is module [M] if the type ['a] is instantiated to
+          a data type defined in module [M], for example, [M.t].  If the data type
+          is an alias of data type defined in another module [N], [N] is also traversed.
+          This alias expansion is performed recursively. *)
+
+  type traversal = 
+    { module_specifier : module_specifier
+    ; recursive : bool (** Includes the values defined in the sub-modules,
+                           or just the toplevel values defined in the module *)
+    }
+
+  type t = traversal list
+
   val to_string : t -> string
 
-  val candidates : Env.t -> Location.t -> t -> type_expr -> Candidate.t list
+  val candidates : Env.t -> Location.t -> t -> Candidate.t list
 end = struct
 
-  (* open Parsetree *)
-  (* open Types *)
-  
-  type t = t2 list
-  
-  and t2 = 
-    | Direct of [`In | `Just] * Longident.t * Path.t option
-    | Opened of [`In | `Just] * Longident.t
+  type module_specifier = 
+    | Direct of Longident.t
+      (** [M] is the module accessible by name [M] in the resolution context. *)
+    | Opened of Longident.t
+      (** [opened M] are the modules accessible by name [P.M] in the resolution context,
+          where [P] are opened.
+      *)
     | Related of Parsetree.core_type * Types.type_expr option
+      (** [(related : 'a)], it is module [M] if the type ['a] is instantiated to
+          a data type defined in module [M], for example, [M.t].  If the data type
+          is an alias of data type defined in another module [N], [N] is also traversed.
+          This alias expansion is performed recursively. *)
 
-(*
-    | Aggressive of t2
-  (*
-    | Name of string * Re.re * t2 (** [name "rex" t2]. Constraint values only to those whose names match with the regular expression *)
-  *)
-    | Has_type of core_type * type_expr option
-    | Deriving of Longident.t
-    | PPXDerive of Parsetree.expression * core_type * type_expr option
-*)
-        
-  let to_string = 
-    let rec t = function
-      | [x] -> t2 x
-      | xs -> String.concat ", " (map t2 xs)
-    and t2 = function
-      | Direct (`In, l, _) -> Longident.to_string l
-      | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
-      | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
-      | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
+  type traversal = 
+    { module_specifier : module_specifier
+    ; recursive : bool (** Includes the values defined in the sub-modules,
+                           or just the toplevel values defined in the module *)
+    }
+
+  type t = traversal list
+
+  let to_string =
+    let rec t trs = String.concat ", " (map traversal trs)
+    and traversal { module_specifier=ms; recursive } =
+      if recursive then module_specifier ms
+      else Printf.sprintf "just (%s)" (module_specifier ms)
+    and module_specifier = function
+      | Direct l -> Longident.to_string l
+      | Opened l -> Printf.sprintf "opened (%s)" & Longident.to_string l
       | Related (cty,_) -> Format.asprintf "(related : %a)" Pprintast.core_type cty
-(*
-      | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
-      | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
-      | Has_type (cty, _) -> 
-          Format.asprintf "has_type (%a)"
-            Pprintast.core_type cty
-      | Deriving p -> Printf.sprintf "deriving %s" & Longident.to_string p
-      | PPXDerive (e, cty, _) ->
-          Format.asprintf "ppxderive (%a : %a)"
-            Pprintast.expression e
-            Pprintast.core_type cty
-*)
     in
-    t 
+    t
 
   (** "Dynamic" means that candidates are dependent on the target type *)
-  let (* rec *) is_static = function
+  let _is_static = function
     | Opened _ -> true
     | Direct _ -> true
     | Related (_,_) -> false
-(*
-    | Has_type _ -> true
-    | Aggressive t2 (* | Name (_, _, t2) *) -> is_static t2
-    | Deriving _ -> false
-    | PPXDerive _ -> false
-*)
-      
+
   (** spec to candidates *)
-  
+
   open Candidate
-      
-  let (* rec *) cand_static env loc : t2 -> t list = function
-    | Opened (f,x) -> cand_opened env loc (f,x)
-    | Direct (f,x,popt) -> cand_direct env loc (f,x,popt)
-    | _ -> assert false (* impos *)
-(*
-      | Aggressive x ->
-        map (fun x -> { x with aggressive = true }) & cand_static env loc x
-*)
-(*
-  (*
-    | Name (_, rex, t2) -> cand_name rex & fun () -> cand_static env loc t2
-  *)
-  (*
-    | Has_type (_, Some ty) -> Chas_type.cand_has_type env loc ty
-  *)
-    | Has_type _ -> assert false (* impos *)
-    | spec when is_static spec -> assert false (* impos *)
-*)
-  
-  let (* rec *) cand_dynamic env loc _ty = function
-    | Related (_, Some ty') -> Crelated.cand_related env loc ty'
-    | Related (_, None) -> assert false
-  (*
-      | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
-    | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
-    | Deriving lid -> Cderiving.cand_deriving env loc ty lid
-    | PPXDerive (_e, _cty, None) -> assert false (* impos *)
-    | PPXDerive (e, _cty, Some temp_ty) -> Cppxderive.cand_derive env loc e temp_ty ty 
-  *)
-    | Opened _ | Direct _ (* | Has_type _ *) ->
-        (* they are static *)
-        assert false (* impos *)
-(*
-    | _ -> assert false
-*)
-  
-  let candidates env loc t =
-    let statics, dynamics = partition is_static t in
-    let statics = concat_map (cand_static env loc) statics in
-    if Debug.debug_resolve then begin
-      !!% "debug_resolve: static candidates@.";
-      flip iter statics & fun x ->
-        !!% "  %a@." Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) x.expr)
-    end;
-    let dynamics ty = concat_map (cand_dynamic env loc ty) dynamics in
-    fun ty -> uniq & statics @ dynamics ty
-      
+
+  let mods env = function
+    | Direct x -> mods_direct env x
+    | Opened x -> mods_opened env x
+    | Related (_,Some ty) -> Crelated.mods_related env ty
+    | Related (_,None) -> assert false
+
+  let cands env loc { module_specifier; recursive } =
+    concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
+
+  let candidates env loc t = uniq & concat_map (cands env loc) t
+
 end
 
 module Specconv : sig
-  (** Spec conversion 
-  
-      Specs cannot appear in programs as they are.  
+  (** Spec conversion
+
+      Specs cannot appear in programs as they are.
       This module provides conversions between them and types and expressions.
   *)
 
@@ -459,116 +396,88 @@ module Specconv : sig
   val from_type_expr : Env.t -> Location.t -> type_expr -> Spec.t
   val from_payload_to_core_type : Location.t -> Parsetree.payload -> Parsetree.core_type
 end = struct
-  
-  
+
   open Parsetree
   open Types
-  
+
   open Spec
-  
+
   let prefix = "Spec_"
   let prefix_len = String.length prefix
-  
+
   (** Extract type parts so that they can be encoded in the parameter part
       of a variant constructor.
   *)
-  let get_type_components = 
+  let get_type_components =
     let rec t = function
-      | xs -> concat_map t2 xs
-    and t2 = function
-      | Direct (`In, _l, _) -> []
-      | Direct (`Just, _l, _) -> []
-      | Opened (`In, _l) -> []
-      | Opened (`Just, _l) -> []
+      | xs -> concat_map traversal xs
+    and traversal { module_specifier } = match module_specifier with
+      | Direct (_l) -> []
+      | Opened (_l) -> []
       | Related (cty,_) -> [cty]
-(*
-      | Aggressive x -> t2 x
-      | Name (_s, _re, x) -> t2 x
-      | Has_type (cty, _ty) -> [cty]
-      | Deriving _p -> []
-      | PPXDerive (_e, cty, _) -> [cty]
-*)
     in
-    t 
-  
+    t
+
   (** Assign types of variant constructor parameter to spec *)
-  let assign_type_components tys t0 = 
+  let assign_type_components tys t0 =
     let rec t tys = function
       | xs ->
-          let tys, rev_xs = 
+          let tys, rev_xs =
             fold_left (fun (tys,rev_xs) x ->
-              let tys, x = t2 tys x in
+              let tys, x = traversal tys x in
               tys, x :: rev_xs) (tys,[]) xs
           in
           tys, (rev rev_xs)
-            
-    and t2 tys x = match x with
-      | Direct _ -> tys, x
-      | Opened _ -> tys, x
+
+    and traversal tys ({ module_specifier } as tr) = match module_specifier with
+      | Direct _ -> tys, tr
+      | Opened _ -> tys, tr
       | Related (_cty,Some _) -> assert false (* impos *)
       | Related (cty,None) ->
           begin match tys with
-          | ty::tys -> tys, Related (cty,Some ty)
+          | ty::tys -> tys, { tr with module_specifier = Related (cty,Some ty) }
           | _ -> assert false (* impos *)
           end
-(*
-      | Aggressive x ->
-          let tys, x = t2 tys x in
-      | Name (s, re, x) ->
-          let tys, x = t2 tys x in
-          tys, Name (s, re, x)
-      | Has_type (cty, None) ->
-          begin match tys with
-          | ty::tys -> tys, Has_type (cty, Some ty)
-          | _ -> assert false (* impos *)
-          end
-      | Has_type _ -> assert false (* impos *)
-      | Deriving _ -> tys, x
-      | PPXDerive (e, cty, None) ->
-          begin match tys with
-          | ty::tys -> tys, PPXDerive (e, cty, Some ty)
-          | _ -> assert false (* impos *)
-          end
-      | PPXDerive (_e, _cty, Some _) -> assert false (* impos *)
-*)
     in
     match t tys t0 with
     | [], t0 -> t0
     | _ -> assert false (* impos *)
-  
+
   let mangle x =
     (prefix ^ Mangle.mangle (to_string x),
      get_type_components x)
-  
+
   (* CR jfuruse: need tests *)
-  let unmangle_spec_string loc s = 
+  let unmangle_spec_string loc s =
     if not & String.is_prefix prefix s then raise_errorf ~loc "Mangled spec string does not start with \"Spec_\": %s" s;
     let s = String.sub s prefix_len (String.length s - prefix_len) in
     Mangle.unmangle s
-  
+
   let from_string = XParser.expression_from_string
-  
+
   let from_expression _env e =
     let open Longident in
     try
-      let get_lid e = match e.pexp_desc with
-        | Pexp_construct ({txt=lid}, None) -> Some lid
-        | _ -> None
-      in
       let rec t e = match e.pexp_desc with
-        | Pexp_tuple xs -> map t2 xs
-        | _ -> [t2 e]
-      and t2 e = match e.pexp_desc with
+        | Pexp_tuple xs -> map traversal xs
+        | _ -> [traversal e]
+      and traversal e = match e.pexp_desc with
+        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "just"} },
+                      [Nolabel, e] ) -> 
+            { module_specifier = module_specifier e
+            ; recursive = true }
+        | _ ->
+            { module_specifier = module_specifier e
+            ; recursive = false }
+      and module_specifier e = match e.pexp_desc with
+        | Pexp_construct ({txt=lid}, None) -> Direct lid
+        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
+                      [Nolabel, {pexp_desc= Pexp_construct ({txt=lid}, None)}]) -> Opened lid
+        | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) ->
+            Related (cty, None)
 (*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
                       [Nolabel, e] ) -> Aggressive (t2 e)
-*)
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
-                      [Nolabel, e] ) ->
-            let f,l = flag_lid e in Opened (f,l)
-        | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) -> 
-            Related (cty, None)
-  (*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
                       ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
@@ -582,10 +491,10 @@ end = struct
                 end
             | _ -> raise_errorf ~loc:e.pexp_loc "has_type must take just one argument"
             end
-            
+
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "deriving"} }, args ) ->
             begin match args with
-            | [Nolabel, e] -> 
+            | [Nolabel, e] ->
                 begin match get_lid e with
                 | Some lid -> Deriving lid
                 | None -> raise_errorf ~loc:e.pexp_loc "deriving must take an module path"
@@ -602,30 +511,18 @@ end = struct
             | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take just one argument"
             end
 *)
-        | _ -> 
-            let f,lid = flag_lid e in
-            Direct (f, lid, None)
-      and flag_lid e = match e.pexp_desc with
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "just"} },
-                      [Nolabel, e] ) -> 
-            begin match get_lid e with
-            | Some lid -> `Just, lid
-            | None -> raise_errorf ~loc:e.pexp_loc "Just requires an argument"
-            end
-        | Pexp_construct ({txt=lid}, None) -> `In, lid
         | _ ->
-            raise_errorf ~loc:e.pexp_loc "Illegal spec expression: %a" 
+            raise_errorf ~loc:e.pexp_loc "Illegal spec module_specifier: %a"
               Pprintast.expression e
-              
       in
       Ok (t e)
     with
     | Failure s -> Error (`ParseExp (e, s))
-  
+
   let from_structure env str =
     match str with
     | [] -> Error (`String "requires implicit policies")
-    | _::_::_ -> 
+    | _::_::_ ->
         Error (`String "multiple implicit policies are not allowed")
     | [sitem] ->
         match sitem.pstr_desc with
@@ -633,30 +530,30 @@ end = struct
             from_expression env e
         | _ ->
             Error (`String "spec must be an OCaml expression")
-  
+
   let error loc = function
     | `String s -> raise_errorf ~loc "%s" s
-    | `Failed_unmangle s -> 
+    | `Failed_unmangle s ->
         raise_errorf ~loc "Illegal spec encoding: %S" s
     | `Parse s ->
         raise_errorf ~loc "Spec parse failed: %S" s
     | `ParseExp (_, s) ->
         raise_errorf ~loc "Spec parse failed: %s" s
-  
+
   let from_payload_ env = function
     | PStr s -> from_structure env s
     | _ -> Error (`String "spec must be an OCaml expression")
-  
+
   let from_payload loc x = match from_payload_ Env.empty (* dummy *) x with
     | Error err -> error loc err
     | Ok spec -> spec
-  
+
   (* typed world *)
-  
+
   (********************* NEW ENCODING USING POLYVARIANT ***************)
-      
-  (** Obtain a spec from a type expr. 
-      
+
+  (** Obtain a spec from a type expr.
+
       ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
   *)
   let from_type_expr env loc ty = match expand_repr_desc env ty with
@@ -680,12 +577,12 @@ end = struct
             & unmangle_spec_string loc l
               >>= from_string
               >>= from_expression env
-        | _ -> 
+        | _ ->
             raise_errorf ~loc "Illegal type for implicit spec"
         end
-    | _ -> 
+    | _ ->
         raise_errorf ~loc "Illegal type for implicit spec (not a polymorphic variant type)"
-  
+
   let to_core_type _loc spec = (* XXX we should use loc *)
     let open Ast_helper in
     let mangled, ctys = mangle spec in
@@ -700,30 +597,29 @@ end = struct
     in
     Typ.variant [ Parsetree.Rtag ({txt=mangled; loc=Location.none (* XXX *)}, [], false, [oty]) ] Closed None
 
-  let from_payload_to_core_type : Location.t -> payload -> core_type = fun loc x -> 
+  let from_payload_to_core_type : Location.t -> payload -> core_type = fun loc x ->
     to_core_type loc & from_payload loc x
 
   let () = Leopardppx.Imp.from_payload_to_core_type_forward := from_payload_to_core_type
-  
+
 end
 
 open Typedtree
 open Types
 open Format
-    
+
 (* CR jfuruse: bad state... *)
-(* CR jfuruse: confusing with deriving spec *)                      
+(* CR jfuruse: confusing with deriving spec *)
 let derived_candidates = ref []
 
 (* CR jfuruse: this is very slow, since it computes everything each time. *)
-let get_candidates env loc spec ty =
-  let f = Spec.candidates env loc spec in
-  Candidate.uniq & f ty @ map (fun (_,x,_,_) -> x) !derived_candidates
+let get_candidates env loc spec =
+  Candidate.uniq & Spec.candidates env loc spec @ map (fun (_,x,_,_) -> x) !derived_candidates
 
 module Runtime = struct
   open Longident
 
-  (* Here, we cannot perform Ctype.unify easily, 
+  (* Here, we cannot perform Ctype.unify easily,
      which may change the levels of generalized type variables.
 
      After type inference finishes, we often have ill-formed types ty['a]
@@ -732,7 +628,7 @@ module Runtime = struct
      Unification beween such ty['a] with a completely generalized type ty'
      makes 'a not generalized. Because of the ungeneralized type level of ty.
   *)
-      
+
   (* Leopard.Implicits.Runtime *)
   let lident_implicits = Ldot (Lident "Leopard", "Implicits")
 
@@ -753,7 +649,7 @@ module Runtime = struct
     | _ -> false
 
 
-  let get_ident env loc lid = 
+  let get_ident env loc lid =
     Typecore.type_exp env (Ast_helper.Exp.ident ~loc {txt=lid; loc})
 
   let illtyped_app e args =
@@ -783,7 +679,7 @@ module Runtime = struct
 end
 
 (** Check it is `(<ty>, <spec>) Ppx_implicits.t` and returns `Some (ty, spec)` *)
-let is_imp_arg_type env ty = 
+let is_imp_arg_type env ty =
   match expand_repr_desc env ty with
   | Tconstr (p, [ty; spec], _) when Runtime.is_imp_t_path p ->
       Some (ty, spec)
@@ -808,20 +704,20 @@ let is_imp_arg env loc l ty
     | None ->
         (* optional arg, but the argument type is not optional. strange... *)
         default
-    | Some ty -> 
+    | Some ty ->
         let ty, spec_opt, conv, unconv = f ty in
         match spec_opt with
         | None -> default
-        | Some _ -> 
+        | Some _ ->
             (ty, spec_opt,
              (fun e -> Typedtree.some env (conv e)),
              (fun e -> unconv (Runtime.from_Some e))
             )
-  end 
+  end
 
 module Klabel2 = struct
   (* Constraint labels must precede the other arguments *)
-  let rec extract env ty = 
+  let rec extract env ty =
     let ty = Ctype.expand_head env ty in
     match repr_desc ty with
     | Tarrow(l, ty1, ty2, _) ->
@@ -832,7 +728,7 @@ module Klabel2 = struct
         | _ -> [], ty
         end
     | _ -> [], ty
-  
+
   let rec extract_aggressively env ty =
     let ty = Ctype.expand_head env ty in
     match repr_desc ty with
@@ -862,7 +758,7 @@ let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label
     , ty)
 
 (*
-let extract_candidate spec env loc c = 
+let extract_candidate spec env loc c =
   let xs = extract_candidate spec env loc c in
   !!% "Cand: %a@." Candidate.format c;
   !!% "  => @[<v>%a@]@."
@@ -888,7 +784,7 @@ module Resolve_result = struct
     | [], oks -> Ok (concat oks)
     | mayloops, _ -> MayLoop (concat mayloops)
 end
-  
+
 type trace = (Path.t * type_expr) list
 (** Used instance history. This is used to check the same instance is
     not used with types with not strictly decreasing size. *)
@@ -899,22 +795,22 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
     | p::ps -> resolve_a_problem p ps
 
   and resolve_a_problem (trace,ty,spec) problems =
-    let cs = get_candidates env loc spec ty in
+    let cs = get_candidates env loc spec in
     if Debug.debug_resolve then begin
       !!% "Candidates:@.";
       iter (!!% "  %a@." Candidate.format) cs
     end;
     let cs = concat_map (fun c ->
-        map (fun x -> c.Candidate.path, c.Candidate.expr, x) 
+        map (fun x -> c.Candidate.path, c.Candidate.expr, x)
         & extract_candidate spec env loc c
       ) cs
     in
     Resolve_result.concat
     & map (try_cand trace ty problems) cs
-    
+
   and try_cand trace ity problems (path, expr, (cs,vty)) =
 
-    let org_tysize = Tysize.size ity in 
+    let org_tysize = Tysize.size ity in
 
     match assoc_opt path trace with
     | Some ty' when not & Tysize.(lt org_tysize (size ty')) ->
@@ -923,7 +819,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
           !!% "  Checking %a <> ... using %a ... oops@."
             Printtyp.type_expr ity
             Path.format path;
-          !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@." 
+          !!% "    @[<2>Skip this candidate because of non decreasing %%imp recursive dependency:@ @[<2>%a@ : %a (%s)@ =>  %a (%s)@]@]@."
             Path.format path
             Printtyp.type_expr ty'
             (Tysize.(to_string & size ty'))
@@ -934,10 +830,10 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
         Resolve_result.Ok []
 
     | _ ->
-        (* CR jfuruse: Older binding of `path` in `trace` is no longer useful. 
-           Replace instead of add? 
+        (* CR jfuruse: Older binding of `path` in `trace` is no longer useful.
+           Replace instead of add?
         *)
-        let trace' = (path, ity) :: trace in 
+        let trace' = (path, ity) :: trace in
 
         (* Instantiate the candidate types *)
         let ivty, cs =
@@ -988,7 +884,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
                     (Tysize.to_string org_tysize)
                     (Tysize.to_string new_tysize)
                 end;
-                (* CR jfuruse: this is reported ambiguousity *) 
+                (* CR jfuruse: this is reported ambiguousity *)
                 Resolve_result.MayLoop [expr]
               end else
 
@@ -1023,7 +919,7 @@ let shadow_check env loc e =
   let module I = TypedtreeIter.MakeIterator(struct
       include TypedtreeIter.DefaultIteratorArgument
       let enter_expression e = match e.exp_desc with
-        | Texp_ident (p, _, _) -> 
+        | Texp_ident (p, _, _) ->
             begin match Env.value_accessibility env p with
             | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
             | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
@@ -1063,7 +959,7 @@ let resolve env loc spec ty = with_snapshot & fun () ->
   (* CR jfuruse: Only one value at a time so far *)
   let open Resolve_result in
   match resolve loc env [([],ty,spec)] with
-  | MayLoop es -> 
+  | MayLoop es ->
       raise_errorf ~loc "The experssion has type @[%a@] which is too ambiguous to resolve this implicit.@ @[<2>The following instances may cause infinite loop of the resolution:@ @[<2>%a@]@]"
         Printtyp.type_expr ty
         (* CR jfuruse: should define a function for printing Typedtree.expression *)
@@ -1083,33 +979,33 @@ let resolve env loc spec ty = with_snapshot & fun () ->
           shadow_check env loc e;
           e
 
-let resolve env loc spec ty = 
+let resolve env loc spec ty =
   let e = resolve env loc spec ty in
   (* Now we replay the type unifications! *)
   (* But generalized variables must be protected! *)
   let gvars = gen_vars ty in
   let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
   close_gen_vars ty;
-  if Debug.debug_resolve then 
-    !!% "Replaying %a against %a@." 
+  if Debug.debug_resolve then
+    !!% "Replaying %a against %a@."
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
   let ue = Untypeast.(default_mapper.expr default_mapper) e in
   let te = Typecore.type_expression env ue in
-  if Debug.debug_resolve then 
-    !!% "Replaying %a : %a against %a@." 
+  if Debug.debug_resolve then
+    !!% "Replaying %a : %a against %a@."
       Typedtree.format_expression te
       Printtyp.type_scheme te.exp_type
       Printtyp.type_scheme ty;
   Ctype.unify env te.exp_type ty;
   (* recover gvars *)
   List.iter (fun (gv, desc) -> gv.desc <- desc; gv.level <- Btype.generic_level) gvar_descs;
-  if Debug.debug_resolve then 
-    !!% "Replay result: %a@." 
+  if Debug.debug_resolve then
+    !!% "Replay result: %a@."
       Printtyp.type_scheme te.exp_type;
   te
 
-(* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *) 
+(* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *)
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
@@ -1124,7 +1020,7 @@ let resolve_omitted_imp_arg loc env a = match a with
           | None -> a (* It is not imp arg *)
           | Some spec ->
               let e' = conv (resolve env loc spec ty) in
-              (* for retyping, e.exp_env is not suitable, since 
+              (* for retyping, e.exp_env is not suitable, since
                  it is made by Typecore.option_none with Env.initial_safe_string
               *)
               let e'' = { e' with exp_env = env; exp_type = e.exp_type } in
@@ -1136,10 +1032,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
   include TypedtreeMap.DefaultMapArgument
 
   (* Code transformations independent each other must be embeded
-     into one  AST mapper, and one part must be scattered into 
+     into one  AST mapper, and one part must be scattered into
      more than two places. Very hard to read. *)
 
-  let create_imp_arg_name = 
+  let create_imp_arg_name =
     let x = ref 0 in
     fun () -> incr x; "__imp__arg__" ^ string_of_int !x
 
@@ -1163,7 +1059,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | _ -> e
         end
     | _ -> e
-    
+
   let opt e = match e.exp_desc with
     | Texp_apply ( f, args ) ->
         begin match f.exp_desc with
@@ -1186,8 +1082,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
                       { e with
                         exp_desc = Texp_apply (get_embed & Runtime.get a, args)
                       ; exp_type = e.exp_type }
-                  | None -> 
-                      (* <%imp> ?l:a x .. 
+                  | None ->
+                      (* <%imp> ?l:a x ..
                                  => Runtime.get (Runtime.from_Some a) x ..
                       *)
                       { e with
@@ -1207,9 +1103,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
    *)
   let add_derived_candidate e case p type_ unconv =
     (* This is an imp arg *)
-  
+
     (* Build  fun ?d:(d as __imp_arg__) -> *)
-  
+
     let loc = Location.ghost p.pat_loc in
     let name = create_imp_arg_name () in
     (* p ->     ===>   (p as fname) -> *)
@@ -1236,10 +1132,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
                           , { Candidate.path; (* <- not actually path. see expr field *)
                               expr;
                               type_;
-                              aggressive = false } 
+                              aggressive = false }
                           , id
                           , vdesc
-                          ) 
+                          )
                           :: !derived_candidates;
     let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
     let case = { case with c_lhs = p' } in
@@ -1248,19 +1144,19 @@ module MapArg : TypedtreeMap.MapArgument = struct
           { e with exp_desc = Texp_function { f with cases= [case] }}
       | _ -> assert false
     in
-    
+
     (* __imp_arg__ will be used for the internal resolutions *)
     (* XXX needs a helper module *)
     Typedtree.add_attribute
-      "leopard_mark" 
+      "leopard_mark"
       (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
 
   let clean_derived_candidates e =
     let open Parsetree in
     (* Handling derived implicits, part 2 of 2 *)
-    let is_mark ({txt}, payload as a) = 
+    let is_mark ({txt}, payload as a) =
       if txt <> "leopard_mark" then Either.Right a
-      else 
+      else
         match payload with
         (* XXX need a helper *)
         | PStr [{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant (Pconst_string (s, _))}, _)}] when is_function_id s -> Either.Left s
@@ -1270,7 +1166,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
     | [], e -> e
     | [txt], e ->
         (* Hack:
-           
+
            Remove the association of `"__imp_arg__0"` and the candidate of
            `__imp_arg__0` from `derived_candidates`.
         *)
@@ -1284,13 +1180,13 @@ module MapArg : TypedtreeMap.MapArgument = struct
           (* XXX cleanup *)
           opt { e with
                 exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
-  
+
       | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
           (* Eeek, label with multiple cases? *)
           warnf "%a: Unexpected label with multiple function cases"
             Location.format e.exp_loc;
           e
-  
+
       | Texp_function { arg_label=l; cases= [case] } ->
           let p = case.c_lhs in
           begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
