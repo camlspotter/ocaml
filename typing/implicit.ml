@@ -256,8 +256,9 @@ end
 
 module Crelated = struct
 
-  let cand_related env loc ty =  (* XXX not the entire type but the instantiation of the type variable! *)
+  let cand_related env loc hint_ty =  (* XXX not the entire type but the instantiation of the type variable! *)
     (* XXX no inf loop even with rectypes? *)
+    Format.eprintf "hint type: %a@." Printtyp.type_scheme hint_ty;
     let rec find_paths ty = match Types.repr_desc ty with
       | Types.Tconstr (p, _, _) ->
           let mp = match p with
@@ -271,7 +272,7 @@ module Crelated = struct
           end
       | _ -> []
     in
-    let paths = find_paths ty in
+    let paths = find_paths hint_ty in
     if Debug.debug_resolve then begin
       !!% "cand_related: modules: @[%a@]@."
         (Format.list "@," Path.format) paths;
@@ -365,7 +366,7 @@ end = struct
       | Direct (`Just, l, _) -> Printf.sprintf "just %s" & Longident.to_string l
       | Opened (`In, l) -> Printf.sprintf "opened (%s)" & Longident.to_string l
       | Opened (`Just, l) -> Printf.sprintf "opened (just %s)" & Longident.to_string l
-      | Related (_,_) -> "related" (* "(related : %a)" Pprintast.core_type cty *)
+      | Related (cty,_) -> Format.asprintf "(related : %a)" Pprintast.core_type cty
 (*
       | Aggressive x -> Printf.sprintf "aggressive (%s)" (t2 x)
       | Name (s, _re, x) -> Printf.sprintf "name %S (%s)" s (t2 x)
@@ -416,8 +417,9 @@ end = struct
     | spec when is_static spec -> assert false (* impos *)
 *)
   
-  let (* rec *) cand_dynamic env loc ty = function
-    | Related (_,_) -> Crelated.cand_related env loc ty
+  let (* rec *) cand_dynamic env loc _ty = function
+    | Related (_, Some ty') -> Crelated.cand_related env loc ty'
+    | Related (_, None) -> assert false
   (*
       | Aggressive x -> map (fun x -> { x with aggressive= true }) & cand_dynamic env loc ty x
     | Name (_, rex, t2) -> cand_name rex & fun () -> cand_dynamic env loc ty t2
@@ -478,7 +480,7 @@ end = struct
       | Direct (`Just, _l, _) -> []
       | Opened (`In, _l) -> []
       | Opened (`Just, _l) -> []
-      | Related (_,_) -> (* [cty] *) []
+      | Related (cty,_) -> [cty]
 (*
       | Aggressive x -> t2 x
       | Name (_s, _re, x) -> t2 x
@@ -503,7 +505,12 @@ end = struct
     and t2 tys x = match x with
       | Direct _ -> tys, x
       | Opened _ -> tys, x
-      | Related (_,_) -> tys, x
+      | Related (_cty,Some _) -> assert false (* impos *)
+      | Related (cty,None) ->
+          begin match tys with
+          | ty::tys -> tys, Related (cty,Some ty)
+          | _ -> assert false (* impos *)
+          end
 (*
       | Aggressive x ->
           let tys, x = t2 tys x in
@@ -559,7 +566,8 @@ end = struct
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
                       [Nolabel, e] ) ->
             let f,l = flag_lid e in Opened (f,l)
-        | Pexp_ident {txt=Lident "related"} -> Related (assert false, assert false)
+        | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) -> 
+            Related (cty, None)
   (*
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
@@ -647,7 +655,10 @@ end = struct
   
   (********************* NEW ENCODING USING POLYVARIANT ***************)
       
-  (** Obtain a spec from a type expr. *)
+  (** Obtain a spec from a type expr. 
+      
+      ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
+  *)
   let from_type_expr env loc ty = match expand_repr_desc env ty with
     | Tvariant rd ->
         let rd = Btype.row_repr rd in
@@ -673,15 +684,18 @@ end = struct
             raise_errorf ~loc "Illegal type for implicit spec"
         end
     | _ -> 
-        raise_errorf ~loc "Illegal type for implicit spec"
+        raise_errorf ~loc "Illegal type for implicit spec (not a polymorphic variant type)"
   
   let to_core_type _loc spec = (* XXX we should use loc *)
     let open Ast_helper in
     let mangled, ctys = mangle spec in
     let label n = !@ ("l" ^ string_of_int n) in
+(* XXX vars should not be quantified for related!
     let make_meth_type cty =  (* quantify cty *)
       Typ.poly (map (!@) & XParsetree.tvars_of_core_type cty) cty
     in
+*)
+    let make_meth_type cty = cty in
     let oty = Typ.object_ (mapi (fun n cty -> Otag (label n, [], make_meth_type cty)) ctys) Closed
     in
     Typ.variant [ Parsetree.Rtag ({txt=mangled; loc=Location.none (* XXX *)}, [], false, [oty]) ] Closed None
