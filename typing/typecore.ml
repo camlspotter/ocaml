@@ -4527,6 +4527,7 @@ and type_construct env loc lid sarg ty_expected attrs =
 (* ppx_curried_constr begin *)
 
 and type_construct_curried ?in_function env loc ty_expected app_attrs sexp apploc xs =
+  (* `!C`.  `loc` is the location of `!C` *)
 
   let lid = match sexp.pexp_desc with
     | Pexp_construct (lid, None) -> lid
@@ -4545,24 +4546,24 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
       (Constructor.disambiguate lid env opath) constrs in
   Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
 
+  Ast_helper.with_default_loc loc @@ fun () ->
   match constr.cstr_arity with
   | 0 ->
-      (* (None..) must be rejected *)
+      (* !None must be rejected *)
       raise (Error(loc, env, Other "Nullary constructor cannot be curried."))
   | 1 ->
-      (* (Some..) must be rejected *)
+      (* !Some must be rejected *)
       raise (Error(loc, env, Other "Unary constructor cannot be curried."))
   | n ->
       (* Format.eprintf "Debug: applied args: %d@." (List.length xs); *)
-      (* Unlike (Some) x, here we should optimize partial applications *)
-      (* (C..) a1          =>  (fun a2 a3 -> C (a1,a2,a3)) *)
-      (* (C..) a1 a2 a3    =>  C (a1,a2,a3) *)
-      (* (C..) a1 a2 a3 a4 =>  C (a1,a2,a3) a4 *)
+      (* We should optimize partial applications *)
+      (* !C a1          =>  (fun a2 a3 -> C (a1,a2,a3)) *)
+      (* !C a1 a2 a3    =>  C (a1,a2,a3) *)
+      (* !C a1 a2 a3 a4 =>  C (a1,a2,a3) a4, well it will be rejected *)
       let open Ast_helper in
       let patterns, sarg, remain =
-        (* XXXX Locations! *)
-        let xi i = Exp.ident {txt=Longident.Lident ("x" ^ string_of_int i); loc=Location.none} in
-        let pi i = Pat.var {txt="x" ^ string_of_int i; loc=Location.none} in
+        let xi i = Exp.ident ~loc {txt=Longident.Lident ("x" ^ string_of_int i); loc} in
+        let pi i = Pat.var ~loc {txt="x" ^ string_of_int i; loc} in
         let rec loop i xs =
           if i > n then [], [], xs
           else
@@ -4619,7 +4620,9 @@ and type_construct_curried ?in_function env loc ty_expected app_attrs sexp applo
       | _, _ -> assert false
 
 and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
-  (* None  or   (Some) *)
+  (* `None`  or   `(Some)` 
+     `loc` is the location of the constructor
+  *)
   let opath =
     try
       let (p0, p,_) = extract_concrete_variant env ty_expected in
@@ -4632,17 +4635,17 @@ and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
       (Constructor.disambiguate lid env opath) constrs in
   Env.mark_constructor Env.Positive env (Longident.last lid.txt) constr;
 
+  Ast_helper.with_default_loc loc @@ fun () ->
   match constr.cstr_arity with
   | 0 -> (* None *)
       type_construct env loc lid None ty_expected sexp.pexp_attributes
   | 1 -> (* (Some) => fun x -> Some x *)
       let sexp =
-        (* XXX Locations! *)
         let open Ast_helper in
-        let p = Pat.var {txt= "x"; loc= Location.none } in
-        let x = Exp.ident {txt= Longident.Lident "x"; loc= Location.none } in
+        let p = Pat.var ~loc {txt= "x"; loc } in
+        let x = Exp.ident ~loc {txt= Longident.Lident "x"; loc } in
         let e = { sexp with pexp_desc = Pexp_construct (lid, Some x) } in
-        Exp.fun_ Nolabel None p e
+        Exp.fun_ ~loc Nolabel None p e
       in
       type_expect_ ?in_function env sexp ty_expected
 
@@ -4656,10 +4659,9 @@ and type_construct_maybe_uncurried ?in_function env loc ty_expected sexp lid =
           in
           loop [] n
         in
-        (* XXX Locations! *)
         let names = make_n n (fun i -> "x" ^ string_of_int i) in
-        let p = Pat.(tuple (List.map (fun txt -> var {txt; loc= Location.none}) names)) in
-        let x = Exp.(tuple (List.map (fun txt -> ident {txt= Longident.Lident txt; loc= Location.none }) names)) in
+        let p = Pat.(tuple ~loc (List.map (fun txt -> var {txt; loc}) names)) in
+        let x = Exp.(tuple ~loc (List.map (fun txt -> ident {txt= Longident.Lident txt; loc}) names)) in
         let e = { sexp with pexp_desc = Pexp_construct (lid, Some x) } in
         Exp.fun_ Nolabel None p e
       in
