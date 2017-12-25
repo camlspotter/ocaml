@@ -24,6 +24,7 @@ module XPath : sig
   val format : Path.t Format.fmt
   val format_verbose : Path.t Format.fmt
   val to_string : Path.t -> string
+  val is_prefix_of : Path.t -> Path.t -> bool
 end = struct
   open Path
   open Format
@@ -36,6 +37,12 @@ end = struct
     | Papply (p1, p2) -> fprintf ppf "%a(%a)" format_verbose p1 format_verbose p2
 
   let to_string l = asprintf "%a" format l
+
+  let rec is_prefix_of path p = 
+    if path = p then true
+    else match p with
+      | Pdot (p, _, _) -> is_prefix_of path p
+      | _ -> false
 end
 
 module Path = struct
