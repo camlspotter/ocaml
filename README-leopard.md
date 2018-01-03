@@ -42,6 +42,22 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
     ```ocaml
 	let (.[]) = Bytes.get
 	```
+
+* Implicit values for adhoc polymorphism
+
+    ```ocaml
+    type 'a add = ('a -> 'a -> 'a, [%imp Add]) Leopard.Implicits.t
+    val %imp add : ?d:'a add -> 'a -> 'a -> 'a
+
+    module Add = struct
+      let int = (+)
+      let float = (+.)
+    end
+
+    let () = assert (add 1 2 = 3)
+    let () = assert (add 1.2 3.4 = 4.6)
+	```
+
 ## Coexistable with vanilla OCaml
 
 Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml of the same version number together:
@@ -643,6 +659,11 @@ These sugars also apply to patterns, therefore if you want to redefine
 ```
 let (.[]) x y = ...    (* desugarred to  let __string_get x y = ... *)
 ```
+
+# Implicit values
+
+Implicit values are generalization of the definiable SML style overloading.
+
 
 # Trivia of giraffes
 

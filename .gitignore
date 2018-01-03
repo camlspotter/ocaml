@@ -415,3 +415,5 @@ byterun/caml/m.h
 byterun/caml/s.h
 *.orig
 *~
+/config/m.h
+/config/s.h
