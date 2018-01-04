@@ -284,6 +284,7 @@ module Spec : sig
     ; recursive : bool (** Includes the values defined in the sub-modules,
                            or just the toplevel values defined in the module *)
     ; filters : filter list
+    ; aggressive : bool (** How sub constraints are obtained *)
     }
 
   type t = traversal list
@@ -314,12 +315,16 @@ end = struct
     ; recursive : bool (** Includes the values defined in the sub-modules,
                            or just the toplevel values defined in the module *)
     ; filters : filter list
+    ; aggressive : bool
     }
 
   type t = traversal list
 
   let to_string =
-    let rec t trs = String.concat ", " (map filters trs)
+    let rec t trs = String.concat ", " (map aggressive trs)
+    and aggressive ({ aggressive } as t) =
+      if aggressive then Printf.sprintf "aggressive (%s)" (filters t)
+      else filters t
     and filters ({ filters } as t) =
       let f filter str = match filter with
         | Substr s -> Printf.sprintf "substr %S (%s)" s str
@@ -357,12 +362,15 @@ end = struct
     in
     filter (eval_filter f) cs
 
-  let cands env loc { module_specifier; recursive; filters } =
-    List.fold_right apply_filter filters
-    & concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
+  let cands env loc { module_specifier; recursive; filters; aggressive } =
+    let cs =
+      List.fold_right apply_filter filters
+      & concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
+    in
+    if aggressive then map (fun c -> { c with aggressive = true }) cs
+    else cs
 
   let candidates env loc t = uniq & concat_map (cands env loc) t
-
 end
 
 module Specconv : sig
@@ -442,6 +450,10 @@ end = struct
         | Pexp_tuple xs -> map filters xs
         | _ -> [filters e]
       and filters e = match e.pexp_desc with
+        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
+                      [(Nolabel, e1)] ) ->
+            let t = filters e1 in
+            { t with aggressive = true }
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "substr"} },
                       [(Nolabel, e1); (Nolabel, e2)] ) ->
             let f = match e1.pexp_desc with
@@ -454,15 +466,23 @@ end = struct
             { t with filters = f :: t.filters }
         | _ -> traversal e
       and traversal e = match e.pexp_desc with
+        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
+                      [(Nolabel, e1)] ) ->
+            let t = traversal e1 in
+            { t with aggressive = true }
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "just"} },
                       [Nolabel, e] ) -> 
             { module_specifier = module_specifier e
             ; recursive = true
-            ; filters = [] }
+            ; filters = []
+            ; aggressive = false
+            }
         | _ ->
             { module_specifier = module_specifier e
             ; recursive = false
-            ; filters = [] }
+            ; filters = []
+            ; aggressive = false
+            }
       and module_specifier e = match e.pexp_desc with
         | Pexp_construct ({txt=lid}, None) -> Direct lid
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
@@ -470,8 +490,6 @@ end = struct
         | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) ->
             Related (cty, None)
 (*
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
-                      [Nolabel, e] ) -> Aggressive (t2 e)
         | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
                       [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
                       ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
