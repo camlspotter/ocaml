@@ -765,7 +765,7 @@ let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label
       , ty
       , (match specopt with
          | Some x -> x
-         | None -> spec (* inherit! *))
+         | None -> spec (* This is obtained by aggressive. Let's inherit! *))
       , conv))
     , ty)
 
