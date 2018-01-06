@@ -58,3 +58,26 @@ module Implicits : sig:
   external get : ('a, 'spec) t -> 'a = "%identity"
   val imp : ?d:('a, 'spec) t -> 'a
   external embed : 'a -> ('a, 'spec) t = "%identity"
+
+  (** [[`M] module_] is the encoding of escaped module name "M" *)
+  type 'a module_
+
+  type 'a opened
+
+  type 'a just
+
+  (** to traverse sub-modules  *)
+  type 'a deep
+
+  type 'a related
+
+  (** [[`xxx] string] is the encoding of escaped string "xxx" *)
+  type 'a string 
+
+  type 'a substr
+
+  type ('a, 'b) filter      
+
+  type 'a aggressive
+
+

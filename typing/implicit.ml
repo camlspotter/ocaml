@@ -264,115 +264,242 @@ module Spec : sig
   *)
 
   type module_specifier = 
-    | Direct of Longident.t
-      (** [M] is the module accessible by name [M] in the resolution context. *)
-    | Opened of Longident.t
-      (** [opened M] are the modules accessible by name [P.M] in the resolution context,
-          where [P] are opened.
-      *)
-    | Related of Parsetree.core_type * Types.type_expr option
+    | Just    of Longident.t
+    | Opened  of Longident.t
+    | Related of Parsetree.core_type option * Types.type_expr option
       (** [(related : 'a)], it is module [M] if the type ['a] is instantiated to
           a data type defined in module [M], for example, [M.t].  If the data type
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
 
+  type search_space =
+    | Module  of module_specifier
+    | Deep of search_space
+    | Union   of search_space list
+
   type filter =
-    | Substr of string (** Only the values whose name contain the string in it *) 
+    | Substr of string (** Only the values whose name contain the string in it *)
+    | Or     of filter list
+    | And_   of filter list
+    | Not    of filter
 
   type traversal = 
-    { module_specifier : module_specifier
-    ; recursive : bool (** Includes the values defined in the sub-modules,
-                           or just the toplevel values defined in the module *)
-    ; filters : filter list
-    ; aggressive : bool (** How sub constraints are obtained *)
+    { search_space : search_space
+    ; filter : filter option
     }
 
-  type t = traversal list
+  type t =
+    { traversals : traversal list
+    ; aggressive : bool
+    }
 
   val to_string : t -> string
+
+  val normalize : t -> t
+    
+  val get_type_components : t -> Parsetree.core_type list
+
+  val assign_type_components : Types.type_expr list -> t -> t
 
   val candidates : Env.t -> Location.t -> t -> Candidate.t list
 end = struct
 
   type module_specifier = 
-    | Direct of Longident.t
-      (** [M] is the module accessible by name [M] in the resolution context. *)
-    | Opened of Longident.t
-      (** [opened M] are the modules accessible by name [P.M] in the resolution context,
-          where [P] are opened.
-      *)
-    | Related of Parsetree.core_type * Types.type_expr option
+    | Just    of Longident.t
+    | Opened  of Longident.t
+    | Related of Parsetree.core_type option * Types.type_expr option
       (** [(related : 'a)], it is module [M] if the type ['a] is instantiated to
           a data type defined in module [M], for example, [M.t].  If the data type
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
 
+  type search_space =
+    | Module  of module_specifier
+    | Deep of search_space
+    | Union   of search_space list
+
   type filter =
-    | Substr of string (** Only the values whose name contain the string in it *) 
+    | Substr of string (** Only the values whose name contain the string in it *)
+    | Or     of filter list
+    | And_    of filter list
+    | Not    of filter
 
   type traversal = 
-    { module_specifier : module_specifier
-    ; recursive : bool (** Includes the values defined in the sub-modules,
-                           or just the toplevel values defined in the module *)
-    ; filters : filter list
+    { search_space : search_space
+    ; filter : filter option
+    }
+
+  type t =
+    { traversals : traversal list
     ; aggressive : bool
     }
 
-  type t = traversal list
-
   let to_string =
-    let rec t trs = String.concat ", " (map aggressive trs)
-    and aggressive ({ aggressive } as t) =
-      if aggressive then Printf.sprintf "aggressive (%s)" (filters t)
-      else filters t
-    and filters ({ filters } as t) =
-      let f filter str = match filter with
-        | Substr s -> Printf.sprintf "substr %S (%s)" s str
-      in
-      List.fold_right f filters & traversal t
-    and traversal { module_specifier=ms; recursive } =
-      if recursive then module_specifier ms
-      else Printf.sprintf "just (%s)" (module_specifier ms)
+    let rec t { traversals=ts; aggressive } =
+      if aggressive then Printf.sprintf "aggressive (%s)" (traversals ts)
+      else traversals ts
+    and traversals ts = String.concat ", " (map traversal ts)
+    and traversal { search_space=ss; filter=f } = match f with
+      | None -> search_space ss
+      | Some f -> Printf.sprintf "filter (%s, %s)" (filter f) (search_space ss)
+    and filter = function
+      | Substr s -> Printf.sprintf "substr %S" s
+      | Or fs    -> Printf.sprintf "or (%s)" (String.concat ", " (List.map filter fs))
+      | And_ fs   -> Printf.sprintf "and_ (%s)" (String.concat ", " (List.map filter fs))
+      | Not f    -> Printf.sprintf "not (%s)" (filter f)
+    and search_space = function
+      | Module ms -> module_specifier ms
+      | Deep ss -> Printf.sprintf "deep (%s)" (search_space ss)
+      | Union ss -> Printf.sprintf "union (%s)" (String.concat ", " (List.map search_space ss))
     and module_specifier = function
-      | Direct l -> Longident.to_string l
-      | Opened l -> Printf.sprintf "opened (%s)" & Longident.to_string l
-      | Related (cty,_) -> Format.asprintf "(related : %a)" Pprintast.core_type cty
+      | Just l -> Longident.to_string l
+      | Opened l -> Printf.sprintf "%s" & Longident.to_string l
+      | Related (Some cty, _) -> Format.asprintf "(related : %a)" Pprintast.core_type cty
+      | Related (None, Some ty) -> Format.asprintf "(related : %a)" Printtyp.type_expr ty
+      | Related (None, None) -> assert false
     in
     t
 
-  (** "Dynamic" means that candidates are dependent on the target type *)
-  let _is_static = function
-    | Opened _ -> true
-    | Direct _ -> true
-    | Related (_,_) -> false
+  let normalize t =
+    let rec search_space = function
+      | (Module _ as t) -> t
+      | Deep s ->
+          begin match search_space s with
+          | Deep s -> Deep s
+          | s -> Deep s
+          end
+      | Union ss ->
+          begin match
+            concat_map (fun s -> match search_space s with
+                | Union ss -> ss
+                | s -> [s]) ss
+          with
+          | [] -> assert false
+          | [s] -> s
+          | ss -> Union ss
+          end
+    and filter = function
+      | (Substr _ as f) -> f
+      | Or fs ->
+          begin match
+            concat_map (fun f -> match filter f with
+                | Or fs -> fs
+                | f -> [f]) fs
+          with
+          | [] -> assert false
+          | [f] -> f
+          | fs -> Or fs
+          end
+      | And_ fs ->
+          begin match
+            concat_map (fun f -> match filter f with
+                | And_ fs -> fs
+                | f -> [f]) fs
+          with
+          | [] -> assert false
+          | [f] -> f
+          | fs -> And_ fs
+          end
+      | Not f ->
+          begin match filter f with
+          | Not f -> f
+          | Or fs -> And_ (map (fun f -> filter (Not f)) fs)
+          | f -> Not f
+          end
+    and traversal t =
+      { search_space = search_space t.search_space
+      ; filter = Option.map filter t.filter
+      }
+    in
+    { t with traversals = map traversal t.traversals }
+      
+  (** Extract type parts so that they can be encoded in the parameter part
+      of a variant constructor.
+  *)
+  let get_type_components =
+    let rec t {traversals=ts} = concat_map traversals ts
+    and traversals {search_space=ss} = search_space ss
+    and search_space = function
+      | Module ms -> module_specifier ms
+      | Deep ss -> search_space ss
+      | Union sss -> concat_map search_space sss
+    and module_specifier = function
+      | Just _ -> []
+      | Opened _ -> []
+      | Related (Some cty,_) -> [cty]
+      | Related _ -> assert false
+    in
+    t
+
+  (** Assign types of variant constructor parameter to spec *)
+  let assign_type_components tys t0 =
+    let rec t tys x =
+      let tys, rev_traversals =
+        fold_left (fun (tys, rev_traversals) tr ->
+            let tys, tr' = traversal tys tr in tys, tr'::rev_traversals) (tys,[]) x.traversals
+      in
+      if tys <> [] then assert false (* or some nice error? *)
+      else { x with traversals = rev rev_traversals }
+    and traversal tys tr =
+      let tys, ss = search_space tys tr.search_space in
+      tys, { tr with search_space = ss }
+    and search_space tys = function
+      | Module ms -> let tys, ms' = module_specifier tys ms in tys, Module ms'
+      | Deep ss -> let tys, ss' = search_space tys ss in tys, Deep ss'
+      | Union sss ->
+          let tys, rev_sss = fold_left (fun (tys, rev_sss) ss ->
+              let tys, ss' = search_space tys ss in
+              tys, ss' :: rev_sss) (tys, []) sss
+          in
+          tys, Union (rev rev_sss)
+    and module_specifier tys ms =
+      match ms with
+      | Just _ | Opened _ -> tys, ms
+      | Related (_ctyo, Some _) -> assert false
+      | Related (ctyo, None) ->
+          match tys with
+          | ty::tys -> tys, Related (ctyo, Some ty)
+          | [] -> assert false
+    in
+    t tys t0
 
   (** spec to candidates *)
 
   open Candidate
 
-  let mods env = function
-    | Direct x -> mods_direct env x
-    | Opened x -> mods_opened env x
-    | Related (_,Some ty) -> mods_related env ty
-    | Related (_,None) -> assert false
-
-  let apply_filter f cs =
-    let eval_filter f c = match f with
+  let candidates env loc t =
+    let cands_mods = function
+      | Just x -> mods_direct env x
+      | Opened x -> mods_opened env x
+      | Related (_,Some ty) -> mods_related env ty
+      | Related (_,None) -> assert false
+    in
+    let rec cands_search_space subs = function
+      | Module m -> concat_map (cands_of_module env loc subs) & cands_mods m
+      | Deep s -> cands_search_space true s
+      | Union ss -> uniq & concat_map (cands_search_space subs) ss
+    in
+    let rec eval_filter f c = match f with
       | Substr s -> String.is_substring ~needle:s & Path.to_string c.path
+      | Or fs -> List.exists (fun f -> eval_filter f c) fs
+      | And_ fs -> List.for_all (fun f -> eval_filter f c) fs
+      | Not f -> not & eval_filter f c
     in
-    filter (eval_filter f) cs
-
-  let cands env loc { module_specifier; recursive; filters; aggressive } =
-    let cs =
-      List.fold_right apply_filter filters
-      & concat_map (Candidate.cands_of_module env loc recursive) & mods env module_specifier
+    let cands_traversal { search_space; filter } =
+      let cs = cands_search_space false (* do not search sub modules *) search_space in
+      match filter with
+      | None -> cs
+      | Some f -> List.filter (eval_filter f) cs
     in
-    if aggressive then map (fun c -> { c with aggressive = true }) cs
-    else cs
-
-  let candidates env loc t = uniq & concat_map (cands env loc) t
+    let candidates t =
+      let cs = uniq & concat_map cands_traversal t.traversals in
+      if t.aggressive then map (fun c -> { c with aggressive = true }) cs
+      else cs
+    in
+    candidates t
 end
 
+(*
 module Specconv : sig
   (** Spec conversion
 
@@ -393,44 +520,6 @@ end = struct
   let prefix = "Spec_"
   let prefix_len = String.length prefix
 
-  (** Extract type parts so that they can be encoded in the parameter part
-      of a variant constructor.
-  *)
-  let get_type_components =
-    let rec t = function
-      | xs -> concat_map traversal xs
-    and traversal { module_specifier } = match module_specifier with
-      | Direct (_l) -> []
-      | Opened (_l) -> []
-      | Related (cty,_) -> [cty]
-    in
-    t
-
-  (** Assign types of variant constructor parameter to spec *)
-  let assign_type_components tys t0 =
-    let rec t tys = function
-      | xs ->
-          let tys, rev_xs =
-            fold_left (fun (tys,rev_xs) x ->
-              let tys, x = traversal tys x in
-              tys, x :: rev_xs) (tys,[]) xs
-          in
-          tys, (rev rev_xs)
-
-    and traversal tys ({ module_specifier } as tr) = match module_specifier with
-      | Direct _ -> tys, tr
-      | Opened _ -> tys, tr
-      | Related (_cty,Some _) -> assert false (* impos *)
-      | Related (cty,None) ->
-          begin match tys with
-          | ty::tys -> tys, { tr with module_specifier = Related (cty,Some ty) }
-          | _ -> assert false (* impos *)
-          end
-    in
-    match t tys t0 with
-    | [], t0 -> t0
-    | _ -> assert false (* impos *)
-
   let mangle x =
     (prefix ^ Mangle.mangle (to_string x),
      get_type_components x)
@@ -442,123 +531,6 @@ end = struct
     Mangle.unmangle s
 
   let from_string = XParser.expression_from_string
-
-  let from_expression _env e =
-    let open Longident in
-    try
-      let rec t e = match e.pexp_desc with
-        | Pexp_tuple xs -> map filters xs
-        | _ -> [filters e]
-      and filters e = match e.pexp_desc with
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
-                      [(Nolabel, e1)] ) ->
-            let t = filters e1 in
-            { t with aggressive = true }
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "substr"} },
-                      [(Nolabel, e1); (Nolabel, e2)] ) ->
-            let f = match e1.pexp_desc with
-              | Pexp_constant (Pconst_string (s, _)) -> Substr s
-              | _ -> 
-                  raise_errorf ~loc:e1.pexp_loc "Filter must be a string constant: "
-                    Pprintast.expression e1
-            in
-            let t = filters e2 in
-            { t with filters = f :: t.filters }
-        | _ -> traversal e
-      and traversal e = match e.pexp_desc with
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "aggressive"} },
-                      [(Nolabel, e1)] ) ->
-            let t = traversal e1 in
-            { t with aggressive = true }
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "just"} },
-                      [Nolabel, e] ) -> 
-            { module_specifier = module_specifier e
-            ; recursive = true
-            ; filters = []
-            ; aggressive = false
-            }
-        | _ ->
-            { module_specifier = module_specifier e
-            ; recursive = false
-            ; filters = []
-            ; aggressive = false
-            }
-      and module_specifier e = match e.pexp_desc with
-        | Pexp_construct ({txt=lid}, None) -> Direct lid
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "opened"} },
-                      [Nolabel, {pexp_desc= Pexp_construct ({txt=lid}, None)}]) -> Opened lid
-        | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) ->
-            Related (cty, None)
-(*
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "name"} },
-                      [ Nolabel, { pexp_desc = Pexp_constant (Pconst_string (s, _)) }
-                      ; Nolabel, e ] ) -> Name (s, Re_pcre.regexp s, t2 e)
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "has_type"} }, args ) ->
-             begin match args with
-            | [Nolabel, e] ->
-                begin match e.pexp_desc with
-                | Pexp_ident lid ->
-                    Has_type (Ast_helper.Typ.constr lid [], None)
-                | _ -> raise_errorf ~loc:e.pexp_loc "has_type must take a type path"
-                end
-            | _ -> raise_errorf ~loc:e.pexp_loc "has_type must take just one argument"
-            end
-
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "deriving"} }, args ) ->
-            begin match args with
-            | [Nolabel, e] ->
-                begin match get_lid e with
-                | Some lid -> Deriving lid
-                | None -> raise_errorf ~loc:e.pexp_loc "deriving must take an module path"
-                end
-            | _ -> raise_errorf ~loc:e.pexp_loc "deriving must take just one argument"
-            end
-        | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident "ppxderive"} }, args ) ->
-            begin match args with
-            | [Nolabel, e] ->
-                begin match e.pexp_desc with
-                | Pexp_constraint (e, cty) -> PPXDerive (e, cty, None)
-                | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take (e : t)"
-                end
-            | _ -> raise_errorf ~loc:e.pexp_loc "ppxderive must take just one argument"
-            end
-*)
-        | _ ->
-            raise_errorf ~loc:e.pexp_loc "Illegal spec module_specifier: %a"
-              Pprintast.expression e
-      in
-      Ok (t e)
-    with
-    | Failure s -> Error (`ParseExp (e, s))
-
-  let from_structure env str =
-    match str with
-    | [] -> Error (`String "requires implicit policies")
-    | _::_::_ ->
-        Error (`String "multiple implicit policies are not allowed")
-    | [sitem] ->
-        match sitem.pstr_desc with
-        | Pstr_eval (e, _) ->
-            from_expression env e
-        | _ ->
-            Error (`String "spec must be an OCaml expression")
-
-  let error loc = function
-    | `String s -> raise_errorf ~loc "%s" s
-    | `Failed_unmangle s ->
-        raise_errorf ~loc "Illegal spec encoding: %S" s
-    | `Parse s ->
-        raise_errorf ~loc "Spec parse failed: %S" s
-    | `ParseExp (_, s) ->
-        raise_errorf ~loc "Spec parse failed: %s" s
-
-  let from_payload_ env = function
-    | PStr s -> from_structure env s
-    | _ -> Error (`String "spec must be an OCaml expression")
-
-  let from_payload loc x = match from_payload_ Env.empty (* dummy *) x with
-    | Error err -> error loc err
-    | Ok spec -> spec
 
   (* typed world *)
 
@@ -595,25 +567,251 @@ end = struct
     | _ ->
         raise_errorf ~loc "Illegal type for implicit spec (not a polymorphic variant type)"
 
-  let to_core_type _loc spec = (* XXX we should use loc *)
-    let open Ast_helper in
-    let mangled, ctys = mangle spec in
-    let label n = !@ ("l" ^ string_of_int n) in
-(* XXX vars should not be quantified for related!
-    let make_meth_type cty =  (* quantify cty *)
-      Typ.poly (map (!@) & XParsetree.tvars_of_core_type cty) cty
-    in
-*)
-    let make_meth_type cty = cty in
-    let oty = Typ.object_ (mapi (fun n cty -> Otag (label n, [], make_meth_type cty)) ctys) Closed
-    in
-    Typ.variant [ Parsetree.Rtag ({txt=mangled; loc=Location.none (* XXX *)}, [], false, [oty]) ] Closed None
+  let () = Leopardppx.Imp.from_payload_to_core_type_forward := from_payload_to_core_type
 
+end
+*)
+
+module Specconv : sig
+  (** Spec conversion
+
+      Specs cannot appear in programs as they are.
+      This module provides conversions between them and types and expressions.
+  *)
+
+  open Types
+
+  val from_type_expr : Location.t -> type_expr -> Spec.t
+
+end = struct
+
+  open Parsetree
+  open Types
+
+  open Spec
+
+  (* typed world *)
+
+(*
+  let from_string = XParser.expression_from_string
+*)
+      
+  let from_expression e =
+    let open Longident in
+    let get_app e = match e.pexp_desc with
+      | Pexp_apply( { pexp_desc= Pexp_ident {txt=Lident s} },
+                    args ) ->
+          begin try
+            Some (s, List.map (function (Nolabel, e) -> e | _ -> raise Exit) args)
+          with
+          | Exit -> None
+          end
+      | _ -> None
+    in
+    let get_tuple e = match e.pexp_desc with
+      | Pexp_tuple es -> es
+      | _ -> [e]
+    in
+    try
+      let rec t e = match get_app e with
+        | Some ("aggressive", [e]) -> { (t e) with aggressive = true }
+        | _ -> { traversals= traversals e; aggressive= false }
+      and traversals e = map traversal & get_tuple e
+      and traversal e = match get_app e with
+        | Some ("filter", [e1; e2]) ->
+            let tr = traversal e2 in
+            let f = filter e1 in
+            begin match tr.filter with
+            | None -> { tr with filter = Some f }
+            | Some f' -> { tr with filter = Some (And_ [f; f']) }
+            end
+        | _ -> { search_space= search_space e; filter= None }
+      and filter e = match get_app e with
+        | Some ("substr", [e]) -> Substr (get_string e)
+        | Some ("or", es) -> Or (map filter es)
+        | Some ("and_", es) -> And_ (map filter es)
+        | Some ("not", [e]) -> Not (filter e)
+        | _ -> raise_errorf ~loc:e.pexp_loc "filter syntax error: %a" Pprintast.expression e
+      and search_space e = match get_app e with
+        | Some ("deep", [e]) -> Deep (search_space e)
+        | Some ("union", es) -> Union (map search_space es)
+        | _ -> Module (module_specifier e)
+      and module_specifier e = match get_app e with
+        | Some ("just", [e]) -> Just (get_path e)
+        | _ ->
+            match e.pexp_desc with
+            | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) ->
+                Related (Some cty, None)
+            | _ -> Opened (get_path e)
+      and get_string e = match e.pexp_desc with
+          | Pexp_constant (Pconst_string (s, _)) -> s
+          | _ -> 
+              raise_errorf ~loc:e.pexp_loc "string is expected: %a"
+                Pprintast.expression e
+      and get_path e = match e.pexp_desc with
+        | Pexp_construct ({txt}, None) -> txt
+        | _ -> raise_errorf ~loc:e.pexp_loc "%a is not a module path" Pprintast.expression e
+      in
+      Ok (t e)
+    with
+    | Failure s -> Error (`ParseExp (e, s))
+
+  let from_structure str = match str with
+    | [] -> Error (`String "requires implicit policies")
+    | _::_::_ ->
+        Error (`String "multiple implicit policies are not allowed")
+    | [sitem] ->
+        match sitem.pstr_desc with
+        | Pstr_eval (e, _) ->
+            from_expression e
+        | _ ->
+            Error (`String "spec must be an OCaml expression")
+
+  let error loc = function
+    | `String s -> raise_errorf ~loc "%s" s
+    | `Failed_unmangle s ->
+        raise_errorf ~loc "Illegal spec encoding: %S" s
+    | `Parse s ->
+        raise_errorf ~loc "Spec parse failed: %S" s
+    | `ParseExp (_, s) ->
+        raise_errorf ~loc "Spec parse failed: %s" s
+
+  let from_payload_ = function
+    | PStr s -> from_structure s
+    | _ -> Error (`String "spec must be an OCaml expression")
+
+  let from_payload loc x = match from_payload_ x with
+    | Error err -> error loc err
+    | Ok spec -> spec
+
+  let to_core_type loc spec =
+    let open Longident in
+    let open Ast_helper in
+    let imp s = { loc; txt = Ldot (Ldot (Lident "Leopard", "Implicits"), s) } in
+    with_default_loc loc & fun () ->
+      let string s =
+        let txt = Mangle.mangle s in
+        Typ.variant [ Parsetree.Rtag ({txt; loc}, [], false, []) ] Closed None
+      in
+      let list f xs = Typ.tuple & List.map f xs in
+      let module_specifier = function
+        | Just lid -> (* x just *)
+            Typ.constr (imp "just") [string & Longident.to_string lid]
+        | Opened lid -> string & Longident.to_string lid
+        | Related (Some cty, _) -> (* 'a related *)
+            Typ.constr (imp "related") [cty]
+        | Related _ -> assert false
+      in
+      let rec search_space = function
+        | Module ms -> module_specifier ms
+        | Deep ss -> Typ.constr (imp "deep") [ search_space ss ]
+        | Union sss -> Typ.constr (imp "union") [ list search_space sss ]
+      in
+      let rec filter = function
+        | Substr s -> (* x substr *)
+            Typ.constr (imp "substr") [string s]
+        | Or fs -> (* (f1 * f2 ..) or *)
+            Typ.constr (imp "or") [list filter fs]
+        | And_ fs -> (* (f1 * f2 ..) and_ *)
+            Typ.constr (imp "and_") [list filter fs]
+        | Not f -> (* f not *)
+            Typ.constr (imp "not") [filter f] 
+      in
+      let traversal t = match t.filter with
+        | None -> search_space t.search_space
+        | Some f ->
+            let f = filter f in
+            let ss = search_space t.search_space in
+            Typ.constr (imp "filter") [f; ss]
+      in
+      let t x =
+        let ts = match x.traversals with
+          | [] -> assert false
+          | [t] -> traversal t
+          | ts -> list traversal ts
+        in
+        if x.aggressive then Typ.constr (imp "aggressive") [ts] else ts
+      in
+      t spec
+      
   let from_payload_to_core_type : Location.t -> payload -> core_type = fun loc x ->
     to_core_type loc & from_payload loc x
 
-  let () = Leopardppx.Imp.from_payload_to_core_type_forward := from_payload_to_core_type
+  (********************* NEW ENCODING USING POLYVARIANT ***************)
 
+  (** Obtain a spec from a type expr.
+
+      ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
+  *)
+  let from_type_expr loc ty =
+    let take_one n ty = raise_errorf ~loc "type %a is used where %s must take one argument" Printtyp.type_expr ty n
+    in
+    let str ty = match repr_desc ty with
+      | Tvariant { row_fields=[txt, Rpresent None]
+                 (* ; row_more *)
+                 ; row_closed= true
+                 ; row_name= None } ->
+          begin match Mangle.unmangle txt with
+          | Ok s -> s
+          | Error (`Failed_unmangle s) -> raise_errorf ~loc "%s" s
+          end
+      | _ -> raise_errorf ~loc "This type %a is where a type of encoded string was expected (%a)" Printtyp.type_expr ty Printtyp.raw_type_expr ty
+    in
+    let get ty = match repr_desc ty with
+      | Tconstr ( (Path.Pident {Ident.name} | Path.Pdot (_,name,_)) , xs, _ ) -> Some (name, xs)
+      | _ -> None
+    in
+    let types ty = match repr_desc ty with
+      | Ttuple tys -> tys
+      | _ -> [ty]
+    in
+    let longident ty =
+      let s = str ty in
+      match Longident.parse s with
+      | Longident.Lident "" ->
+          raise_errorf ~loc "%a is not a type of encoded module path name" Printtyp.type_expr ty
+      | lid -> lid
+    in
+    let module_specifier ty = match get ty with
+      | Some ("just", [ty]) -> Just (longident ty)
+      | Some ("just", _) -> take_one "direct" ty
+      | Some ("related", [ty]) -> Related (None, Some ty)
+      | Some ("related", _) -> take_one "related" ty
+      | _ -> Opened (longident ty)
+    in
+    let rec search_space ty = match get ty with
+      | Some ("deep", [ty]) -> Deep (search_space ty)
+      | Some ("deep", _) -> take_one "just" ty
+      | Some ("union", [ty]) -> Union (List.map search_space & types ty)
+      | Some ("union", _) -> take_one "union" ty
+      | _ -> Module (module_specifier ty)
+    in
+    let rec filter ty = match get ty with
+      | Some ("substr", [ty]) -> Substr (str ty)
+      | Some ("substr", _) -> take_one "substr" ty
+      | Some ("or", [ty]) -> Or (List.map filter & types ty)
+      | Some ("and_", [ty]) -> And_ (List.map filter & types ty)
+      | Some ("not", [ty]) -> Not (filter ty)
+      | _ -> raise_errorf ~loc "type %a is used where a filter is expected" Printtyp.type_expr ty
+    in
+    let rec traversal ty = match get ty with
+      | Some ("filter", [ty1; ty2]) ->
+          let trv = traversal ty2 in
+          let f = filter ty1 in
+          { trv with filter = match trv.filter with None -> Some f | Some f' -> Some (And_ [f; f']) }
+      | _ -> { search_space = search_space ty; filter = None }
+    in
+    let rec traversals ty = match get ty with
+      | Some ("union", [ty]) -> concat_map traversals & types ty
+      | _ -> [ traversal ty ]
+    in
+    let rec t ty = match get ty with
+      | Some ("aggressive", [ty]) -> { (t ty) with aggressive = true }
+      | _ -> { traversals = traversals ty; aggressive = false }
+    in
+    t ty
+
+  let () = Leopardppx.Imp.from_payload_to_core_type_forward := from_payload_to_core_type
 end
 
 open Typedtree
@@ -706,7 +904,7 @@ let is_imp_arg env loc l ty
   let default = (ty, None, (fun x -> x), (fun x -> x)) in
   let f ty = match is_imp_arg_type env ty with
     | Some (ty, spec) ->
-        let spec = Specconv.from_type_expr env loc spec in
+        let spec = Specconv.from_type_expr loc spec in
         (ty, Some spec, Runtime.embed, Runtime.get)
     | None -> default
   in

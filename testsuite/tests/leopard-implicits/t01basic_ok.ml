@@ -4,7 +4,7 @@ module Add = struct
   let float = (+.)
 end
 
-type 'a add = ('a -> 'a -> 'a, [%imp Add]) Leopard.Implicits.t
+type 'a add = ('a -> 'a -> 'a, [%imp just Add]) Leopard.Implicits.t
 
 val %imp add : ?d:'a add -> 'a -> 'a -> 'a
 

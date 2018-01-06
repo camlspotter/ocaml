@@ -5,7 +5,7 @@ module Show = struct
 end
 
 type 'a string_of =
-  ('a -> string, [%imp aggressive (substr "string_of_" Show)]) Leopard.Implicits.t
+  ('a -> string, [%imp aggressive (filter (substr "string_of_") (just Show))]) Leopard.Implicits.t
 
 val %imp string_of : ?d:'a string_of -> 'a -> string
 

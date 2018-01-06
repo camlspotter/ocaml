@@ -1,5 +1,5 @@
 type 'a string_of =
-  ('a -> string, [%imp substr "string_of_" Pervasives]) Leopard.Implicits.t
+  ('a -> string, [%imp filter (substr "string_of_") (just Pervasives)]) Leopard.Implicits.t
 
 val %imp string_of : ?d:'a string_of -> 'a -> string
 
