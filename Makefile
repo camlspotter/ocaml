@@ -476,9 +476,11 @@ ifeq "$(UNIX_OR_WIN32)" "unix"
 	$(MAKE) runtimeopt
 	$(MAKE) ocamlopt
 	$(MAKE) libraryopt
+	$(MAKE) leopardlibopt
 	$(MAKE) otherlibrariesopt ocamltoolsopt
 else
 	$(MAKE) opt-core
+	$(MAKE) leopardlibopt
 	$(MAKE) otherlibrariesopt ocamltoolsopt
 endif
 
@@ -492,14 +494,16 @@ opt.opt:
 	$(MAKE) ocaml
 	$(MAKE) opt-core
 	$(MAKE) ocamlc.opt
+	$(MAKE) leopardlib
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) ocamltest
 	$(MAKE) ocamlopt.opt
+	$(MAKE) leopardlibopt
 	$(MAKE) otherlibrariesopt
 	$(MAKE) ocamllex.opt ocamltoolsopt ocamltoolsopt.opt $(OCAMLDOC_OPT) \
 	  ocamltest.opt
 else
 opt.opt: core opt-core ocamlc.opt all ocamlopt.opt ocamllex.opt \
-         ocamltoolsopt ocamltoolsopt.opt otherlibrariesopt $(OCAMLDOC_OPT) \
+         ocamltoolsopt ocamltoolsopt.opt leopardlibopt otherlibrariesopt $(OCAMLDOC_OPT) \
          ocamltest.opt
 endif
 
@@ -511,6 +515,7 @@ base.opt:
 	$(MAKE) ocaml
 	$(MAKE) opt-core
 	$(MAKE) ocamlc.opt
+	$(MAKE) leopardlib
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) ocamltest
 	$(MAKE) ocamlopt.opt
 	$(MAKE) otherlibrariesopt
@@ -543,6 +548,7 @@ coreboot:
 all: runtime
 	$(MAKE) coreall
 	$(MAKE) ocaml
+	$(MAKE) leopardlib
 	$(MAKE) otherlibraries $(WITH_DEBUGGER) $(WITH_OCAMLDOC) ocamltest
 
 # Bootstrap and rebuild the whole system.
@@ -657,6 +663,7 @@ ifeq "$(UNIX_OR_WIN32)" "unix" # Install manual pages only on Unix
 	$(MKDIR) "$(INSTALL_MANDIR)/man$(PROGRAMS_MAN_SECTION)"
 	-$(MAKE) -C man install
 endif
+	$(MAKE) -C leopardlib install
 	for i in $(OTHERLIBRARIES); do \
 	  $(MAKE) -C otherlibs/$$i install || exit $$?; \
 	done
@@ -700,6 +707,7 @@ installopt:
 	if test -n "$(WITH_OCAMLDOC)"; then \
 	  $(MAKE) -C ocamldoc installopt; \
 	fi
+	$(MAKE) -C leopardlib installopt
 	for i in $(OTHERLIBRARIES); do \
 	  $(MAKE) -C otherlibs/$$i installopt || exit $$?; \
 	done
@@ -1087,6 +1095,22 @@ html_doc: ocamldoc
 
 partialclean::
 	$(MAKE) -C ocamldoc clean
+
+# The extra libraries
+
+.PHONY: leopardlib
+leopardlib: ocamltools
+	$(MAKE) -C leopardlib all
+
+.PHONY: leopardlibopt
+leopardlibopt:
+	$(MAKE) -C leopardlib allopt
+
+partialclean::
+	$(MAKE) -C leopardlib partialclean
+
+clean::
+	$(MAKE) -C leopardlib clean
 
 # The extra libraries
 
