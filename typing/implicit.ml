@@ -68,7 +68,11 @@ end = struct
 
 end
 *)
-    
+
+(** Path.t list which are opened by [open [@imp]] *)
+let imp_opens = ref []
+let get_imp_opens () = flatten !imp_opens
+
 module Candidate : sig
 
   type t = {
@@ -98,7 +102,7 @@ module Candidate : sig
     Env.t
     -> Longident.t
     -> Path.t list
-      
+
   val mods_related :
     Env.t
     -> Types.type_expr
@@ -271,6 +275,9 @@ module Spec : sig
           a data type defined in module [M], for example, [M.t].  If the data type
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
+    | OpenedSpecial (** [%imp open_imp], the search space is module [P]
+                        which is declared with [opened %imp P].
+                    *)
 
   type search_space =
     | Module  of module_specifier
@@ -312,6 +319,9 @@ end = struct
           a data type defined in module [M], for example, [M.t].  If the data type
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
+    | OpenedSpecial (** [open [@imp] P], the search space is module [P]
+                        which is declared with [opened [@imp] P].
+                    *)
 
   type search_space =
     | Module  of module_specifier
@@ -357,6 +367,7 @@ end = struct
       | Related (Some cty, _) -> Format.asprintf "(related : %a)" Pprintast.core_type cty
       | Related (None, Some ty) -> Format.asprintf "(related : %a)" Printtyp.type_expr ty
       | Related (None, None) -> assert false
+      | OpenedSpecial -> "open_imp"
     in
     t
 
@@ -424,8 +435,7 @@ end = struct
       | Deep ss -> search_space ss
       | Union sss -> concat_map search_space sss
     and module_specifier = function
-      | Just _ -> []
-      | Opened _ -> []
+      | Just _ | Opened _ | OpenedSpecial -> []
       | Related (Some cty,_) -> [cty]
       | Related _ -> assert false
     in
@@ -454,7 +464,7 @@ end = struct
           tys, Union (rev rev_sss)
     and module_specifier tys ms =
       match ms with
-      | Just _ | Opened _ -> tys, ms
+      | Just _ | Opened _ | OpenedSpecial -> tys, ms
       | Related (_ctyo, Some _) -> assert false
       | Related (ctyo, None) ->
           match tys with
@@ -471,6 +481,7 @@ end = struct
     let cands_mods = function
       | Just x -> mods_direct env x
       | Opened x -> mods_opened env x
+      | OpenedSpecial -> get_imp_opens ()
       | Related (_,Some ty) -> mods_related env ty
       | Related (_,None) -> assert false
     in
@@ -642,6 +653,7 @@ end = struct
             match e.pexp_desc with
             | Pexp_constraint ({pexp_desc= Pexp_ident {txt=Lident "related"}}, cty) ->
                 Related (Some cty, None)
+            | Pexp_ident {txt=Lident "open_imp"} -> OpenedSpecial
             | _ -> Opened (get_path e)
       and get_string e = match e.pexp_desc with
           | Pexp_constant (Pconst_string (s, _)) -> s
@@ -698,6 +710,7 @@ end = struct
         | Just lid -> (* x just *)
             Typ.constr (imp "just") [string & Longident.to_string lid]
         | Opened lid -> string & Longident.to_string lid
+        | OpenedSpecial -> Typ.constr (imp "open_imp") []
         | Related (Some cty, _) -> (* 'a related *)
             Typ.constr (imp "related") [cty]
         | Related _ -> assert false
@@ -777,6 +790,9 @@ end = struct
       | Some ("just", _) -> take_one "direct" ty
       | Some ("related", [ty]) -> Related (None, Some ty)
       | Some ("related", _) -> take_one "related" ty
+      | Some ("open_imp", []) -> OpenedSpecial
+      | Some ("open_imp", _) -> 
+          raise_errorf ~loc "type %a is used where open_imp must take no argument" Printtyp.type_expr ty
       | _ -> Opened (longident ty)
     in
     let rec search_space ty = match get ty with
@@ -1384,32 +1400,75 @@ module MapArg : TypedtreeMap.MapArgument = struct
         e
     | _ -> assert false (* impos *)
 
-  let enter_expression e = match e.exp_desc with
-      | Texp_apply (f, args) ->
-          (* Resolve omitted ?_x arguments *)
-          (* XXX cleanup *)
-          opt { e with
-                exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+  let push_imp_opens = function
+    | [] -> ()
+    | ps -> imp_opens := ps :: !imp_opens
 
-      | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
-          (* Eeek, label with multiple cases? *)
-          warnf "%a: Unexpected label with multiple function cases"
-            Location.format e.exp_loc;
-          e
+  let pop_imp_opens = function
+    | [] -> ()
+    | ps -> match !imp_opens with
+      | ps'::pss ->
+          assert (ps = ps');
+          imp_opens := pss
+      | [] -> assert false
 
-      | Texp_function { arg_label=l; cases= [case] } ->
-          let p = case.c_lhs in
-          begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
-          | (_, None, _, _) -> e
-          | (type_, Some _spec, _conv, unconv) ->
-              (* CR jfuruse: specs are ignored *)
-              (* This is an imp arg *)
-              (* Build  fun ?d:(d as __imp_arg__) -> *)
-              add_derived_candidate e case p type_ unconv
-          end
-      | _ -> e
+  let filter_imp_opens e =
+    List.fold_right (fun (extra, _, attrs as ex) (st, imp_opens) ->
+        match extra with
+        | Texp_open (_ovf, path, _locident, _env) when List.exists (fun ({txt},_) -> txt = "imp") attrs ->
+            (st, path :: imp_opens)
+        | _ -> (ex::st, imp_opens)) e.exp_extra ([],[]) 
 
-  let leave_expression e = clean_derived_candidates e
+  let enter_expression e = 
+    let _extra, imp_opens = filter_imp_opens e in
+    push_imp_opens imp_opens;
+    match e.exp_desc with
+    | Texp_apply (f, args) ->
+        (* Resolve omitted ?_x arguments *)
+        (* XXX cleanup *)
+        opt { e with
+              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+
+    | Texp_function { arg_label=l; param=_; cases= _::_::_; partial= _} when l <> Nolabel ->
+        (* Eeek, label with multiple cases? *)
+        warnf "%a: Unexpected label with multiple function cases"
+          Location.format e.exp_loc;
+        e
+
+    | Texp_function { arg_label=l; cases= [case] } ->
+        let p = case.c_lhs in
+        begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
+        | (_, None, _, _) -> e
+        | (type_, Some _spec, _conv, unconv) ->
+            (* CR jfuruse: specs are ignored *)
+            (* This is an imp arg *)
+            (* Build  fun ?d:(d as __imp_arg__) -> *)
+            add_derived_candidate e case p type_ unconv
+        end
+    | _ -> e
+
+  let leave_expression e =
+    let e = clean_derived_candidates e in
+    let extra, imp_opens = filter_imp_opens e in
+    pop_imp_opens imp_opens;
+    { e with exp_extra = extra }
+
+  let enter_structure_item si = match si.str_desc with
+    | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
+        push_imp_opens [od.open_path];
+        (* removal is not at leaving [open] but at the end of structure *)
+        si
+    | _ -> si
+
+  let leave_structure ({str_items} as str) =
+    let sis, imp_opens = fold_right (fun si (sis, imp_opens) ->
+        match si.str_desc with
+        | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
+            sis, od.open_path :: imp_opens
+        | _ -> si :: sis, imp_opens) str_items ([],[])
+    in
+    iter (fun x -> pop_imp_opens [x]) & rev imp_opens;
+    { str with str_items = sis }
 end
 
 module Map = TypedtreeMap.MakeMap(MapArg)
