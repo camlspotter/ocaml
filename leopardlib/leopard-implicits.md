@@ -15,16 +15,17 @@ The definition of the resolution DSL is given by the following BNF:
 
   <search_space> ::= <module_specifier>
                    | deep <search_space>
-	           | (<search_space>, .. , <search_space>) 
+                   | (<search_space>, .. , <search_space>) 
 
   <module_specifier> ::= <path>
                       | just <path>
                       | (related : <tvar>)
+                      | open_imp
 
   <filter> ::= substr <string>
              | or <filter> .. <filter>
              | and_ <filter> .. <filter>
-	     | not <filter>
+             | not <filter>
 
   <path> : module path, such as Print, Num, etc.
   <tvar> : type variable
@@ -41,6 +42,11 @@ The resolution candidates are the values defined in the module accessible by `M`
 ## `(related : 'a)`
 
 `(related : 'a)` takes one of the type variables of the first type argument of the implicit type.  When the type variable is instantiated to a data type defined in module `M` such as `int M.t`, the resolution candidates are the values defined in `M`.  If the type variable is instantiated not to a data type, no candidates are taken.
+
+## `open_imp`
+
+`open_imp` takes the values defined in the modules `M` opened specially 
+by `open [@imp] M`. 
 
 ## `deep s`
 

@@ -3733,6 +3733,16 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_type = newty (Tpackage (p, nl, tl'));
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+
+  | Pexp_open (ovf, lid, e) when List.exists (fun ({txt},_) -> txt = "imp") sexp.pexp_attributes ->
+      let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
+      let exp = type_expect env e ty_expected in
+      { exp with
+        exp_extra = (Texp_open (ovf, path, lid, newenv), loc,
+                     sexp.pexp_attributes) ::
+                      exp.exp_extra;
+      }
+
   | Pexp_open (ovf, lid, e) ->
       let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
       let exp = type_expect newenv e ty_expected in

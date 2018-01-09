@@ -1565,9 +1565,16 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           transl_modtype_decl names env pmtd
         in
         Tstr_modtype mtd, [sg], newenv
+
+    (* ocamleopard *)
+    | Pstr_open sod when List.exists (fun ({txt},_) -> txt = "imp") sod.popen_attributes ->
+        let (_path, _newenv, od) = type_open ~toplevel env sod in
+        Tstr_open od, [], env
+
     | Pstr_open sod ->
         let (_path, newenv, od) = type_open ~toplevel env sod in
         Tstr_open od, [], newenv
+
     | Pstr_class cl ->
         List.iter
           (fun {pci_name} -> check_name check_type names pci_name)
