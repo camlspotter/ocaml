@@ -3735,10 +3735,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_env = env }
 
   | Pexp_open (ovf, lid, e) when List.exists (fun ({txt},_) -> txt = "imp") sexp.pexp_attributes ->
-      let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
+      (* [open [@imp] P] does not open [P] *)
+      let path = Env.lookup_module ~load:true ~loc:lid.loc lid.txt env in
       let exp = type_expect env e ty_expected in
       { exp with
-        exp_extra = (Texp_open (ovf, path, lid, newenv), loc,
+        exp_extra = (Texp_open (ovf, path, lid, env), loc,
                      sexp.pexp_attributes) ::
                       exp.exp_extra;
       }
