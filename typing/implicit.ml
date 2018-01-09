@@ -275,7 +275,9 @@ module Spec : sig
           a data type defined in module [M], for example, [M.t].  If the data type
           is an alias of data type defined in another module [N], [N] is also traversed.
           This alias expansion is performed recursively. *)
-    | OpenedSpecial (** open [@imp] P *)
+    | OpenedSpecial (** [open [@imp] P], the search space is module [P]
+                        which is declared with [opened [@imp] P].
+                    *)
 
   type search_space =
     | Module  of module_specifier
