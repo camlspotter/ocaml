@@ -56,7 +56,7 @@ module Implicits : sig:
   exception Not_resolved
   val from_Some : 'a option -> 'a
   external get : ('a, 'spec) t -> 'a = "%identity"
-  val imp : ?d:('a, 'spec) t -> 'a
+  val imp : ?_d:('a, 'spec) t -> 'a
   external embed : 'a -> ('a, 'spec) t = "%identity"
 
   (** [[`M] module_] is the encoding of escaped module name "M" *)

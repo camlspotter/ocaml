@@ -5,7 +5,7 @@ open Leopardtyping
 open List
 open Asttypes
 
-let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
+let debug_resolve = Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 
 (*
 module Klabel : sig
@@ -75,11 +75,16 @@ let get_imp_opens () = flatten !imp_opens
 
 module Candidate : sig
 
-  type t = {
-    path : Path.t;
-    expr : Typedtree.expression;
-    type_ : Types.type_expr;
-    aggressive : bool;
+  type t = 
+    { path : Path.t
+    (** The source path. *)
+    ; expr : Typedtree.expression
+    (** The actual expression used to build the instance.
+        The type may be incorrect *)
+    ; type_ : Types.type_expr
+    (** The polymorphic type of the candidate *)
+    ; aggressive : bool
+    (** Aggressively extract sub-constraints or not *)
   }
 
   val format : t Format.fmt
@@ -1140,21 +1145,21 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
 
    Shadow check can find the derived_candidates, since they are added to `env`.
 *)
-let shadow_check env loc e =
+let shadow_check env loc e0 =
   let shadowed = ref [] in
   let module I = TypedtreeIter.MakeIterator(struct
       include TypedtreeIter.DefaultIteratorArgument
       let enter_expression e = match e.exp_desc with
         | Texp_ident (p, _, _) ->
             begin match Env.value_accessibility env p with
-            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
+            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a in %a" Path.format p Typedtree.format_expression e0
             | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
             | `Accessible _ -> ()
             end
         | _ -> ()
     end)
   in
-  I.iter_expression e;
+  I.iter_expression e0;
   match !shadowed with
   | [] -> ()
   | _ ->
@@ -1168,7 +1173,7 @@ let shadow_check env loc e =
               Location.format loc
       in
       raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
-        Typedtree.format_expression e
+        Typedtree.format_expression e0
         (Format.list "@," format_shadow) !shadowed
 
 let resolve env loc spec ty = with_snapshot & fun () ->
@@ -1304,7 +1309,26 @@ module MapArg : TypedtreeMap.MapArgument = struct
             | [Some a], args ->
                 fix_no_args & begin match un_some a with
                   | Some a ->
-                      (* <%imp> ?l:Some a x ..   =>  Runtime.get a x .. *)
+                      (* Basically,
+
+                           <%imp> ?l:(Some a) x .. => Leopard.Implicit.get a x ..
+
+                         but the retyping infers more general type than the original.
+
+                         One way to fix this is to have a type constraint:
+
+                           <%imp> ?l:(Some a) x ..   
+                             => Leopard.Implicit.get (a : (...,...) Leopard.Implicit.t) x .. 
+                         
+                         but it is hard to generate core_type from type_expr...
+
+                           => val zzz : (t1,t2) Leopard.Implicit.t -> t1 = "%identity"
+                              zzz a x .. 
+
+                         would be nice, but we cannot define zzz since t1 can be a function type
+                         and it may change the arity of zzz to more than 2.  We cannot declare
+                         "%identity" of more than 2 arguments in OCaml.
+                      *)
                       { e with
                         exp_desc = Texp_apply (get_embed & Runtime.get a, args)
                       ; exp_type = e.exp_type }
@@ -1373,9 +1397,13 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
     (* __imp_arg__ will be used for the internal resolutions *)
     (* XXX needs a helper module *)
-    Typedtree.add_attribute
-      "leopard_mark"
-      (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+    let e =
+      Typedtree.add_attribute
+        "leopard_mark"
+        (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+    in
+    Format.eprintf "add derived: %a@." Typedtree.format_expression e;
+    e
 
   let clean_derived_candidates e =
     let open Parsetree in
@@ -1445,6 +1473,21 @@ module MapArg : TypedtreeMap.MapArgument = struct
             (* Build  fun ?d:(d as __imp_arg__) -> *)
             add_derived_candidate e case p type_ unconv
         end
+        
+    | Texp_ident (p, _, _) ->
+        begin match e.exp_attributes with
+        | [{txt="imp_omitted"}, Parsetree.PStr []] when gen_vars e.exp_type = [] ->
+            Format.eprintf "@[<2>FOUND @imp_omitted@ %a : %a@]@." Path.format p Printtyp.type_scheme e.exp_type;
+            let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
+            begin match specopt with
+            | None -> assert false (* wrong type! *)
+            | Some spec ->
+                let e' = conv (resolve e.exp_env e.exp_loc spec ty) in
+                e'
+            end
+        | _ -> e
+        end
+        
     | _ -> e
 
   let leave_expression e =
@@ -1454,6 +1497,47 @@ module MapArg : TypedtreeMap.MapArgument = struct
     { e with exp_extra = extra }
 
   let enter_structure_item si = match si.str_desc with
+    | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
+        push_imp_opens [od.open_path];
+        (* removal is not at leaving [open] but at the end of structure *)
+        si
+(* This is not good.  Before, the primitive has no entry in the module, by modifying it to a normal value, it creates a new entry, which contradicts the typing of the module.
+
+    | Tstr_primitive ({ val_prim = [ "%imp" ] } as val_) ->
+        (* val %imp add : ?_d:'a add -> 'a -> 'a -> 'a
+           =>
+           let add : ?_d:'a add -> 'a -> 'a -> 'a = Leopard.Implicits.imp
+        *)
+        let core_type = val_.val_desc in
+(*
+        let theLabel = match core_type.ctyp_desc with
+          | Ttyp_arrow (arg_label, _, _) -> arg_label
+          | _ -> assert false
+        in
+*)
+        let make_def env loc ty =
+          Typecore.type_expect env
+            (let open Ast_helper in
+             let open Exp in
+             with_default_loc loc
+             @@ fun () ->
+             ident {txt=Longident.(Ldot (Ldot (Lident "Leopard", "Implicits"), "imp")); loc})
+            ty
+        in    
+        let vb = { vb_pat= { pat_desc= Tpat_var (val_.val_id, val_.val_name)
+                           ; pat_loc= val_.val_name.loc
+                           ; pat_extra= [ (Tpat_constraint core_type, val_.val_name.loc, []) ]
+                           ; pat_type= val_.val_val.Types.val_type
+                           ; pat_env= si.str_env
+                           ; pat_attributes= [] }
+                 ; vb_expr = make_def si.str_env si.str_loc val_.val_val.Types.val_type
+                 ; vb_attributes = []
+                 ; vb_loc = val_.val_loc
+                 }
+        in
+        { si with str_desc= Tstr_value (Nonrecursive, [vb]) }
+*)
+
     | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
         push_imp_opens [od.open_path];
         (* removal is not at leaving [open] but at the end of structure *)
@@ -1474,5 +1558,10 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardfeatures.overload then Map.map_structure str
-  else str
+  if !Leopardfeatures.implicits then begin
+    if debug_resolve then
+      Format.eprintf "@[<2>RESOLVE:@ @[%a@]@]@." 
+        Pprintast.structure
+        (Untypeast.(default_mapper.structure default_mapper str));
+    Map.map_structure str
+  end else str

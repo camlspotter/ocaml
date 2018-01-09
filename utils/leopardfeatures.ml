@@ -1,13 +1,16 @@
 let curried_constr = ref true
 let overload = ref true
+let implicits = ref true
 
 let enable_leopard () =
   curried_constr := true;
-  overload := true
+  overload := true;
+  implicits := true
     
 let disable_leopard () =
   curried_constr := false;
-  overload := false
+  overload := false;
+  implicits := false
     
 let without_leopard f =
   disable_leopard ();
