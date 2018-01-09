@@ -10,9 +10,9 @@ module type Num = sig:
   val (-) : t -> t -> t
 
 module Num = struct:
-  type 'a num = ('a _num, [%imp NumInstances]) Leopard.Implicits.t
-  
   type 'a _num = (module Num with type t = 'a)
+  
+  type 'a num = ('a _num, [%imp NumInstances]) Leopard.Implicits.t
   
   val %imp _num  : ?d:'a num -> 'a _num
   
