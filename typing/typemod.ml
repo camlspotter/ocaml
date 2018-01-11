@@ -1567,13 +1567,14 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         Tstr_modtype mtd, [sg], newenv
 
     (* ocamleopard *)
-    | Pstr_open sod when List.exists (fun ({txt},_) -> txt = "imp") sod.popen_attributes ->
-        (* [open [@imp] P] does not open [P] *)
+    | Pstr_extension (({ txt = "imp"; loc }, PStr [ { pstr_desc= Pstr_open sod } ]), attrs) ->
+        let a = {txt="imp"; loc}, PStr [] in
+        (* [open %imp P] does not open [P] *)
         let path = Env.lookup_module ~load:true ~loc:sod.popen_lid.loc sod.popen_lid.txt env in
         let od = { open_path= path; open_txt= sod.popen_lid;
                    open_override = sod.popen_override;
                    open_loc = loc;
-                   open_attributes = sod.popen_attributes }
+                   open_attributes = a :: attrs @ sod.popen_attributes }
         in
         Tstr_open od, [], env
 

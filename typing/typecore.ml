@@ -3734,22 +3734,23 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
 
-  | Pexp_open (ovf, lid, e) when List.exists (fun ({txt},_) -> txt = "imp") sexp.pexp_attributes ->
-      (* [open [@imp] P] does not open [P] *)
-      let path = Env.lookup_module ~load:true ~loc:lid.loc lid.txt env in
-      let exp = type_expect env e ty_expected in
-      { exp with
-        exp_extra = (Texp_open (ovf, path, lid, env), loc,
-                     sexp.pexp_attributes) ::
-                      exp.exp_extra;
-      }
-
   | Pexp_open (ovf, lid, e) ->
       let (path, newenv) = !type_open ovf env sexp.pexp_loc lid in
       let exp = type_expect newenv e ty_expected in
       { exp with
         exp_extra = (Texp_open (ovf, path, lid, newenv), loc,
                      sexp.pexp_attributes) ::
+                      exp.exp_extra;
+      }
+
+  | Pexp_extension ({ txt = "imp"; loc }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open (ovf, lid, e) }, attrs) } ] ) ->
+      (* [open %imp P] does not open [P] *)
+      let a = {txt="imp"; loc}, PStr [] in
+      let path = Env.lookup_module ~load:true ~loc:lid.loc lid.txt env in
+      let exp = type_expect env e ty_expected in
+      { exp with
+        exp_extra = (Texp_open (ovf, path, lid, env), loc,
+                     a :: sexp.pexp_attributes @ attrs) ::
                       exp.exp_extra;
       }
 
