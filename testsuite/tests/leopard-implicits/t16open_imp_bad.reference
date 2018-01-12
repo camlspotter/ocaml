@@ -1,0 +1,3 @@
+whatever
+File "t16open_imp_bad.ml", line 1, characters 10-21:
+Error: Unbound module Nonexistent
