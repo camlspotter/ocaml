@@ -6,9 +6,7 @@ module M = struct:
   let int = (+)
   let float = (+.)
 
+let () = let open %imp M in assert (add 1 2 = 3)
+
 open %imp M
-
-let () =
-  assert (add 1 2 = 3);
-  assert (add 1.2 3.4 = 4.6)
-
+let () = assert (add 1.2 3.4 = 4.6)

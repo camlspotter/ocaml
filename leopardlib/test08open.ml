@@ -1,4 +1,4 @@
-open %imp List
+open [@imp] List
 let () =
-  let open %imp List in
+  let open [@imp] Hashtbl in
   ()

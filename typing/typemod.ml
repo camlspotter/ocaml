@@ -1570,7 +1570,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     | Pstr_extension (({ txt = "imp"; loc }, PStr [ { pstr_desc= Pstr_open sod } ]), attrs) ->
         let a = {txt="imp"; loc}, PStr [] in
         (* [open %imp P] does not open [P] *)
-        let path = Env.lookup_module ~load:true ~loc:sod.popen_lid.loc sod.popen_lid.txt env in
+        let path = Typetexp.lookup_module ~load:true env sod.popen_lid.loc sod.popen_lid.txt in
         let od = { open_path= path; open_txt= sod.popen_lid;
                    open_override = sod.popen_override;
                    open_loc = loc;

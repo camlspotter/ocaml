@@ -3743,10 +3743,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                       exp.exp_extra;
       }
 
+  (* ocamleopard *)
   | Pexp_extension ({ txt = "imp"; loc }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open (ovf, lid, e) }, attrs) } ] ) ->
       (* [open %imp P] does not open [P] *)
       let a = {txt="imp"; loc}, PStr [] in
-      let path = Env.lookup_module ~load:true ~loc:lid.loc lid.txt env in
+      let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
       let exp = type_expect env e ty_expected in
       { exp with
         exp_extra = (Texp_open (ovf, path, lid, env), loc,
