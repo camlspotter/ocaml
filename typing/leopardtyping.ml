@@ -949,3 +949,27 @@ end = struct
     with
     | Exit -> true
 end
+
+module XTypecore = struct
+  (* Create a typed expression of the given path in the env *)
+  (* XXX moved to Leopardcomplib *)
+  let expr_of_path ?(loc=Location.none) env path =
+    let open Typedtree in
+    let vdesc = Env.find_value path env in
+    let type_ = vdesc.val_type in
+    { exp_desc= Texp_ident (path
+                           , { txt= Untypeast.lident_of_path path
+                             ; loc }
+                           , vdesc)
+    ; exp_loc = loc
+    ; exp_extra = []
+    ; exp_type = Ctype.instance env type_
+    ; exp_env = env
+    ; exp_attributes = []
+    }
+end
+
+module Typecore = struct
+  include Typecore
+  include XTypecore
+end
