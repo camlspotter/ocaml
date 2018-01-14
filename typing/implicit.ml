@@ -86,10 +86,15 @@ module Candidate : sig
 
   val uniq : t list -> t list
 
+  type flags =
+    { sub_modules : bool
+    ; modulex : bool
+    }
+    
   val cands_of_module :
     Env.t
     -> Location.t
-    -> bool (*+ recursive *)
+    -> flags
     -> Path.t (*+ module path *)
     -> t list
     
@@ -127,7 +132,7 @@ end = struct
 
   let format ppf c =
     Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
-      Path.format c.path
+    Path.format c.path
       Typedtree.format_expression c.expr
       Printtyp.type_scheme c.type_
 
@@ -193,7 +198,7 @@ end = struct
     ; exp_attributes = []
     }
 
-  let default_candidate_of_path env path =
+  let candidate_of_path env path =
     try
       let vdesc = Env.find_value path env in
       let type_ = vdesc.val_type in
@@ -202,9 +207,31 @@ end = struct
     with
     | Not_found -> assert false (* impos *)
 
-  let cands_of_module env loc recursive mpath =
-    let paths = Env.values_of_module ~recursive env loc mpath in
-    map (default_candidate_of_path env) paths
+  let candidate_of_module_path env path =
+    Format.eprintf "candidate_of_module_path: %a@." Path.format path;
+    try
+      let pexp = Ast_helper.(Exp.pack (Mod.ident {txt=Ctype.lid_of_path path; loc=Location.none})) in
+      (* Damn, we cannot type it without any context *)
+      let expr = Typecore.type_expression env pexp in
+      let type_ = expr.Typedtree.exp_type in
+      { path; expr; type_; aggressive= false }
+    with
+    | Not_found -> assert false (* impos *)
+
+  type flags =
+    { sub_modules : bool
+    ; modulex : bool
+    }
+
+  (* XXX modulex *)
+  let cands_of_module env loc flags mpath =
+    let paths = Env.things_of_module ~recursive:flags.sub_modules env loc mpath in
+    let values, modules = List.partition_map (function `Value v -> Either.Left v | `Module m -> Either.Right m) paths in
+    if flags.modulex then begin
+      Format.eprintf "modulex: @[%a@]@." (Format.list "@ " Path.format) modules
+    end;
+    map (candidate_of_path env) values
+    @ if flags.modulex then map (candidate_of_module_path env) modules else []
 
   let mods_direct env lid =
     try
@@ -283,6 +310,7 @@ module Spec : sig
     | Module  of module_specifier
     | Deep of search_space
     | Union   of search_space list
+    | ModuleX of search_space
 
   type filter =
     | Substr of string (** Only the values whose name contain the string in it *)
@@ -327,11 +355,12 @@ end = struct
     | Module  of module_specifier
     | Deep of search_space
     | Union   of search_space list
+    | ModuleX of search_space
 
   type filter =
     | Substr of string (** Only the values whose name contain the string in it *)
     | Or     of filter list
-    | And_    of filter list
+    | And_   of filter list
     | Not    of filter
 
   type traversal = 
@@ -361,6 +390,7 @@ end = struct
       | Module ms -> module_specifier ms
       | Deep ss -> Printf.sprintf "deep (%s)" (search_space ss)
       | Union ss -> Printf.sprintf "union (%s)" (String.concat ", " (List.map search_space ss))
+      | ModuleX ss -> Printf.sprintf "module (%s)" (search_space ss)
     and module_specifier = function
       | Just l -> Longident.to_string l
       | Opened l -> Printf.sprintf "%s" & Longident.to_string l
@@ -388,6 +418,11 @@ end = struct
           | [] -> assert false
           | [s] -> s
           | ss -> Union ss
+          end
+      | ModuleX ss -> 
+          begin match search_space ss with
+          | ModuleX ss -> ModuleX ss
+          | ss -> ModuleX ss
           end
     and filter = function
       | (Substr _ as f) -> f
@@ -434,6 +469,7 @@ end = struct
       | Module ms -> module_specifier ms
       | Deep ss -> search_space ss
       | Union sss -> concat_map search_space sss
+      | ModuleX ss -> search_space ss
     and module_specifier = function
       | Just _ | Opened _ | OpenedSpecial -> []
       | Related (Some cty,_) -> [cty]
@@ -462,6 +498,7 @@ end = struct
               tys, ss' :: rev_sss) (tys, []) sss
           in
           tys, Union (rev rev_sss)
+      | ModuleX ss -> let tys, ss' = search_space tys ss in tys, ModuleX ss'
     and module_specifier tys ms =
       match ms with
       | Just _ | Opened _ | OpenedSpecial -> tys, ms
@@ -485,10 +522,11 @@ end = struct
       | Related (_,Some ty) -> mods_related env ty
       | Related (_,None) -> assert false
     in
-    let rec cands_search_space subs = function
-      | Module m -> concat_map (cands_of_module env loc subs) & cands_mods m
-      | Deep s -> cands_search_space true s
-      | Union ss -> uniq & concat_map (cands_search_space subs) ss
+    let rec cands_search_space flags = function
+      | Module m -> concat_map (cands_of_module env loc flags) & cands_mods m
+      | Deep s -> cands_search_space { flags with sub_modules= true } s
+      | Union ss -> uniq & concat_map (cands_search_space flags) ss
+      | ModuleX s -> cands_search_space { flags with modulex= true } s
     in
     let rec eval_filter f c = match f with
       | Substr s -> String.is_substring ~needle:s & Path.to_string c.path
@@ -497,7 +535,7 @@ end = struct
       | Not f -> not & eval_filter f c
     in
     let cands_traversal { search_space; filter } =
-      let cs = cands_search_space false (* do not search sub modules *) search_space in
+      let cs = cands_search_space { sub_modules= false; modulex= false } search_space in
       match filter with
       | None -> cs
       | Some f -> List.filter (eval_filter f) cs
@@ -646,6 +684,7 @@ end = struct
       and search_space e = match get_app e with
         | Some ("deep", [e]) -> Deep (search_space e)
         | Some ("union", es) -> Union (map search_space es)
+        | Some ("modulex", [e]) -> ModuleX (search_space e)
         | _ -> Module (module_specifier e)
       and module_specifier e = match get_app e with
         | Some ("just", [e]) -> Just (get_path e)
@@ -719,6 +758,7 @@ end = struct
         | Module ms -> module_specifier ms
         | Deep ss -> Typ.constr (imp "deep") [ search_space ss ]
         | Union sss -> Typ.constr (imp "union") [ list search_space sss ]
+        | ModuleX ss -> Typ.constr (imp "modulex") [ search_space ss ]
       in
       let rec filter = function
         | Substr s -> (* x substr *)
@@ -753,8 +793,6 @@ end = struct
   (********************* NEW ENCODING USING POLYVARIANT ***************)
 
   (** Obtain a spec from a type expr.
-
-      ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
   *)
   let from_type_expr loc ty =
     let take_one n ty = raise_errorf ~loc "type %a is used where %s must take one argument" Printtyp.type_expr ty n
@@ -797,9 +835,11 @@ end = struct
     in
     let rec search_space ty = match get ty with
       | Some ("deep", [ty]) -> Deep (search_space ty)
-      | Some ("deep", _) -> take_one "just" ty
+      | Some ("deep", _) -> take_one "deep" ty
       | Some ("union", [ty]) -> Union (List.map search_space & types ty)
       | Some ("union", _) -> take_one "union" ty
+      | Some ("modulex", [ty]) -> ModuleX (search_space ty)
+      | Some ("modulex", _) -> take_one "modulex" ty
       | _ -> Module (module_specifier ty)
     in
     let rec filter ty = match get ty with
@@ -966,17 +1006,19 @@ module Klabel2 = struct
     | _ -> [[], ty]
 end
 
-(* Fix the candidates by adding type dependent part *)
+(* Fix the candidates by adding type dependent part,
+   if [aggressive], there may be more than one ways to get dependent parts
+ *)
 let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label * type_expr * Spec.t * (expression -> expression)) list * type_expr) list =
   let f =
     if not aggressive then (fun type_ -> [Klabel2.extract env type_])
     else Klabel2.extract_aggressively env
   in
   flip map (f type_) & fun (args, ty) ->
-    (flip map args (fun (l,ty) ->
-      let (ty,specopt,conv,_unconv) = is_imp_arg env loc l ty in
+    (flip map args (fun (l,aty) ->
+      let (aty,specopt,conv,_unconv) = is_imp_arg env loc l aty in
       ( l
-      , ty
+      , aty
       , (match specopt with
          | Some x -> x
          | None -> spec (* This is obtained by aggressive. Let's inherit! *))

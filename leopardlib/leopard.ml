@@ -84,3 +84,5 @@ module Implicits = struct:
   type 'a aggressive
 
   type open_imp
+
+  type 'a modulex

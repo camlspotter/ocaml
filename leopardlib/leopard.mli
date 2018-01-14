@@ -81,3 +81,5 @@ module Implicits : sig:
   type 'a aggressive
 
   type open_imp
+
+  type 'a modulex

@@ -238,6 +238,12 @@ module XEnv : sig
 
   val values_of_module : recursive:bool -> Env.t -> Location.t -> Path.t -> Path.t list
 
+  val things_of_module : recursive:bool ->
+    Env.t ->
+    Location.t ->
+    Path.t ->
+    [ `Module of Path.t | `Value of Path.t ] list
+
   val get_opens : Env.t -> Path.t list
 
   val dump_summary : Env.t -> unit
@@ -406,6 +412,23 @@ end = struct
             
       | _ -> st
 
+  let rec things_of_module ~recursive env path mdecl : [`Value of Path.t | `Module of Path.t] list =
+    let m = new dummy_module env path mdecl.md_type in
+    let sg = scrape_sg env mdecl in
+    flip2 fold_right sg [] & fun sitem st -> match sitem with
+      | Sig_value (id, _vdesc) ->
+          let path = try m#lookup_value & Ident.name id with Not_found ->
+            !!% "values_of_module: m#lookup_value %s not found@." & Ident.name id;
+            assert false
+          in
+          `Value path :: st
+      | Sig_module (id, moddecl, _) ->
+          let path = m#lookup_module & Ident.name id in
+          let st = `Module path :: st in
+          if recursive then things_of_module ~recursive env path moddecl @ st
+          else st
+      | _ -> st
+
   let check_module env loc path =
     match 
       try Some (Env.find_module path env) with _ -> None
@@ -418,6 +441,10 @@ end = struct
   let values_of_module ~recursive env loc path =
     let mdecl = check_module env loc path in
     values_of_module ~recursive env path mdecl
+
+  let things_of_module ~recursive env loc path =
+    let mdecl = check_module env loc path in
+    things_of_module ~recursive env path mdecl
 
   let value_accessibility env path =
     let lid = Untypeast.lident_of_path path in
