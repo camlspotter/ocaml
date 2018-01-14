@@ -7,68 +7,6 @@ open Asttypes
 
 let debug = Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 
-(*
-module Klabel : sig
-
-  val is_klabel : Asttypes.arg_label -> [> `Normal | `Optional ] option
-
-  val extract :
-    Env.t
-    -> Types.type_expr
-    -> (Asttypes.arg_label * Types.type_expr) list * Types.type_expr
-
-  val extract_aggressively :
-    Env.t
-    ->  Types.type_expr
-    -> ((Asttypes.arg_label * Types.type_expr) list * Types.type_expr) list
-
-end = struct
-  (** Constraint labels *)
-
-  open Types
-
-  (* Constraint labels must start with '_' *)
-  let is_klabel = function
-    | Labelled s when s.[0] = '_' -> Some `Normal
-    | Optional s when s.[0] = '_' -> Some `Optional
-    | _ -> None
-
-  (* Constraint labels must precede the other arguments *)
-  let rec extract env ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) when is_klabel l <> None ->
-        let cs, ty = extract env ty2 in
-        (l,ty1)::cs, ty
-  (*
-    | Tarrow(l, ty1, ty2, x) ->
-        let cs, ty = extract env ty2 in
-        cs, { (Ctype.newty & Tarrow (l, ty1, ty, x)) with level = ty.level }
-  *)
-    | _ -> [], ty
-
-  (* In the agressive mode, any argument with gen_vars can be constraint arguments *)
-  let rec extract_aggressively env ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) when gen_vars ty1 <> [] ->
-        ([], ty)
-        :: map
-          (fun (cs, ty) -> (l,ty1)::cs, ty)
-          (extract_aggressively env ty2)
-    | _ -> [[], ty]
-
-  (*
-  let rec get_args ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) -> (l,ty1)::get_args ty2
-    | _ -> []
-  *)
-
-end
-*)
-
 (** Path.t list which are opened by [open %imp] *)
 let imp_opens = ref []
 let get_imp_opens () = flatten !imp_opens
@@ -77,8 +15,8 @@ module Candidate : sig
 
   type t = {
     path : Path.t;
-    expr : Typedtree.expression;
-    type_ : Types.type_expr; (** type of [expr], we have it since [expr]'s type may not be correct due to [unconv] *)
+    exprf : Types.type_expr -> Typedtree.expression; (** to make main expr *)
+    ztype_ : Types.type_expr; (** type of [expr], we have it since [expr]'s type may not be correct due to [unconv] *)
     aggressive : bool;
   }
 
@@ -125,16 +63,16 @@ end = struct
 
   type t = {
     path       : Path.t;
-    expr       : Typedtree.expression;
-    type_      : Types.type_expr;
+    exprf : Types.type_expr -> Typedtree.expression; (** to make main expr *)
+    ztype_      : Types.type_expr;
     aggressive : bool
   }
 
   let format ppf c =
-    Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
-    Path.format c.path
-      Typedtree.format_expression c.expr
-      Printtyp.type_scheme c.type_
+    Format.fprintf ppf "@[<2>\"%a\" : %a@]"
+      Path.format c.path
+      (* Typedtree.format_expression c.expr *)
+      Printtyp.type_scheme c.ztype_
 
   let uniq xs =
     let tbl = Hashtbl.create 107 in
@@ -184,9 +122,9 @@ end = struct
   let candidate_of_path env path =
     try
       let vdesc = Env.find_value path env in
-      let type_ = vdesc.val_type in
+      let ztype_ = vdesc.val_type in
       let expr = Typecore.expr_of_path env path in
-      { path; expr; type_; aggressive= false }
+      { path; exprf = (fun _ -> expr); ztype_; aggressive= false }
     with
     | Not_found -> assert false (* impos *)
 
@@ -195,9 +133,9 @@ end = struct
     try
       let pexp = Ast_helper.(Exp.pack (Mod.ident {txt=Ctype.lid_of_path path; loc=Location.none})) in
       (* (module X) requires expected type *)
-      let expr = Typecore.type_expect env pexp ty in
-      let type_ = expr.Typedtree.exp_type in
-      { path; expr; type_; aggressive= false }
+      let exprf ty = Typecore.type_expect env pexp ty in
+      let ztype_ = ty in
+      { path; exprf; ztype_; aggressive= false }
     with
     | Not_found -> assert false (* impos *)
 
@@ -935,8 +873,9 @@ end
 (* Fix the candidates by adding type dependent part,
    if [aggressive], there may be more than one ways to get dependent parts
  *)
-let extract_candidate spec env loc { Candidate.aggressive; type_ } : ((arg_label * type_expr * Spec.t * (expression -> expression)) list * type_expr) list =
-  flip map (Klabel2.extract ~aggressive env type_) & fun (args, ty) ->
+let extract_candidate spec env loc { Candidate.aggressive; ztype_ }
+  : ((arg_label * type_expr * Spec.t * (expression -> expression)) list * type_expr) list =
+  flip map (Klabel2.extract ~aggressive env ztype_) & fun (args, ty) ->
     (flip map args (fun (l,aty) ->
       let { imp_type=aty; spec=specopt; conv } = is_imp_arg env loc l aty in
       ( l
@@ -979,27 +918,32 @@ type trace = (Path.t * type_expr) list
 (** Used instance history. This is used to check the same instance is
     not used with types with not strictly decreasing size. *)
 
+let get_and_extract_candidates env loc ty spec =
+  let cs = get_candidates env loc ty spec in
+    if debug then begin
+      !!% "Candidates:@.";
+      iter (!!% "  %a@." Candidate.format) cs
+    end;
+    concat_map (fun c ->
+        map (fun (subcs, ty) ->
+            c.Candidate.path,
+            c.Candidate.exprf,
+            subcs,
+            ty)
+        & extract_candidate spec env loc c
+      ) cs
+
 let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_result.t =
   let rec resolve = function
     | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
     | p::ps -> resolve_a_problem p ps
 
   and resolve_a_problem (trace,ty,spec) problems =
-    (* Build an expression of type [ty], from the values specified by [spec] *)
-    let cs = get_candidates env loc ty spec in
-    if debug then begin
-      !!% "Candidates:@.";
-      iter (!!% "  %a@." Candidate.format) cs
-    end;
-    let cs = concat_map (fun c ->
-        map (fun (subcs, ty) -> c.Candidate.path, c.Candidate.expr, subcs, ty)
-        & extract_candidate spec env loc c
-      ) cs
-    in
     Resolve_result.concat
-    & map (try_cand trace ty problems) cs
+    & map (try_cand trace ty problems)
+    & get_and_extract_candidates env loc ty spec 
 
-  and try_cand trace ity problems (path, expr, subcs, vty) =
+  and try_cand trace ity problems (path, exprf, subcs, vty) =
 
     let org_tysize = Tysize.size ity in
 
@@ -1063,6 +1007,8 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
           | Ok () ->
               if debug then
                 !!% "    ok: %a@." Printtyp.type_expr ity;
+
+              let expr = exprf vty in
 
               let new_tysize = Tysize.size ity in
 
@@ -1287,7 +1233,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         end
     | _ -> e
 
-  let add_derived_candidate e case p type_ unconv =
+  let add_derived_candidate e case p ztype_ unconv =
     (* p.pexp_type and type_ may be different *)
     (* This is an imp arg *)
 
@@ -1318,8 +1264,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
     in
     derived_candidates := (name
                           , { Candidate.path; (* <- not actually path. see expr field *)
-                              expr;
-                              type_;
+                              exprf= (fun _ -> expr);
+                              ztype_;
                               aggressive = false }
                           , id
                           , vdesc
@@ -1438,3 +1384,66 @@ module Map = TypedtreeMap.MakeMap(MapArg)
 let resolve str =
   if !Leopardfeatures.overload then Map.map_structure str
   else str
+
+(*
+module Klabel : sig
+
+  val is_klabel : Asttypes.arg_label -> [> `Normal | `Optional ] option
+
+  val extract :
+    Env.t
+    -> Types.type_expr
+    -> (Asttypes.arg_label * Types.type_expr) list * Types.type_expr
+
+  val extract_aggressively :
+    Env.t
+    ->  Types.type_expr
+    -> ((Asttypes.arg_label * Types.type_expr) list * Types.type_expr) list
+
+end = struct
+  (** Constraint labels *)
+
+  open Types
+
+  (* Constraint labels must start with '_' *)
+  let is_klabel = function
+    | Labelled s when s.[0] = '_' -> Some `Normal
+    | Optional s when s.[0] = '_' -> Some `Optional
+    | _ -> None
+
+  (* Constraint labels must precede the other arguments *)
+  let rec extract env ty =
+    let ty = Ctype.expand_head env ty in
+    match repr_desc ty with
+    | Tarrow(l, ty1, ty2, _) when is_klabel l <> None ->
+        let cs, ty = extract env ty2 in
+        (l,ty1)::cs, ty
+  (*
+    | Tarrow(l, ty1, ty2, x) ->
+        let cs, ty = extract env ty2 in
+        cs, { (Ctype.newty & Tarrow (l, ty1, ty, x)) with level = ty.level }
+  *)
+    | _ -> [], ty
+
+  (* In the agressive mode, any argument with gen_vars can be constraint arguments *)
+  let rec extract_aggressively env ty =
+    let ty = Ctype.expand_head env ty in
+    match repr_desc ty with
+    | Tarrow(l, ty1, ty2, _) when gen_vars ty1 <> [] ->
+        ([], ty)
+        :: map
+          (fun (cs, ty) -> (l,ty1)::cs, ty)
+          (extract_aggressively env ty2)
+    | _ -> [[], ty]
+
+  (*
+  let rec get_args ty =
+    let ty = Ctype.expand_head env ty in
+    match repr_desc ty with
+    | Tarrow(l, ty1, ty2, _) -> (l,ty1)::get_args ty2
+    | _ -> []
+  *)
+
+end
+*)
+
