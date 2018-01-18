@@ -5,7 +5,7 @@ open Leopardtyping
 open List
 open Asttypes
 
-let debug_resolve = Sys.env_exist "LEOPARD_IMPLICITS_DEBUG_RESOLVE"
+let debug_resolve = Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 
 (*
 module Klabel : sig
@@ -75,11 +75,16 @@ let get_imp_opens () = flatten !imp_opens
 
 module Candidate : sig
 
-  type t = {
-    path : Path.t;
-    expr : Typedtree.expression;
-    type_ : Types.type_expr;
-    aggressive : bool;
+  type t = 
+    { path : Path.t
+    (** The source path. *)
+    ; expr : Typedtree.expression
+    (** The actual expression used to build the instance.
+        The type may be incorrect *)
+    ; type_ : Types.type_expr
+    (** The polymorphic type of the candidate *)
+    ; aggressive : bool
+    (** Aggressively extract sub-constraints or not *)
   }
 
   val format : t Format.fmt
