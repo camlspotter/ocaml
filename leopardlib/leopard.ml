@@ -82,3 +82,5 @@ module Implicits = struct:
   type ('a, 'b) filter
 
   type 'a aggressive
+
+  type open_imp

@@ -1565,9 +1565,23 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           transl_modtype_decl names env pmtd
         in
         Tstr_modtype mtd, [sg], newenv
+
+    (* ocamleopard *)
+    | Pstr_extension (({ txt = "imp"; loc }, PStr [ { pstr_desc= Pstr_open sod } ]), attrs) ->
+        let a = {txt="imp"; loc}, PStr [] in
+        (* [open %imp P] does not open [P] *)
+        let path = Typetexp.lookup_module ~load:true env sod.popen_lid.loc sod.popen_lid.txt in
+        let od = { open_path= path; open_txt= sod.popen_lid;
+                   open_override = sod.popen_override;
+                   open_loc = loc;
+                   open_attributes = a :: attrs @ sod.popen_attributes }
+        in
+        Tstr_open od, [], env
+
     | Pstr_open sod ->
         let (_path, newenv, od) = type_open ~toplevel env sod in
         Tstr_open od, [], newenv
+
     | Pstr_class cl ->
         List.iter
           (fun {pci_name} -> check_name check_type names pci_name)

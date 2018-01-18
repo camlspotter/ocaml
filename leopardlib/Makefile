@@ -11,6 +11,9 @@ leopardlib: opt
 all: leopard.cmo test.exe test2.exe test3.exe test4.exe test5.exe test6.exe \
   test07sub.exe
 
+.PHONY: allopt
+leopardlib: opt
+
 .PHONY: opt
 opt: leopard.cmx 
 
