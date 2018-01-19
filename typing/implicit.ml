@@ -1145,21 +1145,21 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
 
    Shadow check can find the derived_candidates, since they are added to `env`.
 *)
-let shadow_check env loc e =
+let shadow_check env loc e0 =
   let shadowed = ref [] in
   let module I = TypedtreeIter.MakeIterator(struct
       include TypedtreeIter.DefaultIteratorArgument
       let enter_expression e = match e.exp_desc with
         | Texp_ident (p, _, _) ->
             begin match Env.value_accessibility env p with
-            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a" Path.format p
+            | `NotFound -> raise_errorf ~loc "Shadow check: NotFound for %a in %a" Path.format p Typedtree.format_expression e0
             | `ShadowedBy _ as s -> shadowed := (p,s) :: !shadowed
             | `Accessible _ -> ()
             end
         | _ -> ()
     end)
   in
-  I.iter_expression e;
+  I.iter_expression e0;
   match !shadowed with
   | [] -> ()
   | _ ->
@@ -1173,7 +1173,7 @@ let shadow_check env loc e =
               Location.format loc
       in
       raise_errorf ~loc "@[<2>The implicit argument is resolved to@ @[%a@], but the following values are shadowed:@ @[<v>%a@]@]"
-        Typedtree.format_expression e
+        Typedtree.format_expression e0
         (Format.list "@," format_shadow) !shadowed
 
 let resolve env loc spec ty = with_snapshot & fun () ->
@@ -1378,9 +1378,13 @@ module MapArg : TypedtreeMap.MapArgument = struct
 
     (* __imp_arg__ will be used for the internal resolutions *)
     (* XXX needs a helper module *)
-    Typedtree.add_attribute
-      "leopard_mark"
-      (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+    let e =
+      Typedtree.add_attribute
+        "leopard_mark"
+        (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
+    in
+    Format.eprintf "add derived: %a@." Typedtree.format_expression e;
+    e
 
   let clean_derived_candidates e =
     let open Parsetree in
@@ -1453,7 +1457,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         
     | Texp_ident _ ->
         begin match e.exp_attributes with
-        | [{txt="imp_omitted"}, Parsetree.PStr []] ->
+        | [{txt="imp_omitted"}, Parsetree.PStr []] when gen_vars e.exp_type = [] ->
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
