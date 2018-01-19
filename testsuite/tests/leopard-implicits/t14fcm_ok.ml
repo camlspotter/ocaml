@@ -1,4 +1,3 @@
-
 (* We can mimic type classes using the first class modules,
    but it requires lot of lines of hand writing code.
 *)
