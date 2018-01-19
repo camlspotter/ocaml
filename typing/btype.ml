@@ -612,6 +612,10 @@ let check_memorized_abbrevs () =
 
 let is_optional = function Optional _ -> true | _ -> false
 
+let is_implicit = function 
+  | Labelled s -> String.length s > 0 && s.[0] = '_' 
+  | _ -> false
+
 let label_name = function
     Nolabel -> ""
   | Labelled s

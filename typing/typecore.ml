@@ -2594,6 +2594,8 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
+let implicit_omitted = ref []
+
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
   type_expect ?recarg env sexp (newvar ())
@@ -4255,13 +4257,15 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
 
 and type_application env funct sargs =
   (* funct.exp_type may be generic *)
-  (* jfuruse: omitted -> ty_fun *)
+  (* jfuruse: build a type: [omitted -> .. omitted -> ty_fun] *)
   let result_type omitted ty_fun =
     List.fold_left
       (fun ty_fun (l,ty,lv) -> newty2 lv (Tarrow(l,ty,ty_fun,Cok)))
       ty_fun omitted
   in
-  (* jfuruse: ty_fun may have label l or not *)
+  (* jfuruse: whether ty_fun may have label l or not.
+     If the return type is a tvar then it returns [true].
+  *)
   let has_label l ty_fun =
     let ls, tvar = list_labels env ty_fun in
     tvar || List.mem l ls
@@ -4333,7 +4337,7 @@ and type_application env funct sargs =
     begin
       let ls, tvar = list_labels env funct.exp_type in
       not tvar &&
-      let labels = List.filter (fun l -> not (is_optional l)) ls in
+      let labels = List.filter (fun l -> not (is_optional l) && not (is_implicit l)) ls in
       List.length labels = List.length sargs &&
       List.for_all (fun (l,_) -> l = Nolabel) sargs &&
       List.exists (fun l -> l <> Nolabel) labels &&
@@ -4360,6 +4364,7 @@ and type_application env funct sargs =
         in
         let name = label_name l
         and optional = is_optional l in
+        let implicit = is_implicit l in
         let sargs, more_sargs, arg =
           if ignore_labels && not (is_optional l) then begin
             (* In classic mode, omitted = [] *)
@@ -4415,6 +4420,21 @@ and type_application env funct sargs =
                 (Warnings.Without_principality "eliminated optional argument");
               ignored := (l,ty,lv) :: !ignored;
               Some (fun () -> option_none (instance env ty) Location.none)
+            end else if implicit then begin
+              (* an implicit argument is omitted *)
+                prerr_endline "implicit omitted";
+                let lid = Longident.Lident "imp" in
+                let id = Ident.create "imp" in
+                let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
+                          ; exp_loc= Location.none
+                          ; exp_extra= []
+                          ; exp_type= instance env ty
+                          ; exp_env= env
+                          ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
+                          }
+                in
+                implicit_omitted := (l,exp) :: !implicit_omitted;
+                Some (fun () -> exp)
             end else begin
               may_warn funct.exp_loc
                 (Warnings.Without_principality "commuted an argument");
@@ -4435,6 +4455,7 @@ and type_application env funct sargs =
             type_unknown_args args omitted ty_fun0
               (sargs @ more_sargs)
   in
+  (* jfuruse: special handling of %ignore *)
   let is_ignore funct =
     match funct.exp_desc with
       Texp_ident (_, _, {val_kind=Val_prim{Primitive.prim_name="%ignore"}}) ->
@@ -4924,6 +4945,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
   let attrs_list = List.map fst spatl in
   let is_recursive = (rec_flag = Recursive) in
   (* If recursive, first unify with an approximation of the expression *)
+  (* jfuruse: eek, this will break the implicit abstraction! *)
   if is_recursive then
     List.iter2
       (fun pat binding ->
@@ -5090,6 +5112,53 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
         })
       l spat_sexp_list
   in
+  let add_imp_abs vb = 
+    (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
+    let gen_vars ty =
+      List.filter (fun ty ->
+        ty.level = Btype.generic_level) (Ctype.free_variables ty)
+    in
+    let p_genvars = gen_vars vb.vb_pat.pat_type in
+    let abs, rest = List.partition (fun (_,e) ->
+        let e_genvars = gen_vars e.exp_type in
+        List.exists (fun e_genvar -> List.mem e_genvar p_genvars) e_genvars) !implicit_omitted
+    in
+    implicit_omitted := rest;
+    if abs <> [] then begin
+      prerr_endline "WOW I FOUND EXTRA ABS!";
+      let pats = List.map (fun (l,e) ->
+          match e.exp_desc with
+          | Texp_ident (Path.Pident id, _, _) ->
+              l,
+              id,
+              { pat_desc= Tpat_var (id, {loc=Location.none; txt= id.Ident.name})
+              ; pat_loc= Location.none
+              ; pat_extra= []
+              ; pat_type = e.exp_type
+              ; pat_env= e.exp_env (* right? *)
+              ; pat_attributes= []
+              }
+          | _ -> assert false) abs
+      in
+      let e = List.fold_left (fun e (l,id,p) ->
+          { exp_desc= Texp_function { arg_label= l
+                                    ; param= id
+                                    ; cases= [ { c_lhs= p
+                                               ; c_guard= None
+                                               ; c_rhs= e} ]
+                                    ; partial= Total 
+                                    }
+          ; exp_loc= Location.none
+          ; exp_extra= []
+          ; exp_type= e.exp_type (* incorrect *)
+          ; exp_env= e.exp_env
+          ; exp_attributes= []
+          }) vb.vb_expr pats 
+      in
+      { vb with vb_expr= e }
+    end else vb
+  in
+  let l = List.map add_imp_abs l in
   if is_recursive then
     List.iter 
       (fun {vb_pat=pat} -> match pat.pat_desc with

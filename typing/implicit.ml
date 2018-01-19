@@ -1450,6 +1450,20 @@ module MapArg : TypedtreeMap.MapArgument = struct
             (* Build  fun ?d:(d as __imp_arg__) -> *)
             add_derived_candidate e case p type_ unconv
         end
+        
+    | Texp_ident _ ->
+        begin match e.exp_attributes with
+        | [{txt="imp_omitted"}, Parsetree.PStr []] ->
+            let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
+            begin match specopt with
+            | None -> assert false (* wrong type! *)
+            | Some spec ->
+                let e' = conv (resolve e.exp_env e.exp_loc spec ty) in
+                e'
+            end
+        | _ -> e
+        end
+        
     | _ -> e
 
   let leave_expression e =

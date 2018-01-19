@@ -168,6 +168,7 @@ val forget_abbrev:
 (**** Utilities for labels ****)
 
 val is_optional : arg_label -> bool
+val is_implicit : arg_label -> bool
 val label_name : arg_label -> label
 
 (* Returns the label name with first character '?' or '~' as appropriate. *)
