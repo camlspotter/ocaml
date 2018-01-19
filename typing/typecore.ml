@@ -2595,6 +2595,7 @@ let unify_exp env exp expected_ty =
   unify_exp_types loc env exp.exp_type expected_ty
 
 let implicit_omitted = ref []
+let imp_counter = ref 0
 
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
@@ -4422,19 +4423,21 @@ and type_application env funct sargs =
               Some (fun () -> option_none (instance env ty) Location.none)
             end else if implicit then begin
               (* an implicit argument is omitted *)
-                prerr_endline "implicit omitted";
-                let lid = Longident.Lident "imp" in
-                let id = Ident.create "imp" in
-                let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
-                          ; exp_loc= Location.none
-                          ; exp_extra= []
-                          ; exp_type= instance env ty
-                          ; exp_env= env
-                          ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
-                          }
-                in
-                implicit_omitted := (l,exp) :: !implicit_omitted;
-                Some (fun () -> exp)
+              let s = Printf.sprintf "imp%d" !imp_counter in
+              Format.eprintf "implicit omitted: %s@." s;
+              incr imp_counter;
+              let lid = Longident.Lident s in
+              let id = Ident.create s in
+              let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
+                        ; exp_loc= Location.none
+                        ; exp_extra= []
+                        ; exp_type= instance env ty
+                        ; exp_env= env
+                        ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
+                        }
+              in
+              implicit_omitted := (l,exp) :: !implicit_omitted;
+              Some (fun () -> exp)
             end else begin
               may_warn funct.exp_loc
                 (Warnings.Without_principality "commuted an argument");
@@ -5158,6 +5161,9 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       { vb with vb_expr= e }
     end else vb
   in
+  (* We must stop special typing at the second typing *)
+  (* We must update new_env! *)
+  (* We must replace internal recursive calls with apps! *)
   let l = List.map add_imp_abs l in
   if is_recursive then
     List.iter 

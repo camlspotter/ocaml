@@ -1458,6 +1458,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
     | Texp_ident _ ->
         begin match e.exp_attributes with
         | [{txt="imp_omitted"}, Parsetree.PStr []] when gen_vars e.exp_type = [] ->
+            prerr_endline "FOUND @imp_omitted";
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
