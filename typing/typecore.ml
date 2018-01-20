@@ -3747,7 +3747,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
       }
 
   (* ocamleopard *)
-  | Pexp_extension ({ txt = "imp"; loc }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open (ovf, lid, e) }, attrs) } ] ) ->
+  | Pexp_extension ({ txt = "imp"; loc }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open (ovf, lid, e) }, attrs) } ] ) when !Leopardfeatures.implicits ->
       (* [open %imp P] does not open [P] *)
       let a = {txt="imp"; loc}, PStr [] in
       let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
@@ -4338,7 +4338,7 @@ and type_application env funct sargs =
     begin
       let ls, tvar = list_labels env funct.exp_type in
       not tvar &&
-      let labels = List.filter (fun l -> not (is_optional l) && not (is_implicit l)) ls in
+      let labels = List.filter (fun l -> not (is_optional l) && (!Leopardfeatures.implicits && not (is_implicit l))) ls in
       List.length labels = List.length sargs &&
       List.for_all (fun (l,_) -> l = Nolabel) sargs &&
       List.exists (fun l -> l <> Nolabel) labels &&
@@ -4365,7 +4365,7 @@ and type_application env funct sargs =
         in
         let name = label_name l
         and optional = is_optional l in
-        let implicit = is_implicit l in
+        let implicit = is_implicit l && !Leopardfeatures.implicits in
         let sargs, more_sargs, arg =
           if ignore_labels && not (is_optional l) then begin
             (* In classic mode, omitted = [] *)
@@ -5161,10 +5161,10 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       { vb with vb_expr= e }
     end else vb
   in
-  (* We must stop special typing at the second typing *)
+  (* done We must stop special typing at the second typing *)
   (* We must update new_env! *)
   (* We must replace internal recursive calls with apps! *)
-  let l = List.map add_imp_abs l in
+  let l = if !Leopardfeatures.implicits then List.map add_imp_abs l else l  in
   if is_recursive then
     List.iter 
       (fun {vb_pat=pat} -> match pat.pat_desc with

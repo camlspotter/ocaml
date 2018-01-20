@@ -3,3 +3,5 @@ val without_leopard : (unit -> 'a) -> 'a
 
 val curried_constr : bool ref
 val overload : bool ref
+val implicits : bool ref
+    
