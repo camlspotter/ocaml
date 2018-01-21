@@ -5128,7 +5128,6 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
     in
     implicit_omitted := rest;
     if abs <> [] then begin
-      prerr_endline "WOW I FOUND EXTRA ABS!";
       let pats = List.map (fun (l,e) ->
           match e.exp_desc with
           | Texp_ident (Path.Pident id, _, _) ->
@@ -5153,18 +5152,64 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                                     }
           ; exp_loc= Location.none
           ; exp_extra= []
-          ; exp_type= e.exp_type (* incorrect *)
+          ; exp_type= newgenty (Tarrow (l,p.pat_type,e.exp_type,Cok))
           ; exp_env= e.exp_env
           ; exp_attributes= []
           }) vb.vb_expr pats 
       in
-      { vb with vb_expr= e }
-    end else vb
+      (* XXX re-typing of vb_pat and vb_expr *)
+      (* XXX not good. it creates new pat vars *)
+      let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
+      let pat =
+        begin_def ();
+        let e_type = instance e.exp_env e.exp_type in
+        match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
+        | [pat],_,_,_ -> pat
+        | _ -> assert false
+      in
+      iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat;
+      Format.eprintf "VBfix %a : %a = %a@."
+        Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
+        Printtyp.type_scheme pat.pat_type
+        Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
+      Some { vb with vb_expr= e; vb_pat= pat }
+    end else None
   in
   (* done We must stop special typing at the second typing *)
   (* We must update new_env! *)
   (* We must replace internal recursive calls with apps! *)
-  let l = if !Leopardfeatures.implicits then List.map add_imp_abs l else l  in
+  (* What about unpacks? *)
+  let l, new_env =
+    if !Leopardfeatures.implicits then
+      let l = List.map (fun vb -> match add_imp_abs vb with
+          | None -> vb
+          | Some vb -> vb
+        ) l
+      in
+(*
+      let _new_env =
+        let pats = ref [] in
+        let rec iter pat =
+          begin match pat.pat_desc with
+          | Tpat_var (id, s) -> pats := (id, s, pat.pat_type) :: !pats
+          | Tpat_alias (_, id, s) -> pats := (id, s, pat.pat_type) :: !pats
+          | _ -> ()
+          end;
+          Typedtree.iter_pattern_desc iter pat.pat_desc
+        in
+        List.iter (fun vb -> iter vb.vb_pat) l;
+        List.fold_left (fun env (id, s, ty) ->
+            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
+            Env.add_value id { val_type = ty
+                             ; val_kind = Val_reg
+                             ; val_loc = s.loc
+                             ; val_attributes = [] (* XXX must be got from new_env *)
+                             } env) env !pats
+      in
+*)
+      (l, new_env)
+    else (l, new_env)
+  in
   if is_recursive then
     List.iter 
       (fun {vb_pat=pat} -> match pat.pat_desc with
