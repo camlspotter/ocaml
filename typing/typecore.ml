@@ -5115,20 +5115,29 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
         })
       l spat_sexp_list
   in
-  let add_imp_abs vb = 
+  let add_imp_abss vb = 
     (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
     let gen_vars ty =
       List.filter (fun ty ->
-        ty.level = Btype.generic_level) (Ctype.free_variables ty)
+          ty.level = Btype.generic_level) (Ctype.free_variables ty)
     in
     let p_genvars = gen_vars vb.vb_pat.pat_type in
-    let abs, rest = List.partition (fun (_,e) ->
+    let abss, rest = List.partition (fun (_,e) ->
         let e_genvars = gen_vars e.exp_type in
         List.exists (fun e_genvar -> List.mem e_genvar p_genvars) e_genvars) !implicit_omitted
     in
+    (* Note that the types of abss are not fully generalized.  Their type vars are generalized,
+       but the other nodes may not.  For example,
+       
+       {id=1218;level=1082;desc= Tconstr(add,[{id=1210;level=100000000;desc=Tvar None}],[])}
+
+       Currently we force the generalization.
+     *)
+    List.iter (fun (_,e) -> generalize e.exp_type) abss; (* I hope this has no strange side effect *)
+    
     implicit_omitted := rest;
-    if abs <> [] then begin
-      let pats = List.map (fun (l,e) ->
+    if abss <> [] then begin
+      let args = List.map (fun (l,e) ->
           match e.exp_desc with
           | Texp_ident (Path.Pident id, _, _) ->
               l,
@@ -5140,8 +5149,14 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
               ; pat_env= e.exp_env (* right? *)
               ; pat_attributes= []
               }
-          | _ -> assert false) abs
+          | _ -> assert false) abss
       in
+
+(*
+List.iter (fun (l,_id,p) ->
+    Format.eprintf "+ABS P: %a@." Printtyp.raw_type_expr p.pat_type) args;
+ *)
+
       let e = List.fold_left (fun e (l,id,p) ->
           { exp_desc= Texp_function { arg_label= l
                                     ; param= id
@@ -5155,39 +5170,50 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
           ; exp_type= newgenty (Tarrow (l,p.pat_type,e.exp_type,Cok))
           ; exp_env= e.exp_env
           ; exp_attributes= []
-          }) vb.vb_expr pats 
+          }) vb.vb_expr args
       in
       (* XXX re-typing of vb_pat and vb_expr *)
       (* XXX not good. it creates new pat vars *)
-      let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
+(*
+        let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
+      begin_def ();
       let pat =
-        begin_def ();
         let e_type = instance e.exp_env e.exp_type in
         match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
         | [pat],_,_,_ -> pat
         | _ -> assert false
       in
+      end_def ();
       iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat;
       Format.eprintf "VBfix %a : %a = %a@."
         Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
         Printtyp.type_scheme pat.pat_type
         Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
+*)
+      (* only simple patterns so far *)
+      let pat = match vb.vb_pat.pat_desc with
+        | Tpat_var (id, sloc) -> 
+           let pat = 
+             List.fold_left (fun pat (l,_id,p) ->
+                 { pat with pat_type= newgenty (Tarrow (l,p.pat_type, pat.pat_type, Cok)) })
+               vb.vb_pat args
+           in
+           pat
+        | _ -> assert false
+      in
       Some { vb with vb_expr= e; vb_pat= pat }
     end else None
   in
-  (* done We must stop special typing at the second typing *)
-  (* We must update new_env! *)
-  (* We must replace internal recursive calls with apps! *)
-  (* What about unpacks? *)
+  (* XXX We must replace internal recursive calls with apps! *)
+  (* XXX What about unpacks? *)
   let l, new_env =
     if !Leopardfeatures.implicits then
-      let l = List.map (fun vb -> match add_imp_abs vb with
+      let l = List.map (fun vb -> match add_imp_abss vb with
           | None -> vb
           | Some vb -> vb
         ) l
       in
-(*
-      let _new_env =
+      let new_env =
         let pats = ref [] in
         let rec iter pat =
           begin match pat.pat_desc with
@@ -5199,14 +5225,15 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
         in
         List.iter (fun vb -> iter vb.vb_pat) l;
         List.fold_left (fun env (id, s, ty) ->
+(*
             Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
+ *)
             Env.add_value id { val_type = ty
                              ; val_kind = Val_reg
                              ; val_loc = s.loc
                              ; val_attributes = [] (* XXX must be got from new_env *)
                              } env) env !pats
       in
-*)
       (l, new_env)
     else (l, new_env)
   in

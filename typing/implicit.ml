@@ -1498,5 +1498,5 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardfeatures.overload then Map.map_structure str
+  if !Leopardfeatures.implicits then Map.map_structure str
   else str

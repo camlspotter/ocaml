@@ -13,8 +13,9 @@ let add ~_d x y = add ~d:_d x y
 let () = assert (add 1 2 = 3)
 
 let double x = add x x
-(*
 
+(*
 let () = assert (double 2 = 4)
 *)
+
     
