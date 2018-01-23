@@ -5137,7 +5137,10 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
     
     implicit_omitted := rest;
     if abss <> [] then begin
+
       let args = List.map (fun (l,e) ->
+Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
+
           match e.exp_desc with
           | Texp_ident (Path.Pident id, _, _) ->
               l,
@@ -5151,11 +5154,6 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
               }
           | _ -> assert false) abss
       in
-
-(*
-List.iter (fun (l,_id,p) ->
-    Format.eprintf "+ABS P: %a@." Printtyp.raw_type_expr p.pat_type) args;
- *)
 
       let e = List.fold_left (fun e (l,id,p) ->
           { exp_desc= Texp_function { arg_label= l
@@ -5172,25 +5170,59 @@ List.iter (fun (l,_id,p) ->
           ; exp_attributes= []
           }) vb.vb_expr args
       in
-      (* XXX re-typing of vb_pat and vb_expr *)
-      (* XXX not good. it creates new pat vars *)
-(*
+
+(* XXX Damn, e's type has non-generalized nodes! *)
+Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
+
+      (* re-typing of vb_pat *)
+      let pat = 
         let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
-      begin_def ();
-      let pat =
-        let e_type = instance e.exp_env e.exp_type in
-        match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
-        | [pat],_,_,_ -> pat
-        | _ -> assert false
+        begin_def ();
+        let pat =
+          let e_type = e.exp_type in
+          match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
+          | [pat],_,_,_ -> pat
+          | _ -> assert false
+        in
+        end_def ();
+        iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat;
+        pat
       in
-      end_def ();
-      iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat;
-      Format.eprintf "VBfix %a : %a = %a@."
+
+      (* We cannot use the pat itself, since the idents have different ids *)
+      let original_pat_vars = 
+        let vars = ref [] in
+        let rec extract_pats p = 
+          begin match p.pat_desc with
+          | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) -> vars := (id.Ident.name, p.pat_desc)::!vars
+          | _ -> ()
+          end;
+          Typedtree.iter_pattern_desc extract_pats p.pat_desc
+        in
+        extract_pats vb.vb_pat;
+        !vars
+      in
+      
+      (* We visit the new pat and fix the ids *)
+      let pat = 
+        let rec fix_ids p = 
+          let desc = 
+            match Typedtree.map_pattern_desc fix_ids p.pat_desc with
+            | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) -> List.assoc id.Ident.name original_pat_vars
+            | d -> d
+          in
+          { p with pat_desc= desc }
+        in
+        fix_ids pat
+      in
+        
+      Format.eprintf "@[<2>VBfix@ %a@ : %a@ = %a@]@."
         Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
         Printtyp.type_scheme pat.pat_type
         Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
-*)
-      (* only simple patterns so far *)
+
+(*
+  (* only simple patterns so far *)
       let pat = match vb.vb_pat.pat_desc with
         | Tpat_var (id, sloc) -> 
            let pat = 
@@ -5201,6 +5233,7 @@ List.iter (fun (l,_id,p) ->
            pat
         | _ -> assert false
       in
+ *)
       Some { vb with vb_expr= e; vb_pat= pat }
     end else None
   in
