@@ -1455,10 +1455,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
             add_derived_candidate e case p type_ unconv
         end
         
-    | Texp_ident _ ->
+    | Texp_ident (p, _, _) ->
         begin match e.exp_attributes with
         | [{txt="imp_omitted"}, Parsetree.PStr []] when gen_vars e.exp_type = [] ->
-            prerr_endline "FOUND @imp_omitted";
+            Format.eprintf "@[<2>FOUND @imp_omitted@ %a : %a@]@." Path.format p Printtyp.type_scheme e.exp_type;
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
@@ -1498,5 +1498,9 @@ end
 module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
-  if !Leopardfeatures.implicits then Map.map_structure str
-  else str
+  if !Leopardfeatures.implicits then begin
+    Format.eprintf "@[<2>RESOLVE:@ @[%a@]@]@." 
+      Pprintast.structure
+      (Untypeast.(default_mapper.structure default_mapper str));
+    Map.map_structure str
+  end else str

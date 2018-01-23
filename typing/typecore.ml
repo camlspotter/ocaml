@@ -5126,17 +5126,18 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
         let e_genvars = gen_vars e.exp_type in
         List.exists (fun e_genvar -> List.mem e_genvar p_genvars) e_genvars) !implicit_omitted
     in
-    (* Note that the types of abss are not fully generalized.  Their type vars are generalized,
-       but the other nodes may not.  For example,
-       
-       {id=1218;level=1082;desc= Tconstr(add,[{id=1210;level=100000000;desc=Tvar None}],[])}
-
-       Currently we force the generalization.
-     *)
-    List.iter (fun (_,e) -> generalize e.exp_type) abss; (* I hope this has no strange side effect *)
-    
     implicit_omitted := rest;
     if abss <> [] then begin
+
+      (* Note that the types of abss are not fully generalized.  Their type vars are generalized,
+         but the other nodes may not.  For example,
+         
+         {id=1218;level=1082; <------ this is not generalized!
+          desc= Tconstr(add,[{id=1210;level=100000000;desc=Tvar None}],[])}
+
+         Currently we force the generalization.
+       *)
+      List.iter (fun (_,e) -> generalize e.exp_type) abss; (* I hope this has no strange side effect *)
 
       let args = List.map (fun (l,e) ->
 Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
@@ -5179,13 +5180,14 @@ Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
         let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
         begin_def ();
         let pat =
-          let e_type = e.exp_type in
+          (* it is wierd to instantiate it here... even though generalized before... but it is required in the current code. *)
+          let e_type = instance env e.exp_type in
           match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
           | [pat],_,_,_ -> pat
           | _ -> assert false
         in
         end_def ();
-        iter_pattern (fun pat -> generalize_expansive env pat.pat_type) pat;
+        iter_pattern (fun pat -> generalize pat.pat_type) pat;
         pat
       in
 
@@ -5216,24 +5218,12 @@ Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
         fix_ids pat
       in
         
-      Format.eprintf "@[<2>VBfix@ %a@ : %a@ = %a@]@."
+      Format.eprintf "@[<2>VBfix@ %a@ : %a@ / %a @ = %a@]@."
         Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
         Printtyp.type_scheme pat.pat_type
+        Printtyp.raw_type_expr pat.pat_type
         Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
 
-(*
-  (* only simple patterns so far *)
-      let pat = match vb.vb_pat.pat_desc with
-        | Tpat_var (id, sloc) -> 
-           let pat = 
-             List.fold_left (fun pat (l,_id,p) ->
-                 { pat with pat_type= newgenty (Tarrow (l,p.pat_type, pat.pat_type, Cok)) })
-               vb.vb_pat args
-           in
-           pat
-        | _ -> assert false
-      in
- *)
       Some { vb with vb_expr= e; vb_pat= pat }
     end else None
   in
@@ -5258,9 +5248,8 @@ Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
         in
         List.iter (fun vb -> iter vb.vb_pat) l;
         List.fold_left (fun env (id, s, ty) ->
-(*
             Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
- *)
+            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
             Env.add_value id { val_type = ty
                              ; val_kind = Val_reg
                              ; val_loc = s.loc
