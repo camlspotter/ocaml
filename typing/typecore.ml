@@ -5129,7 +5129,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
     implicit_omitted := rest;
     if abss <> [] then begin
 
-      (* Note that the types of abss are not fully generalized.  Their type vars are generalized,
+      (* Note that the types of `abss` are not fully generalized.  Their type vars are generalized,
          but the other nodes may not.  For example,
          
          {id=1218;level=1082; <------ this is not generalized!
@@ -5173,7 +5173,7 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
       in
 
 (* XXX Damn, e's type has non-generalized nodes! *)
-Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
+Format.eprintf "The type of abstraction: %a@." Printtyp.raw_type_expr e.exp_type;
 
       (* re-typing of vb_pat *)
       let pat = 
@@ -5187,6 +5187,7 @@ Format.eprintf "Fixed e type: %a@." Printtyp.raw_type_expr e.exp_type;
           | _ -> assert false
         in
         end_def ();
+        (* Since things are abstracted, it is surely non-expansive *)
         iter_pattern (fun pat -> generalize pat.pat_type) pat;
         pat
       in
