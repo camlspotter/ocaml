@@ -1309,7 +1309,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
             | [Some a], args ->
                 fix_no_args & begin match un_some a with
                   | Some a ->
-                      (* <%imp> ?l:Some a x ..   =>  Runtime.get a x .. *)
+                      (* <%imp> ?l:Some a x ..   =>  Runtime.get (a : <type of a>) x .. *)
                       { e with
                         exp_desc = Texp_apply (get_embed & Runtime.get a, args)
                       ; exp_type = e.exp_type }
