@@ -4257,6 +4257,16 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
       texp
 
 and type_application env funct sargs =
+  let ((largs, ret) as res) = type_application_ env funct sargs in
+  Format.eprintf "type_application args: @[%a@]@."
+    (Leopardutils.Format.list ",@ " (fun ppf (_,eopt) ->
+         match eopt with
+         | None -> Format.fprintf ppf "None"
+         | Some e -> Format.fprintf ppf "Some %a" Printtyp.type_scheme e.exp_type)) largs;
+  Format.eprintf "type_application ret: %a@." Printtyp.type_scheme ret;
+  res
+    
+and type_application_ env funct sargs =
   (* funct.exp_type may be generic *)
   (* jfuruse: build a type: [omitted -> .. omitted -> ty_fun] *)
   let result_type omitted ty_fun =
@@ -4422,22 +4432,24 @@ and type_application env funct sargs =
               ignored := (l,ty,lv) :: !ignored;
               Some (fun () -> option_none (instance env ty) Location.none)
             end else if implicit then begin
-              (* an implicit argument is omitted *)
-              let s = Printf.sprintf "imp%d" !imp_counter in
-              Format.eprintf "implicit omitted: %s@." s;
-              incr imp_counter;
-              let lid = Longident.Lident s in
-              let id = Ident.create s in
-              let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
-                        ; exp_loc= Location.none
-                        ; exp_extra= []
-                        ; exp_type= instance env ty
-                        ; exp_env= env
-                        ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
-                        }
-              in
-              implicit_omitted := (l,exp) :: !implicit_omitted;
-              Some (fun () -> exp)
+              Some (fun () ->
+                  (* an implicit argument is omitted *)
+                  let s = Printf.sprintf "imp%d" !imp_counter in
+                  Format.eprintf "implicit omitted: %s@." s;
+                  incr imp_counter;
+                  let lid = Longident.Lident s in
+                  let id = Ident.create s in
+                  let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
+                            ; exp_loc= Location.none
+                            ; exp_extra= []
+                            ; exp_type= instance env ty
+                            ; exp_env= env
+                            ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
+                            }
+                  in
+                  implicit_omitted := (l,exp) :: !implicit_omitted;
+                  unify_exp env exp ty0;
+                  exp)
             end else begin
               may_warn funct.exp_loc
                 (Warnings.Without_principality "commuted an argument");
