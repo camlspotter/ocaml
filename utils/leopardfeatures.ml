@@ -10,7 +10,7 @@ let enable_leopard () =
 let disable_leopard () =
   curried_constr := false;
   overload := false;
-  implicits := true
+  implicits := false
     
 let without_leopard f =
   disable_leopard ();
