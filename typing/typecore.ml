@@ -4257,16 +4257,6 @@ and type_argument ?recarg env sarg ty_expected' ty_expected =
       texp
 
 and type_application env funct sargs =
-  let ((largs, ret) as res) = type_application_ env funct sargs in
-  Format.eprintf "type_application args: @[%a@]@."
-    (Leopardutils.Format.list ",@ " (fun ppf (_,eopt) ->
-         match eopt with
-         | None -> Format.fprintf ppf "None"
-         | Some e -> Format.fprintf ppf "Some %a" Printtyp.type_scheme e.exp_type)) largs;
-  Format.eprintf "type_application ret: %a@." Printtyp.type_scheme ret;
-  res
-    
-and type_application_ env funct sargs =
   (* funct.exp_type may be generic *)
   (* jfuruse: build a type: [omitted -> .. omitted -> ty_fun] *)
   let result_type omitted ty_fun =
@@ -5243,34 +5233,39 @@ Format.eprintf "The type of abstraction: %a@." Printtyp.raw_type_expr e.exp_type
   (* XXX We must replace internal recursive calls with apps! *)
   (* XXX What about unpacks? *)
   let l, new_env =
-    if !Leopardfeatures.implicits then
-      let l = List.map (fun vb -> match add_imp_abss vb with
-          | None -> vb
-          | Some vb -> vb
-        ) l
-      in
-      let new_env =
-        let pats = ref [] in
-        let rec iter pat =
-          begin match pat.pat_desc with
-          | Tpat_var (id, s) -> pats := (id, s, pat.pat_type) :: !pats
-          | Tpat_alias (_, id, s) -> pats := (id, s, pat.pat_type) :: !pats
-          | _ -> ()
-          end;
-          Typedtree.iter_pattern_desc iter pat.pat_desc
+    if not !Leopardfeatures.implicits then (l, new_env)
+    else begin
+      let l' = List.map add_imp_abss l in
+      if List.for_all (function None -> true | _ -> false) l' then (l, new_env)
+      else begin
+        let l = List.map2 (fun vbo vb -> 
+            match vbo with
+            | Some vb -> vb
+            | None -> vb) l' l 
         in
-        List.iter (fun vb -> iter vb.vb_pat) l;
-        List.fold_left (fun env (id, s, ty) ->
-            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
-            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
-            Env.add_value id { val_type = ty
-                             ; val_kind = Val_reg
-                             ; val_loc = s.loc
-                             ; val_attributes = [] (* XXX must be got from new_env *)
-                             } env) env !pats
-      in
-      (l, new_env)
-    else (l, new_env)
+        let new_env =
+          let pats = ref [] in
+          let rec iter pat =
+            begin match pat.pat_desc with
+            | Tpat_var (id, s) -> pats := (id, s, pat.pat_type) :: !pats
+            | Tpat_alias (_, id, s) -> pats := (id, s, pat.pat_type) :: !pats
+            | _ -> ()
+            end;
+            Typedtree.iter_pattern_desc iter pat.pat_desc
+          in
+          List.iter (fun vb -> iter vb.vb_pat) l;
+          List.fold_left (fun env (id, s, ty) ->
+              Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
+              Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
+              Env.add_value id { val_type = ty
+                               ; val_kind = Val_reg
+                               ; val_loc = s.loc
+                               ; val_attributes = [] (* XXX must be got from new_env *)
+                               } env) env !pats
+        in
+        (l, new_env)
+      end
+    end
   in
   if is_recursive then
     List.iter 
