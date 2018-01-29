@@ -1309,7 +1309,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
             | [Some a], args ->
                 fix_no_args & begin match un_some a with
                   | Some a ->
-                      (* <%imp> ?l:Some a x ..   =>  Runtime.get (a : <type of a>) x .. *)
+                      (* <%imp> ?l:(Some a) x ..   
+                         => Leopard.Implicit.get (a : (...,...) Leopard.Implicit.t) x .. *)
                       { e with
                         exp_desc = Texp_apply (get_embed & Runtime.get a, args)
                       ; exp_type = e.exp_type }
@@ -1478,6 +1479,44 @@ module MapArg : TypedtreeMap.MapArgument = struct
     { e with exp_extra = extra }
 
   let enter_structure_item si = match si.str_desc with
+    | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
+        push_imp_opens [od.open_path];
+        (* removal is not at leaving [open] but at the end of structure *)
+        si
+    | Tstr_primitive ({ val_prim = [ "%imp" ] } as val_) ->
+        (* val %imp add : ?_d:'a add -> 'a -> 'a -> 'a
+           =>
+           let add : ?_d:'a add -> 'a -> 'a -> 'a = Leopard.Implicits.imp
+        *)
+        let core_type = val_.val_desc in
+(*
+        let theLabel = match core_type.ctyp_desc with
+          | Ttyp_arrow (arg_label, _, _) -> arg_label
+          | _ -> assert false
+        in
+*)
+        let make_def env loc ty =
+          Typecore.type_expect env
+            (let open Ast_helper in
+             let open Exp in
+             with_default_loc loc
+             @@ fun () ->
+             ident {txt=Longident.(Ldot (Ldot (Lident "Leopard", "Implicits"), "imp")); loc})
+            ty
+        in    
+        let vb = { vb_pat= { pat_desc= Tpat_var (val_.val_id, val_.val_name)
+                           ; pat_loc= val_.val_name.loc
+                           ; pat_extra= [ (Tpat_constraint core_type, val_.val_name.loc, []) ]
+                           ; pat_type= val_.val_val.Types.val_type
+                           ; pat_env= si.str_env
+                           ; pat_attributes= [] }
+                 ; vb_expr = make_def si.str_env si.str_loc val_.val_val.Types.val_type
+                 ; vb_attributes = []
+                 ; vb_loc = val_.val_loc
+                 }
+        in
+        { si with str_desc= Tstr_value (Nonrecursive, [vb]) }
+
     | Tstr_open od when List.exists (fun ({txt},_) -> txt = "imp") od.open_attributes -> 
         push_imp_opens [od.open_path];
         (* removal is not at leaving [open] but at the end of structure *)
