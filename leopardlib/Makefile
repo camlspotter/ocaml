@@ -4,9 +4,6 @@ OCAMLC= $(OCAMLRUN) ../ocamlc $(OPTIONS)
 OCAMLOPT= $(OCAMLRUN) ../ocamlopt $(OPTIONS)
 OCAMLDEP= $(OCAMLRUN) ../tools/ocamldep
 
-.PHONY: allopt
-leopardlib: opt
-
 .PHONY: all
 all: leopard.cmo test.exe test2.exe test3.exe test4.exe test5.exe test6.exe \
   test07sub.exe
