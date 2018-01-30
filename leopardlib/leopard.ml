@@ -58,7 +58,7 @@ module Implicits = struct:
         
   external get : ('a, 'spec) t -> 'a = "%identity"
   
-  let imp ?d = from_Some d
+  let imp ?_d = from_Some _d
   
   external embed : 'a -> ('a, 'spec) t = "%identity"
 
