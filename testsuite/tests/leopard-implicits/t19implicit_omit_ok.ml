@@ -18,15 +18,11 @@ let add' x y = add x y
 
 let add'' = add
   
-(*
-  let () = assert (add' 1 2 = 3)
+let () = assert (add' 1 2 = 3)
 
 let double x = add x x
-*)
-  
-(*
+
 let () = assert (double 2 = 4)
-*)
   
 
 

@@ -2594,6 +2594,7 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
+let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 let implicit_omitted = ref []
 let imp_counter = ref 0
 
@@ -5142,7 +5143,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       List.iter (fun (_,e) -> generalize e.exp_type) abss; (* I hope this has no strange side effect *)
 
       let args = List.map (fun (l,e) ->
-Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
+          if debug_resolve then Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
 
           match e.exp_desc with
           | Texp_ident (Path.Pident id, _, _) ->
@@ -5180,9 +5181,10 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
           newgenty (Tarrow (l,p.pat_type,t,Cok))) vb.vb_pat.pat_type args
       in
 
-      Format.eprintf "The type of entire pat: %a@.  %a@."
-        Printtyp.type_scheme fixed_pat_type
-        Printtyp.raw_type_expr fixed_pat_type;
+      if debug_resolve then
+        Format.eprintf "The type of entire pat: %a@.  %a@."
+          Printtyp.type_scheme fixed_pat_type
+          Printtyp.raw_type_expr fixed_pat_type;
 
       (* re-typing of vb_pat *)
       let pat = 
@@ -5201,9 +5203,10 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
         pat
       in
 
-      Format.eprintf "The type of pat: %a@.  %a@."
-        Printtyp.type_scheme pat.pat_type
-        Printtyp.raw_type_expr pat.pat_type;
+      if debug_resolve then
+        Format.eprintf "The type of pat: %a@.  %a@."
+          Printtyp.type_scheme pat.pat_type
+          Printtyp.raw_type_expr pat.pat_type;
       
       (* We cannot use the pat itself, since the idents have different ids *)
       let original_pat_vars = 
@@ -5231,12 +5234,13 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
         in
         fix_ids pat
       in
-        
-      Format.eprintf "@[<2>VBfix@ %a@ : %a@ / %a @ = %a@]@."
-        Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
-        Printtyp.type_scheme pat.pat_type
-        Printtyp.raw_type_expr pat.pat_type
-        Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
+
+      if debug_resolve then
+        Format.eprintf "@[<2>VBfix@ %a@ : %a@ / %a @ = %a@]@."
+          Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
+          Printtyp.type_scheme pat.pat_type
+          Printtyp.raw_type_expr pat.pat_type
+          Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
 
       Some { vb with vb_expr= e; vb_pat= pat }
     end else None
@@ -5266,8 +5270,10 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
           in
           List.iter (fun vb -> iter vb.vb_pat) l;
           List.fold_left (fun env (id, s, ty) ->
-              Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
-              Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
+              if debug_resolve then begin
+                Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
+                Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
+              end;
               Env.add_value id { val_type = ty
                                ; val_kind = Val_reg
                                ; val_loc = s.loc
