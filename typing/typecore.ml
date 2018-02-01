@@ -5174,8 +5174,15 @@ Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
           }) vb.vb_expr args
       in
 
-(* XXX Damn, e's type has non-generalized nodes! *)
-Format.eprintf "The type of abstraction: %a@." Printtyp.raw_type_expr e.exp_type;
+      (* We CANNOT use the type of e since it may have ungeneralized node!
+        We use the pat type instead. *)
+      let fixed_pat_type = List.fold_left (fun t (l,_,p) ->
+          newgenty (Tarrow (l,p.pat_type,t,Cok))) vb.vb_pat.pat_type args
+      in
+
+      Format.eprintf "The type of entire pat: %a@.  %a@."
+        Printtyp.type_scheme fixed_pat_type
+        Printtyp.raw_type_expr fixed_pat_type;
 
       (* re-typing of vb_pat *)
       let pat = 
@@ -5183,8 +5190,8 @@ Format.eprintf "The type of abstraction: %a@." Printtyp.raw_type_expr e.exp_type
         begin_def ();
         let pat =
           (* it is wierd to instantiate it here... even though generalized before... but it is required in the current code. *)
-          let e_type = instance env e.exp_type in
-          match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [e_type] allow with
+          let p_type = instance env fixed_pat_type in
+          match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [p_type] allow with
           | [pat],_,_,_ -> pat
           | _ -> assert false
         in
@@ -5194,6 +5201,10 @@ Format.eprintf "The type of abstraction: %a@." Printtyp.raw_type_expr e.exp_type
         pat
       in
 
+      Format.eprintf "The type of pat: %a@.  %a@."
+        Printtyp.type_scheme pat.pat_type
+        Printtyp.raw_type_expr pat.pat_type;
+      
       (* We cannot use the pat itself, since the idents have different ids *)
       let original_pat_vars = 
         let vars = ref [] in

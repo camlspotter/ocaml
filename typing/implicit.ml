@@ -1538,8 +1538,9 @@ module Map = TypedtreeMap.MakeMap(MapArg)
 
 let resolve str =
   if !Leopardfeatures.implicits then begin
-    Format.eprintf "@[<2>RESOLVE:@ @[%a@]@]@." 
-      Pprintast.structure
-      (Untypeast.(default_mapper.structure default_mapper str));
+    if debug_resolve then
+      Format.eprintf "@[<2>RESOLVE:@ @[%a@]@]@." 
+        Pprintast.structure
+        (Untypeast.(default_mapper.structure default_mapper str));
     Map.map_structure str
   end else str
