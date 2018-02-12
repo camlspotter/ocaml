@@ -2594,8 +2594,8 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
-let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
-let implicit_omitted = ref []
+let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS_CORE"
+let implicit_omitted : (Asttypes.arg_label * Typedtree.expression) list ref = ref []
 let imp_counter = ref 0
 
 let rec type_exp ?recarg env sexp =
@@ -5119,169 +5119,8 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       l spat_sexp_list
   in
   let (l, new_env) = 
-    if not !Leopardfeatures.implicits then (l, new_env)
-    else
-      let add_imp_abss vb = 
-        (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
-        let gen_vars ty =
-          List.filter (fun ty ->
-              ty.level = Btype.generic_level) (Ctype.free_variables ty)
-        in
-        let p_genvars = gen_vars vb.vb_pat.pat_type in
-        let abss, rest = List.partition (fun (_,e) ->
-            let e_genvars = gen_vars e.exp_type in
-            List.exists (fun e_genvar -> List.mem e_genvar p_genvars) e_genvars) !implicit_omitted
-        in
-        implicit_omitted := rest;
-        if abss <> [] then begin
-
-          (* Note that the types of `abss` are not fully generalized.  Their type vars are generalized,
-             but the other nodes may not.  For example,
-
-             {id=1218;level=1082; <------ this is not generalized!
-              desc= Tconstr(add,[{id=1210;level=100000000;desc=Tvar None}],[])}
-
-             Currently we force the generalization.
-          *)
-          List.iter (fun (_,e) -> generalize e.exp_type) abss; (* I hope this has no strange side effect *)
-
-          let args = List.map (fun (l,e) ->
-              if debug_resolve then Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
-
-              match e.exp_desc with
-              | Texp_ident (Path.Pident id, _, _) ->
-                  l,
-                  id,
-                  { pat_desc= Tpat_var (id, {loc=Location.none; txt= id.Ident.name})
-                  ; pat_loc= Location.none
-                  ; pat_extra= []
-                  ; pat_type = e.exp_type
-                  ; pat_env= e.exp_env (* right? *)
-                  ; pat_attributes= []
-                  }
-              | _ -> assert false) abss
-          in
-
-          let e = List.fold_left (fun e (l,id,p) ->
-              { exp_desc= Texp_function { arg_label= l
-                                        ; param= id
-                                        ; cases= [ { c_lhs= p
-                                                   ; c_guard= None
-                                                   ; c_rhs= e} ]
-                                        ; partial= Total 
-                                        }
-              ; exp_loc= Location.none
-              ; exp_extra= []
-              ; exp_type= newgenty (Tarrow (l,p.pat_type,e.exp_type,Cok))
-              ; exp_env= e.exp_env
-              ; exp_attributes= []
-              }) vb.vb_expr args
-          in
-
-          (* We CANNOT use the type of e since it may have ungeneralized node!
-             We use the pat type instead. *)
-          let fixed_pat_type = List.fold_left (fun t (l,_,p) ->
-              newgenty (Tarrow (l,p.pat_type,t,Cok))) vb.vb_pat.pat_type args
-          in
-
-          if debug_resolve then
-            Format.eprintf "The type of entire pat: %a@.  %a@."
-              Printtyp.type_scheme fixed_pat_type
-              Printtyp.raw_type_expr fixed_pat_type;
-
-          (* re-typing of vb_pat *)
-          let pat = 
-            let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
-            begin_def ();
-            let pat =
-              (* it is wierd to instantiate it here... even though generalized before... but it is required in the current code. *)
-              let p_type = instance env fixed_pat_type in
-              match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [p_type] allow with
-              | [pat],_,_,_ -> pat
-              | _ -> assert false
-            in
-            end_def ();
-            (* Since things are abstracted, it is surely non-expansive *)
-            iter_pattern (fun pat -> generalize pat.pat_type) pat;
-            pat
-          in
-
-          if debug_resolve then
-            Format.eprintf "The type of pat: %a@.  %a@."
-              Printtyp.type_scheme pat.pat_type
-              Printtyp.raw_type_expr pat.pat_type;
-
-          (* We cannot use the pat itself, since the idents have different ids *)
-          let original_pat_vars = 
-            let vars = ref [] in
-            let rec extract_pats p = 
-              begin match p.pat_desc with
-              | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) -> vars := (id.Ident.name, p.pat_desc)::!vars
-              | _ -> ()
-              end;
-              Typedtree.iter_pattern_desc extract_pats p.pat_desc
-            in
-            extract_pats vb.vb_pat;
-            !vars
-          in
-
-          (* We visit the new pat and fix the ids *)
-          let pat = 
-            let rec fix_ids p = 
-              let desc = 
-                match Typedtree.map_pattern_desc fix_ids p.pat_desc with
-                | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) -> List.assoc id.Ident.name original_pat_vars
-                | d -> d
-              in
-              { p with pat_desc= desc }
-            in
-            fix_ids pat
-          in
-
-          if debug_resolve then
-            Format.eprintf "@[<2>VBfix@ %a@ : %a@ / %a @ = %a@]@."
-              Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
-              Printtyp.type_scheme pat.pat_type
-              Printtyp.raw_type_expr pat.pat_type
-              Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
-
-          Some { vb with vb_expr= e; vb_pat= pat }
-        end else None
-      in
-      (* XXX We must replace internal recursive calls with apps! *)
-      (* XXX What about unpacks? *)
-      let l' = List.map add_imp_abss l in
-      if List.for_all (function None -> true | _ -> false) l' then (l, new_env)
-      else begin
-        let l = List.map2 (fun vbo vb -> 
-            match vbo with
-            | Some vb -> vb
-            | None -> vb) l' l 
-        in
-        let new_env =
-          let pats = ref [] in
-          let rec iter pat =
-            begin match pat.pat_desc with
-            | Tpat_var (id, s) -> pats := (id, s, pat.pat_type) :: !pats
-            | Tpat_alias (_, id, s) -> pats := (id, s, pat.pat_type) :: !pats
-            | _ -> ()
-            end;
-            Typedtree.iter_pattern_desc iter pat.pat_desc
-          in
-          List.iter (fun vb -> iter vb.vb_pat) l;
-          List.fold_left (fun env (id, s, ty) ->
-              if debug_resolve then begin
-                  Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
-                  Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
-                end;
-              Env.add_value id { val_type = ty
-                               ; val_kind = Val_reg
-                               ; val_loc = s.loc
-                               ; val_attributes = [] (* XXX must be got from new_env *)
-                               } env) env !pats
-        in
-        (l, new_env)
-      end
+    if !Leopardfeatures.implicits then leopard_fix_let is_recursive env scope allow (l, new_env)
+    else (l, new_env)
   in
   if is_recursive then
     List.iter 
@@ -5291,6 +5130,299 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
          | _ -> raise(Error(pat.pat_loc, env, Illegal_letrec_pat)))
       l;
   (l, new_env, unpacks)
+
+(* ocamleopard *)
+and leopard_fix_let is_recursive env scope allow (l, new_env) =
+  let open Leopardutils in
+
+  let format_expression ppf e =
+    Pprintast.expression ppf
+    & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
+  in
+
+  (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
+  let gen_vars ty =
+    List.filter
+      (fun ty -> ty.level = Btype.generic_level)
+      (Ctype.free_variables ty)
+  in
+
+  (* type variables generalized this possibly mutual recursive let bindings *)
+  let generalized_vars =
+    List.sort_uniq (fun ty1 ty2 -> compare ty1.id ty2.id)
+    @@ List.concat_map (fun vb -> gen_vars vb.vb_pat.pat_type) l
+  in
+
+  if debug_resolve then
+    Format.(eprintf "@[<2>generalized vars: @[%a@]@]@."
+              (list ",@ " Printtyp.raw_type_expr) generalized_vars);
+
+  (* partition implicit args by generalized type variables *)
+  let partition_implicits gvars imps =
+    let gvar_ids = List.map (fun v -> v.id) gvars in
+    List.partition (fun (_,e) ->
+        List.exists (fun v -> List.mem v.id gvar_ids) (gen_vars e.exp_type)
+      ) imps
+  in
+
+  if debug_resolve then
+    Format.(eprintf "@[<2>omitted implicits: @[%a@]@]@."
+              (list ",@ " (fun ppf (_,e) ->
+                   fprintf ppf "@[(%a : %a) [@[%a@]]@]"
+                     format_expression e
+                     Printtyp.raw_type_expr e.exp_type
+                     (list ",@ " Printtyp.raw_type_expr)
+                     (gen_vars e.exp_type)
+                 ))
+              !implicit_omitted);
+
+  (* omitted implicits generalized by the let bindings. *)
+  let generalized_implicits, rest =
+    partition_implicits generalized_vars !implicit_omitted
+  in
+
+  (* Note that the types of omitted implicit args are not fully generalized.  
+     Their type vars are generalized, but the other nodes may not.  For example,
+
+             {id=1218;level=1082; <------ this is not generalized!
+              desc= Tconstr(add,[{id=1210;level=100000000;desc=Tvar None}],[])}
+
+     Currently we force the generalization.
+
+     I hope this has no strange side effect
+  *)
+  List.iter (fun (_,e) -> generalize e.exp_type) generalized_implicits;
+
+  if debug_resolve then Format.(eprintf "generalized implicits: %a@."
+                                  (list ",@ " (fun ppf (_,e) ->
+                                       format_expression ppf e))
+                                  generalized_implicits);
+
+  if debug_resolve then
+    Format.(eprintf "remaining implicits: %a@."
+              (list ",@ " (fun ppf (_,e) ->
+                   fprintf ppf "(%a : %a) [%a]"
+                     format_expression e
+                     Printtyp.raw_type_expr e.exp_type
+                     (list ",@ " Printtyp.raw_type_expr)
+                     (gen_vars e.exp_type)
+                 ))
+              rest);
+
+  implicit_omitted := rest;
+
+  let implicits_related_with_type ty =
+    fst @@ partition_implicits (gen_vars ty) generalized_implicits
+  in
+
+  (* XXX If two implicit args have the same type, they must be unified! *)
+
+  (* recursively defined values which may be implicit-abstracted in the body *)
+  let rec_idents =
+    if is_recursive then
+      List.filter_map (fun id ->
+          let vd = Env.find_value (Path.Pident id) new_env in
+          let imps = implicits_related_with_type vd.val_type in
+          if imps = [] then None else Some (id, imps)
+        ) @@ let_bound_idents l
+    else []
+  in
+
+  let fix_rec_idents =
+    let module MA = struct
+      include TypedtreeMap.DefaultMapArgument
+      (* must be 'leave', otherwise, it loops forever *)
+      let leave_expression e = match e.exp_desc with
+        | Texp_ident (Path.Pident id, _, _) ->
+            begin match List.assoc id rec_idents with
+            | exception Not_found -> e
+            | imps ->
+                { e with
+                  exp_desc= Texp_apply (e, List.map (fun (l,e) -> l, Some e) imps)
+                ; exp_extra= []
+                ; exp_attributes=  []
+                }
+            end
+        | _ -> e
+    end in
+    let module Mapper = TypedtreeMap.MakeMap(MA) in
+    Mapper.map_expression 
+  in
+    
+  let add_imp_abss vb =
+    let loc = { vb.vb_pat.pat_loc with Location.loc_ghost = true } in
+    let env = vb.vb_pat.pat_env in
+
+    (* implicits to be abstracted in this let binding *)
+    let imps = implicits_related_with_type vb.vb_pat.pat_type in
+
+    (* We must not immediately update implicit_omitted, 
+       since the same omitted variables' type vars are generalized
+       in other mutual let definitions *)
+
+    match imps with
+    | [] -> None (* no change required *)
+    | _ ->
+
+        (* XXX How to sort them ? *)
+        (* arguments *)
+        let args = List.map (fun (l,e) ->
+            if debug_resolve then Format.eprintf "Fixed pattern type: %a@." Printtyp.raw_type_expr e.exp_type;
+            match e.exp_desc with
+            | Texp_ident (Path.Pident id, _, _) ->
+                l,
+                id,
+                { pat_desc       = Tpat_var (id, {loc; txt= id.Ident.name})
+                ; pat_loc        = loc
+                ; pat_extra      = []
+                ; pat_type       = e.exp_type
+                ; pat_env        = e.exp_env
+                ; pat_attributes = []
+                }
+            | _ -> assert false) imps
+        in
+
+        (* replace recursive uses *)
+        let e = fix_rec_idents vb.vb_expr in
+        
+        (* abstractions *)
+        let e = List.fold_left (fun e (l,id,p) ->
+            { exp_desc= Texp_function { arg_label= l
+                                      ; param= id
+                                      ; cases= [ { c_lhs= p
+                                                 ; c_guard= None
+                                                 ; c_rhs= e} ]
+                                      ; partial= Total 
+                                      }
+            ; exp_loc= loc
+            ; exp_extra= []
+            ; exp_type= newgenty (Tarrow (l,p.pat_type,e.exp_type,Cok))
+            ; exp_env= e.exp_env
+            ; exp_attributes= []
+            }) e args
+        in
+      
+        (* We CANNOT use the type of e since it may have ungeneralized node!
+           We use the pat type instead. *)
+        let fixed_pat_type = List.fold_left (fun t (l,_,p) ->
+            newgenty (Tarrow (l,p.pat_type,t,Cok))) vb.vb_pat.pat_type args
+        in
+
+        (*
+        if debug_resolve then
+          Format.eprintf "The type of entire pat: %a@.  %a@."
+            Printtyp.type_scheme fixed_pat_type
+            Printtyp.raw_type_expr fixed_pat_type;
+        *)
+
+        (* re-typing of vb_pat *)
+        let pat = 
+          let spat = Untypeast.(default_mapper.pat default_mapper vb.vb_pat) in
+          begin_def ();
+          let pat =
+            (* it is wierd to instantiate it here... even though generalized before... but it is required in the current code. *)
+            let p_type = instance env fixed_pat_type in
+            match type_pattern_list env [vb.vb_pat.pat_attributes, spat] scope [p_type] allow with
+            | [pat],_,_,_ -> pat
+            | _ -> assert false
+          in
+          end_def ();
+          (* Since things are abstracted, it is surely non-expansive *)
+          iter_pattern (fun pat -> generalize pat.pat_type) pat;
+          pat
+        in
+
+        if debug_resolve then
+          Format.eprintf "The type of pat: %a@.  %a@."
+            Printtyp.type_scheme pat.pat_type
+            Printtyp.raw_type_expr pat.pat_type;
+
+        (* We cannot use this pat itself, since the idents have different ids *)
+        let original_pat_vars = 
+          let vars = ref [] in
+          let rec extract_pats p = 
+            begin match p.pat_desc with
+            | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) -> vars := (id.Ident.name, p.pat_desc)::!vars
+            | _ -> ()
+            end;
+            Typedtree.iter_pattern_desc extract_pats p.pat_desc
+          in
+          extract_pats vb.vb_pat;
+          !vars
+        in
+
+        (* We visit the new pat and fix the ids *)
+        let pat = 
+          let rec fix_ids p = 
+            let desc = 
+              match Typedtree.map_pattern_desc fix_ids p.pat_desc with
+              | Tpat_var (id, sloc) | Tpat_alias (_, id, sloc) ->
+                  List.assoc id.Ident.name original_pat_vars
+              | d -> d
+            in
+            { p with pat_desc= desc }
+          in
+          fix_ids pat
+        in
+
+        (*
+        if debug_resolve then
+          Format.eprintf "@[<2>VBfix@ %a@ : %a@ / %a @ = %a@]@."
+            Pprintast.pattern (Untypeast.(default_mapper.pat default_mapper) pat)
+            Printtyp.type_scheme pat.pat_type
+            Printtyp.raw_type_expr pat.pat_type
+            Pprintast.expression (Untypeast.(default_mapper.expr default_mapper) e);
+        *)
+
+        (* we must replace recursive occurrences *)
+        
+        Some (imps, { vb with vb_expr= e; vb_pat= pat })
+  in
+
+  (* XXX We must replace internal recursive calls with apps! *)
+  (* XXX What about unpacks? *)
+  let l' = List.map add_imp_abss l in
+  if List.for_all (function None -> true | _ -> false) l' then (l, new_env)
+  else begin
+    let l = List.map2 (fun vbo vb -> 
+        match vbo with
+        | Some (abss, vb) -> vb
+        | None -> vb) l' l 
+    in
+
+    let used_implicit_omitted =
+      Leopardutils.List.concat_map (function
+          | None -> []
+          | Some (abss,_) -> abss) l'
+    in
+    implicit_omitted := List.filter (fun x -> List.memq x used_implicit_omitted) !implicit_omitted;
+      
+    let new_env =
+      let pats = ref [] in
+      let rec iter pat =
+        begin match pat.pat_desc with
+        | Tpat_var (id, s) -> pats := (id, s, pat.pat_type) :: !pats
+        | Tpat_alias (_, id, s) -> pats := (id, s, pat.pat_type) :: !pats
+        | _ -> ()
+        end;
+        Typedtree.iter_pattern_desc iter pat.pat_desc
+      in
+      List.iter (fun vb -> iter vb.vb_pat) l;
+      List.fold_left (fun env (id, s, ty) ->
+(*
+          if debug_resolve then begin
+            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.type_scheme ty;
+            Format.eprintf "toENV: %s : %a@." (Ident.name id) Printtyp.raw_type_expr ty;
+          end;
+*)
+          Env.add_value id { val_type = ty
+                           ; val_kind = Val_reg
+                           ; val_loc = s.loc
+                           ; val_attributes = [] (* XXX must be got from new_env *)
+                           } env) env !pats
+    in
+    (l, new_env)
+  end
 
 (* Typing of toplevel bindings *)
 
