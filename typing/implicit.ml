@@ -1476,14 +1476,17 @@ module MapArg : TypedtreeMap.MapArgument = struct
         
     | Texp_ident (p, _, _) ->
         begin match e.exp_attributes with
-        | [{txt="imp_omitted"}, Parsetree.PStr []] when gen_vars e.exp_type = [] ->
+        | [{txt="imp_omitted"}, Parsetree.PStr []] (* when gen_vars e.exp_type = [] *) ->
             Format.eprintf "@[<2>FOUND @imp_omitted@ %a : %a@]@." Path.format p Printtyp.type_scheme e.exp_type;
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
             | Some spec ->
-                let e' = conv (resolve e.exp_env e.exp_loc spec ty) in
-                e'
+               let env =
+                 (* We must add derivings so that they can be found in the shadow check *)
+                 List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) e.exp_env !derived_candidates
+               in
+               conv (resolve env e.exp_loc spec ty)
             end
         | _ -> e
         end
