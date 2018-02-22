@@ -10,6 +10,8 @@ val %imp add : ?_d:'a add -> 'a -> 'a -> 'a
 
 let add ~_d x y = add ~_d x y
 
+(* we have no auto-abs
+
 let double x = add x x
     
 let rec times x = function
@@ -30,4 +32,5 @@ and times x = function
 let () =
   assert (times 2 3 = 6);
   assert (times 2.0 3 = 6.0)
-
+*)
+                

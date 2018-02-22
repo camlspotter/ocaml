@@ -52,6 +52,9 @@ module Overload : sig:
     val __string_unsafe_set : 'a array -> int -> 'a -> unit
       
 module Implicits : sig:
+  type 'a alias = 'a
+  (** A workaround to define %identity over functions *)
+              
   type ('a, 'spec) t
   exception Not_resolved
   val from_Some : 'a option -> 'a

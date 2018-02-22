@@ -14,6 +14,7 @@ let add ~_d x y = add ~_d x y
   
 let () = assert (add 1 2 = 3)
     
+(* We have no auto-abs
 let add' x y = add x y
 
 let () = assert (add' 1 2 = 3)
@@ -21,3 +22,4 @@ let () = assert (add' 1 2 = 3)
 let double x = add x x
 
 let () = assert (double 2 = 4)
+ *)

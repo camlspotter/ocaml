@@ -5118,10 +5118,12 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
         })
       l spat_sexp_list
   in
+(* Auto abstraction is hard to implement, and probably not a good idea...
   let (l, new_env) = 
     if !Leopardfeatures.implicits then leopard_fix_let is_recursive env scope allow (l, new_env)
     else (l, new_env)
   in
+*)
   if is_recursive then
     List.iter 
       (fun {vb_pat=pat} -> match pat.pat_desc with

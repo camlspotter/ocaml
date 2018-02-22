@@ -48,6 +48,8 @@ module Overload = struct:
   val %overload __string_unsafe_set : 'a -> int -> 'b -> unit
 
 module Implicits = struct:
+  type 'a alias = 'a
+              
   type ('a, 'spec) t = 'a
 
   exception Not_resolved

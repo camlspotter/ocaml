@@ -18,7 +18,30 @@ let rename lid n = match lid with
   | Ldot (Lident "Bigarray", m) -> "__bigarray_" ^ String.lowercase_ascii m ^ "_" ^ n
   | _ -> assert false
   
-  
+(* XXX Defined also in btype.ml *)
+let is_implicit = function 
+  | Asttypes.Labelled s -> String.length s > 0 && s.[0] = '_' 
+  | _ -> false
+
+let rewrite_imp vdesc = match vdesc.pval_type.ptyp_desc with
+  | Ptyp_arrow (l, t1, t2) when is_implicit l ->
+     (* val %imp n : _d:t1 -> t2  =>  extern n : _d:t1 -> t2 Leopard.Implicit.alias = "%identity" *)
+     let loc = t2.ptyp_loc (*XXX ghost *) in
+     let lid = Longident.(Ldot(Ldot(Lident "Leopard", "Implicits"),"alias")) in
+     let alias = { ptyp_desc= Ptyp_constr ({txt=lid; loc}, [t2])
+                 ; ptyp_loc= loc (* XXX ghost *)
+                 ; ptyp_attributes = []
+                 }
+     in
+     { vdesc
+       with pval_type= { vdesc.pval_type with ptyp_desc= Ptyp_arrow (l, t1, alias) }
+          ; pval_prim= ["%identity"]
+     }
+  | Ptyp_arrow (_l, _t1, _t2) ->
+     (* val %imp n : t  =>  extern n : t = "%imp" *)
+     imp_vdesc vdesc
+  | _ -> assert false (* error XXX *)
+
 let extend super =
   let expr = if not @@ leopard_mode () then super.expr else
       fun self e -> match e.pexp_desc with
@@ -55,7 +78,7 @@ let extend super =
     | Pstr_extension ( ({txt="imp"},
                         PStr [{pstr_desc= Pstr_primitive vdesc}]),
                        _ ) ->
-        { i with pstr_desc = Pstr_primitive (imp_vdesc vdesc) }
+       { i with pstr_desc = Pstr_primitive (rewrite_imp vdesc) }
     | _ -> super.structure_item self i
   in
   let signature_item self i = match i.psig_desc with
@@ -64,11 +87,11 @@ let extend super =
                         PSig [{psig_desc= Psig_value vdesc}]),
                        _ ) ->
         { i with psig_desc = Psig_value (overload_vdesc vdesc) }
-    (* val %imp n : t  =>  extern n : t = "%imp" *)
+
     | Psig_extension ( ({txt="imp"},
                         PSig [{psig_desc= Psig_value vdesc}]),
                        _ ) ->
-        { i with psig_desc = Psig_value (imp_vdesc vdesc) }
+       { i with psig_desc = Psig_value (rewrite_imp vdesc) }
     | _ -> super.signature_item self i
   in
   { super with expr; structure_item; signature_item }
