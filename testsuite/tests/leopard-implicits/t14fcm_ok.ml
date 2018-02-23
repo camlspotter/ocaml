@@ -13,14 +13,14 @@ module Num = struct:
   
   type 'a num = ('a _num, [%imp NumInstances]) Leopard.Implicits.t
   
-  val %imp _num  : ?_d:'a num -> 'a _num
+  val %imp _num  : _d:'a num -> 'a _num
   
-  let (+) (type a) ?_d =
-    let module Num = (val (_num ?_d : a _num)) in
+  let (+) (type a) ~_d =
+    let module Num = (val (_num ~_d : a _num)) in
     Num.(+)
   
-  let (-) (type a) ?_d =
-    let module Num = (val (_num ?_d : a _num)) in
+  let (-) (type a) ~_d =
+    let module Num = (val (_num ~_d : a _num)) in
     Num.(-)
 
 (* Type class instance declaration *)
@@ -50,7 +50,7 @@ let () =
   assert (1 + 1 = 2);
   assert (2.0 - 1.0 = 1.0)
 
-let double ?_d x = Num.(+) ?_d x x
+let double ~_d x = Num.(+) ~_d x x
 
 let () =
   assert (double 1 = 2)

@@ -2,7 +2,7 @@
 
 type 'a read = (string -> 'a, [%imp Read]) Leopard.Implicits.t
 
-val %imp read : ?_d:'a read -> string -> 'a
+val %imp read : _d:'a read -> string -> 'a
   
 module Read = struct
   let _a : string -> [`A] = function "`A" -> `A | s -> failwith "read error"
