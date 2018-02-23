@@ -10,13 +10,14 @@ val %imp add : _d:'a add -> 'a -> 'a -> 'a
 
 let add ~_d x y = add ~_d x y
 
-(* we have no auto-abs
+let double ~_d x = add ~_d x x
 
-let double x = add x x
-    
-let rec times x = function
+let () = assert (double 1 = 2)
+let () = assert (double 1.2 = 2.4)
+
+let rec times ~_d x = function
   | 1 -> x
-  | n -> add x (times x (n-1))
+  | n -> add ~_d x (times ~_d x (n-1))
 
 let () =
   assert (times 3 1 = 3);
@@ -24,13 +25,18 @@ let () =
   assert (times 3 3 = 9);
   assert (times 2.0 3 = 6.0)
 
-let rec  times' x n = times x n
-and times x = function
+let rec times ~_d x = function
+  | 1 -> x
+  | n -> add ~_d x (times x (n-1))
+
+(*
+let rec  times' ~_d x n = times x n
+and times ~_d x = function
   | 1 -> x
   | n -> add x (times' x (n-1))
   
 let () =
   assert (times 2 3 = 6);
   assert (times 2.0 3 = 6.0)
-*)
-                
+ *)
+

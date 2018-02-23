@@ -11,7 +11,9 @@ let leopard_mode () = match !Clflags.leopard_mode with
 let overload_vdesc vdesc = 
   { vdesc with pval_prim = ["%OVERLOADED"] } (* All capital by a historical reason *)
 
+(*
 let imp_vdesc vdesc = { vdesc with pval_prim = ["%imp"] }
+ *)
 
 let rename lid n = match lid with
   | Lident m -> "__" ^ String.lowercase_ascii m ^ "_" ^ n
@@ -37,9 +39,11 @@ let rewrite_imp vdesc = match vdesc.pval_type.ptyp_desc with
        with pval_type= { vdesc.pval_type with ptyp_desc= Ptyp_arrow (l, t1, alias) }
           ; pval_prim= ["%identity"]
      }
+(*
   | Ptyp_arrow (_l, _t1, _t2) ->
      (* val %imp n : t  =>  extern n : t = "%imp" *)
      imp_vdesc vdesc
+ *)
   | _ -> assert false (* error XXX *)
 
 let extend super =

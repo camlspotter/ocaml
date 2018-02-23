@@ -1,6 +1,6 @@
 type 'a add = ('a -> 'a -> 'a, [%imp deep (just Add)]) Leopard.Implicits.t
 
-val %imp add : ?_d:'a add -> 'a -> 'a -> 'a
+val %imp add : _d:'a add -> 'a -> 'a -> 'a
 
 module M1 = struct:
   module Add = struct:

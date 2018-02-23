@@ -1211,6 +1211,8 @@ let resolve env loc spec ty = with_snapshot & fun () ->
           e
 
 let resolve env loc spec ty =
+  (* Derived things must be found in the environment *)
+  let env = List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
   let e = resolve env loc spec ty in
   (* Now we replay the type unifications! *)
   (* But generalized variables must be protected! *)
@@ -1240,9 +1242,6 @@ let resolve env loc spec ty =
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
-      (* Add derived candidates to the environment *)
-      let env =
-        List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
       begin match is_none e with
       | None -> a (* explicitly applied *)
       | Some _t -> (* omitted *)
@@ -1481,12 +1480,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
-            | Some spec ->
-               let env =
-                 (* We must add derivings so that they can be found in the shadow check *)
-                 List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) e.exp_env !derived_candidates
-               in
-               conv (resolve env e.exp_loc spec ty)
+            | Some spec -> conv (resolve e.exp_env e.exp_loc spec ty)
             end
         | _ -> e
         end
