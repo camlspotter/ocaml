@@ -2,9 +2,9 @@ type 'a add_inst = AddInst of ('a -> 'a -> 'a)
 
 type 'a add = ('a add_inst, [%imp Add]) Leopard.Implicits.t
 
-val %imp add' : ?_d:'a add -> 'a add_inst
+val %imp add' : _d:'a add -> 'a add_inst
 
-let add ?_d = let AddInst f = add' ?_d in f
+let add ~_d = let AddInst f = add' ~_d in f
 
 module Add = struct:
   let int = AddInst (+)

@@ -7,7 +7,7 @@ module Add = struct:
 
 let r = ref []
 
-let f = add (List.hd !r) (List.hd !r)
+let f () = add (List.hd !r) (List.hd !r)
 
 (* The resolver chooses `Add.int` for `add` since there is only one candidate.
 
