@@ -253,7 +253,7 @@ end = struct
   open Types
   open Path
   open Env
-      
+
   (** Opened modules in the current environment *)
   let get_opens env =
     let rec get = function

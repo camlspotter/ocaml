@@ -1,0 +1,7 @@
+
+#       Characters 40-44:
+    | 1 -> Some
+           ^^^^
+Error: This expression should not be a function, the expected type is
+'a option
+# 
