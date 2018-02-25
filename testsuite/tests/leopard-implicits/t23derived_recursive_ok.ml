@@ -25,9 +25,10 @@ let () =
   assert (times 3 3 = 9);
   assert (times 2.0 3 = 6.0)
 
-let rec times ~_d x = function
+(* bug: *uniq* type left in the signature *)
+let rec times' ~_d x = function
   | 1 -> x
-  | n -> add ~_d x (times x (n-1))
+  | n -> add ~_d x (times' x (n-1))
 
 (*
 let rec  times' ~_d x n = times x n

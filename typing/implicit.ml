@@ -916,13 +916,20 @@ let is_imp_arg_type env ty =
       Some (ty, spec)
   | _ -> None
 
+(* This does not check the label name currently... 
+
+   * Non optional args: the type is `ty Leopard.Implicits.t`.
+   * Optional args: the type is `ty Leopard.Implicits.t option`.
+*)
 let is_imp_arg env loc l ty
   : ( type_expr
       * Spec.t option
       * (expression -> expression)
       * (expression -> expression)
     ) =
-  let default = (ty, None, (fun x -> x), (fun x -> x)) in
+  let default = (* this is not an imp arg *)
+    (ty, None, (fun x -> x), (fun x -> x))
+  in
   let f ty = match is_imp_arg_type env ty with
     | Some (ty, spec) ->
         let spec = Specconv.from_type_expr loc spec in
@@ -1176,6 +1183,7 @@ let shadow_check env loc e0 =
         Typedtree.format_expression e0
         (Format.list "@," format_shadow) !shadowed
 
+(* The function recovers all the types it modifies inside. *)
 let resolve env loc spec ty = with_snapshot & fun () ->
 
   if debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
@@ -1214,28 +1222,48 @@ let resolve env loc spec ty =
   (* Derived things must be found in the environment *)
   let env = List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
   let e = resolve env loc spec ty in
-  (* Now we replay the type unifications! *)
-  (* But generalized variables must be protected! *)
+  (* Now we replay the type unifications!
+     The generalized variables must be protected! *)
+  if debug_resolve then
+    !!% "@[<2>%a:@ Replaying0 %a : %a@]@."
+      Location.format loc
+      Typedtree.format_expression e
+      Printtyp.type_scheme ty;
   let gvars = gen_vars ty in
   let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
+  !!% "Closing %a@." Printtyp.raw_type_expr ty;
   close_gen_vars ty;
+  !!% "Closing %a@." Printtyp.raw_type_expr ty;
   if debug_resolve then
-    !!% "Replaying %a against %a@."
+    !!% "@[<2>%a:@ Replaying %a : %a@]@."
+      Location.format loc 
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
   let ue = Untypeast.(default_mapper.expr default_mapper) e in
   let te = Typecore.type_expression env ue in
   if debug_resolve then
-    !!% "Replaying %a : %a against %a@."
-      Typedtree.format_expression te
-      Printtyp.type_scheme te.exp_type
-      Printtyp.type_scheme ty;
+    !!% "@[<2>%a:@ Replaying1 %a : %a : %a@]@."
+        Location.format loc
+        Typedtree.format_expression te
+        Printtyp.type_scheme te.exp_type
+        Printtyp.type_scheme ty;
   Ctype.unify env te.exp_type ty;
   (* recover gvars *)
-  List.iter (fun (gv, desc) -> gv.desc <- desc; gv.level <- Btype.generic_level) gvar_descs;
-  if debug_resolve then
-    !!% "Replay result: %a@."
-      Printtyp.type_scheme te.exp_type;
+  (*   gv(=Link) --> uniq  <-- tv'
+
+       gv(=Tvar) <-- uniq  <-- tv'
+  *)       
+  List.iter (fun (gv, desc) ->
+      if debug_resolve then !!% "Recovering %a => " Printtyp.type_scheme gv;
+      let uniq = Ctype.repr gv in
+      gv.desc <- desc; gv.level <- Btype.generic_level;
+      uniq.desc <- Tlink gv;
+      if debug_resolve then !!% "%a@." Printtyp.type_scheme gv
+    ) gvar_descs;
+  if debug_resolve then begin
+    !!% "Replay result: %a@." Printtyp.type_scheme te.exp_type;
+    !!% "Closed? %a@." Printtyp.raw_type_expr te.exp_type
+  end;
   te
 
 (* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *)
@@ -1345,15 +1373,12 @@ module MapArg : TypedtreeMap.MapArgument = struct
         end
     | _ -> e
 
-  (* XXX This does not work at all. In
-      [let double ?d x = add x x],
-     the omitted argument of [add] and [d] do not share the same type variables
-     at this stage!
-   *)
   let add_derived_candidate e case p type_ unconv =
     (* This is an imp arg *)
 
-    (* Build  fun ?d:(d as __imp_arg__) -> *)
+    (* Build  fun ?d:(d as __imp_arg__) -> 
+          or  fun ~d:(d as __imp_arg__) ->
+     *)
 
     let loc = Location.ghost p.pat_loc in
     let name = create_imp_arg_name () in
@@ -1368,6 +1393,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
       ; val_attributes = []  }
     in
     let expr =
+      (* XXX Locations must be fixed later when it is actually used *)
       unconv
       & { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
         ; exp_loc = Location.none
@@ -1386,32 +1412,34 @@ module MapArg : TypedtreeMap.MapArgument = struct
                           , vdesc
                           )
                           :: !derived_candidates;
+    (* p as __imp_arg_x__ *)
     let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
     let case = { case with c_lhs = p' } in
+    (* fun (p as __imp_arg_x__) -> .. *)
     let e = match e.exp_desc with
       | Texp_function f ->
           { e with exp_desc = Texp_function { f with cases= [case] }}
       | _ -> assert false
     in
 
-    (* __imp_arg__ will be used for the internal resolutions *)
-    (* XXX needs a helper module *)
+    (* We need to mark the abstraction for unregistering this derived when we go out from the abstraction *)
+    (* XXX needs a helper module for this *)
     let e =
       Typedtree.add_attribute
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "add derived: %a@." Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a: add derived: %a@]@." Location.format loc Typedtree.format_expression e;
     e
 
   let clean_derived_candidates e =
     let open Parsetree in
-    (* Handling derived implicits, part 2 of 2 *)
+    (* We unregister the derived *)
     let is_mark ({txt}, payload as a) =
       if txt <> "leopard_mark" then Either.Right a
       else
         match payload with
-        (* XXX need a helper *)
+        (* XXX need a helper module *)
         | PStr [{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant (Pconst_string (s, _))}, _)}] when is_function_id s -> Either.Left s
         | _ -> Either.Right a
     in
@@ -1469,14 +1497,16 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | (type_, Some _spec, _conv, unconv) ->
             (* CR jfuruse: specs are ignored *)
             (* This is an imp arg *)
-            (* Build  fun ?d:(d as __imp_arg__) -> *)
+            (* Build  fun ?d:(d as __imp_arg__) -> ..
+                      or fun ~d:(d as __imp_arg__) -> ..
+             *)
             add_derived_candidate e case p type_ unconv
         end
         
     | Texp_ident (p, _, _) ->
         begin match e.exp_attributes with
         | [{txt="imp_omitted"}, Parsetree.PStr []] (* when gen_vars e.exp_type = [] *) ->
-            Format.eprintf "@[<2>FOUND @imp_omitted@ %a : %a@]@." Path.format p Printtyp.type_scheme e.exp_type;
+            Format.eprintf "@[<2>%a: FOUND @imp_omitted@ %a : %a@]@." Location.format e.exp_loc Path.format p Printtyp.type_scheme e.exp_type;
             let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
             begin match specopt with
             | None -> assert false (* wrong type! *)
