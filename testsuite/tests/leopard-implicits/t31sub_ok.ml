@@ -1,6 +1,6 @@
-type 'a add = ('a -> 'a -> 'a, [%imp just Add]) Leopard.Implicits.t
+type 'a add = ('a -> 'a -> 'a, [%imp deep (just Add)]) Leopard.Implicits.t
 
-val %imp add : ?d:'a add -> 'a -> 'a -> 'a
+val %imp add : _d:'a add -> 'a -> 'a -> 'a
 
 module M1 = struct:
   module Add = struct:
@@ -25,12 +25,10 @@ module M3 = struct:
 
 module M4 = struct:
   module Add = struct:
-    include M1.Add
-    include M2.Add
+    module M1 = M1.Add
+    module M2 = M2.Add
 
   let () =
     assert (add "a" "b" = "ab");
     assert (add 1 2 = 3);
     assert (add 1.2 3.4 = 4.6)
-
-let double ?d x = add ?d x x
