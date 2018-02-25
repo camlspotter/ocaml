@@ -14,7 +14,7 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
     | [] ->
         match y with:
         | A -> 2
-        | B -> 3
+        | B -> 3   (* no begin-end required *)
     | x::xs ->
         match y with:
         | A -> 4
@@ -24,30 +24,30 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
 * Variant constructors as functions in both uncurried and curried form.
 
     ```ocaml
-	List.map Some xs
-	```
+    List.map Some xs
+    ```
 
     ```ocaml
-	fun x -> Some @@ x + 1
-	```
+    fun x -> Some @@ x + 1
+    ```
 
 * User definable SML style simple overloading.
 
     ```ocaml
-	(1 + 2, 1.2 + 3.4)
-	```
+    (1 + 2, 1.2 + 3.4)
+    ```
 
 * Easily overridable array access operators such as `x.[i]` and `x.(i)`.
 
     ```ocaml
-	let (.[]) = Bytes.get
-	```
+    let (.[]) = Bytes.get
+    ```
 
-* Implicit values for adhoc polymorphism
+* Implicit parameters for adhoc polymorphism
 
     ```ocaml
     type 'a add = ('a -> 'a -> 'a, [%imp Add]) Leopard.Implicits.t
-    val %imp add : ?d:'a add -> 'a -> 'a -> 'a
+    val %imp add : _d:'a add -> 'a -> 'a -> 'a
 
     module Add = struct
       let int = (+)
@@ -56,11 +56,11 @@ OCamleopard is a modified OCaml compiler with several enhancements in its parsin
 
     let () = assert (add 1 2 = 3)
     let () = assert (add 1.2 3.4 = 4.6)
-	```
+    ```
 
 ## Coexistable with vanilla OCaml
 
-Even with these enhancements, it is designed to be compatible with OCaml as possible.  OCamleopard can be used with OCaml of the same version number together:
+Even with these enhancements, it is designed to be compatible with the original OCaml as possible.  OCamleopard can be used with OCaml of the same version number together:
 
 * Even with the indentation rules, the syntax is still upper-compatible: it can parse the original OCaml code.
 * The existing OCaml PPX preprocessors can work with OCamleopard, since its parsed AST is identical to the one of OCaml.
@@ -72,7 +72,7 @@ To minimize the compilation bugs caused by its extensions,
 OCamleopard has a two phased type checking:
 in the first typing phase, the input program is type-checked by OCamleopard's extended type system.
 Then, the typed AST is transformed to a vanilla OCaml code.
-This output is type checked again in the second typing phase by the type checker without any OCamleopard extensions to make sure that the output of OCamleopard is at least OCaml type safe.
+This output is type checked again in the second typing phase by the type checker without any OCamleopard extensions to make sure that the output of OCamleopard is at least type safe in the original OCaml system.
 OCamleopard is a standalone compiler, but it is also usable as a preprocessor to vanilla OCaml ASTs.  The output can be type-checked and compiled by the genuine OCaml compiler.
 
 # Installation
@@ -98,11 +98,6 @@ Effective set of compiler predicates: pkg_leopard,syntax,autolink,byte
 val x : 'a -> 'a option
 ```
 
-### Other versions
-
-OCamleopard based on other OCaml versions may be available at the repo
-`git://github.com/camlspotter/ocaml`, with branch names `<version>+leoaprd`.
-
 ## From a local source
 
 Or, if you have a copy of the source code:
@@ -111,7 +106,7 @@ Or, if you have a copy of the source code:
 $ opam pin add --kind path leopard .
 ```
 
-## As an indenpendent compiler swith (TBD)
+## As an indenpendent compiler switch (TBD)
 
 You can also install OCamleopard as an indepdendent standalone compler
 as a new switch. (TBD)

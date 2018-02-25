@@ -4436,7 +4436,7 @@ and type_application env funct sargs =
                             ; exp_extra= []
                             ; exp_type= instance env ty
                             ; exp_env= env
-                            ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]]
+                            ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]] (*XXX loc *)
                             }
                   in
                   implicit_omitted := (l,exp) :: !implicit_omitted;

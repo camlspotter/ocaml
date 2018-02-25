@@ -1,5 +1,6 @@
 open Leopardutils
- open Ast_mapper
+open Leopardparsing
+open Ast_mapper
 open Longident
 open Parsetree
 open Location
@@ -115,7 +116,27 @@ module Imp = struct
       | Ptyp_extension ({txt="imp"; loc}, pld) -> !from_payload_to_core_type_forward loc pld
       | _ -> super.typ self cty
     in
-    { super with typ }
+    let expr self e = match e.pexp_desc with
+      | Pexp_extension ({txt="imp"; loc}, pld) ->
+          (* [%imp spec]  =>  (assert false (* this will be replaced *) : (_, [%imp spec]) Leopard.Implicits.t) [@imp_omitted] *)
+          let loc = Location.ghost loc in
+          let spec = !from_payload_to_core_type_forward loc pld in
+          { e with
+            pexp_desc= Pexp_constraint (
+                { e with pexp_desc= Pexp_assert { e with pexp_desc= Pexp_construct ({txt= Longident.Lident "false"; loc}, None) } },
+                { ptyp_desc= Ptyp_constr ( {txt=Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),"t")); loc},
+                                           [ { ptyp_desc= Ptyp_any; ptyp_loc= loc; ptyp_attributes= [] }
+                                           ; spec
+                                           ] )
+                ; ptyp_loc= loc
+                ; ptyp_attributes= []
+                } )
+          ; pexp_attributes = ({loc; txt="imp_omitted"}, PStr[]) :: e.pexp_attributes
+          }
+
+      | _ -> super.expr self e
+    in
+    { super with typ; expr }
 end
 
 let make_mapper () = Imp.extend & extend default_mapper
