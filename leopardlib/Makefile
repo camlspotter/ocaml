@@ -8,35 +8,13 @@ OCAMLDEP= $(OCAMLRUN) ../tools/ocamldep
 leopardlib: opt
 
 .PHONY: all
-all: leopard.cmo test.exe test2.exe test3.exe test4.exe test5.exe test6.exe \
-  test07sub.exe
+all: leopard.cmo
 
 .PHONY: allopt
 leopardlib: opt
 
 .PHONY: opt
 opt: leopard.cmx 
-
-test.exe: leopard.cmo test.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test.cmo
-
-test2.exe: leopard.cmo test2.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test2.cmo
-
-test3.exe: leopard.cmo test3.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test3.cmo
-
-test4.exe: leopard.cmo test4.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test4.cmo
-
-test5.exe: leopard.cmo test5.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test5.cmo
-
-test6.exe: leopard.cmo test6.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test6.cmo
-
-test07sub.exe: leopard.cmo test07sub.cmo 
-	$(OCAMLC) -o $@ leopard.cmo test07sub.cmo
 
 .PHONY: clean
 clean:

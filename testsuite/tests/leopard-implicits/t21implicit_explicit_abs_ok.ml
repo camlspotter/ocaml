@@ -8,5 +8,7 @@ type 'a add = ('a -> 'a -> 'a, [%imp just Add]) Leopard.Implicits.t
 
 val %imp add : _d:'a add -> 'a -> 'a -> 'a
 
-let () = assert (add 1 2 = 3)
-let () = assert (add 1.2 3.4 = 4.6)
+let add' ~_d:(_:'a add) (x : 'a) y = add x y
+
+let add'' ~_d:(_:'a add) (x : 'a) y = add' x y
+

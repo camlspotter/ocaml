@@ -52,11 +52,14 @@ module Overload : sig:
     val __string_unsafe_set : 'a array -> int -> 'a -> unit
       
 module Implicits : sig:
+  type 'a alias = 'a
+  (** A workaround to define %identity over functions *)
+              
   type ('a, 'spec) t
   exception Not_resolved
   val from_Some : 'a option -> 'a
   external get : ('a, 'spec) t -> 'a = "%identity"
-  val imp : ?d:('a, 'spec) t -> 'a
+  val imp : ?_d:('a, 'spec) t -> 'a
   external embed : 'a -> ('a, 'spec) t = "%identity"
 
   (** [[`M] module_] is the encoding of escaped module name "M" *)
