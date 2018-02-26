@@ -1483,7 +1483,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         push_imp_opens [od.open_path];
         (* removal is not at leaving [open] but at the end of structure *)
         si
-(* This is not good.  Before, the primitive has no entry in the module, by modifying it to a normal value, it creates a new entry, which contradicts the typing of the module.
+    (* This is not good.  Before, the primitive has no entry in the module, by modifying it to a normal value, it creates a new entry, which contradicts the typing of the module. *)
     | Tstr_primitive ({ val_prim = [ "%imp" ] } as val_) ->
         (* val %imp add : ?_d:'a add -> 'a -> 'a -> 'a
            =>
