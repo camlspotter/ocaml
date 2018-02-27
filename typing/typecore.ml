@@ -4426,12 +4426,13 @@ and type_application env funct sargs =
               Some (fun () ->
                   (* an implicit argument is omitted *)
                   let s = Printf.sprintf "imp%d" !imp_counter in
-                  Format.eprintf "implicit omitted: %s@." s;
+                  let loc = { funct.exp_loc with Location.loc_ghost = true } in
+                  Format.eprintf "%a: inserting an omitted implicit arg: %s@." Location.print_loc loc s;
                   incr imp_counter;
                   let lid = Longident.Lident s in
                   let id = Ident.create s in
                   let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
-                            ; exp_loc= Location.none
+                            ; exp_loc= loc
                             ; exp_extra= []
                             ; exp_type= instance env ty
                             ; exp_env= env

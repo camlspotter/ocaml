@@ -120,16 +120,22 @@ module XTypes : sig
 
   val gen_vars : type_expr -> type_expr list
 
-  (** Create a type which can be unified only with itself *)
   val create_uniq_type : unit -> type_expr
+  (** Create a type which can be unified only with itself *)
     
   val close_gen_vars : type_expr -> unit
+  (** Unify the generalized type variables appear in the argument with
+      unique types created by `create_uniq_type`.
+   *)
 
+(*
+  val keep_gen_vars : type_expr list -> (unit -> 'a) -> 'a
   (** [keep_gen_vars tys f] performs [f] then retain the generic variables'
       level of [tys] back.  It raises [Failure] when [f] modifies one of
       these generic variables to non variable or unifies together.
-  *)
-  val keep_gen_vars : type_expr list -> (unit -> 'a) -> 'a
+   *)
+   (* bug.  this surely does not prevent invariant breaks of type levels *)
+ *)
 
 end = struct
   open Types
@@ -163,19 +169,19 @@ end = struct
     let cntr = ref 0 in
     fun () -> 
       incr cntr;
-      (* Ident.create is not good. Unifying this data type ident with
-         a tvar may cause "escaping the scope" errors
+      (* `Ident.create` instead of `Ident.create_persistent` is not good. 
+         Unifying this data type ident with a tvar may cause "escaping the scope" errors
       *)
       Ctype.newty ( Tconstr ( Path.Pident (Ident.create_persistent & "*uniq*" ^ string_of_int !cntr), [], ref Mnil ) )
 
   let close_gen_vars ty = flip iter (gen_vars ty) & fun gv ->
-    match repr_desc gv with
-    | Tvar _ ->
-        Ctype.unify Env.empty gv (create_uniq_type ());
-       (* eprintf "Closing %a@." Printtyp.type_expr gv *)
+    let gv = Ctype.repr gv in                                                    
+    match gv.desc with
+    | Tvar _ -> Ctype.unify Env.empty gv (create_uniq_type ())
     | Tunivar _ -> ()
     | _ -> assert false
 
+(*
   let keep_gen_vars tys f =
     let gvars = gen_vars (Ctype.newty (Ttuple tys)) in
     let uniq_by_id = List.sort_uniq (fun x y -> compare x.id y.id) in
@@ -198,6 +204,7 @@ end = struct
     if List.length gvars <> List.length (uniq_by_id gvars'') then
       failwith "generic variables are unified together";
     res
+ *)
 end
 
 module Types = struct
