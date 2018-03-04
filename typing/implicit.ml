@@ -1515,6 +1515,18 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | _ -> e
         end
         
+    | Texp_assert _ ->
+        begin match e.exp_attributes with
+        | [{txt="imp_omitted"}, Parsetree.PStr []] (* when gen_vars e.exp_type = [] *) ->
+            Format.eprintf "@[<2>%a: FOUND @imp_omitted@ (assert false) : %a@]@." Location.format e.exp_loc Printtyp.type_scheme e.exp_type;
+            let (ty, specopt, conv, _unconv) = is_imp_arg e.exp_env e.exp_loc Nolabel e.exp_type in
+            begin match specopt with
+            | None -> assert false (* wrong type! *)
+            | Some spec -> conv (resolve e.exp_env e.exp_loc spec ty)
+            end
+        | _ -> e
+        end
+        
     | _ -> e
 
   let leave_expression e =

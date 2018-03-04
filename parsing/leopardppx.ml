@@ -117,6 +117,9 @@ module Imp = struct
       | _ -> super.typ self cty
     in
     let expr self e = match e.pexp_desc with
+      (* We leave `open %imp M` *)
+      | Pexp_extension ({ txt = "imp" }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open _ }, _)} ] ) -> super.expr self e
+
       | Pexp_extension ({txt="imp"; loc}, pld) ->
           (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
           let loc = Location.ghost loc in
@@ -133,8 +136,8 @@ module Imp = struct
           }
                                                                  ; 
       | _ -> super.expr self e
-    in
-    { super with typ; expr }
+        in
+        { super with typ; expr }
 end
 
 let make_mapper () = Imp.extend & extend default_mapper
