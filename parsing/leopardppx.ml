@@ -118,22 +118,20 @@ module Imp = struct
     in
     let expr self e = match e.pexp_desc with
       | Pexp_extension ({txt="imp"; loc}, pld) ->
-          (* [%imp spec]  =>  (assert false (* this will be replaced *) : (_, [%imp spec]) Leopard.Implicits.t) [@imp_omitted] *)
+          (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
           let loc = Location.ghost loc in
+          let leopard_implicits x = { txt= Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),x)); loc } in
+          let mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
           let spec = !from_payload_to_core_type_forward loc pld in
           { e with
-            pexp_desc= Pexp_constraint (
-                { e with pexp_desc= Pexp_assert { e with pexp_desc= Pexp_construct ({txt= Longident.Lident "false"; loc}, None) } },
-                { ptyp_desc= Ptyp_constr ( {txt=Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),"t")); loc},
-                                           [ { ptyp_desc= Ptyp_any; ptyp_loc= loc; ptyp_attributes= [] }
-                                           ; spec
-                                           ] )
-                ; ptyp_loc= loc
-                ; ptyp_attributes= []
-                } )
-          ; pexp_attributes = ({loc; txt="imp_omitted"}, PStr[]) :: e.pexp_attributes
+            pexp_desc= Ptyp_constr ( { e with pexp_desc= Pexp_ident (leopard_implicits "get") }
+                                   , mkty (Ptyp_arrow (..., mkty (Ptyp_constr ( {txt= leopard_implicits "t"; loc},
+                                                                                [ mkty Ptyp_any ] )),
+                                                         mkty Ptyp_any)))
+          ; ptyp_loc= loc
+          ; ptyp_attributes= [ {loc; txt="imp_omitted"}, PStr[] ]
           }
-
+                                                                 ; 
       | _ -> super.expr self e
     in
     { super with typ; expr }

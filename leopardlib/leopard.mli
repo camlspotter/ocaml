@@ -58,7 +58,7 @@ module Implicits : sig:
   type ('a, 'spec) t
   exception Not_resolved
   val from_Some : 'a option -> 'a
-  external get : ('a, 'spec) t -> 'a = "%identity"
+  external get : _d:('a, 'spec) t -> 'a = "%identity"
   val imp : ?_d:('a, 'spec) t -> 'a
   external embed : 'a -> ('a, 'spec) t = "%identity"
 
