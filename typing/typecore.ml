@@ -2620,6 +2620,61 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
     (Cmt_format.Partial_expression exp :: previous_saved_types);
   exp
 
+(*
+   This cannot live well with type_approx...
+   
+and type_expect_ ?in_function ?recarg env sexp ty_expected =
+  let e = type_expect_' ?in_function ?recarg env sexp ty_expected in
+
+  let rue exp =
+    unify_exp env (re exp) (instance env ty_expected);
+    exp
+  in
+
+  let loc = { e.exp_loc with Location.loc_ghost = true } in
+  let expand_repr_desc env ty = (repr @@ expand_head env ty).desc in (* XXX defined in Leopardtyping.Types *)
+  let funargs env ty =  (* XXX defined in Leopardtyping.Types *)
+    let rec f rev_args ty = match expand_repr_desc env ty with
+      | Tarrow (l, ty, ty',flag) -> f ((l,ty,flag)::rev_args) ty' (* XXX flags... *)
+      | _ -> (List.rev rev_args, ty)
+    in
+    f [] ty
+  in
+  let args, ret = funargs e.exp_env e.exp_type in
+  let imp_args, non_imp_args = List.partition (fun (l,_,_) -> match l with
+      | Labelled s when s.[0] = '_' -> true
+      | _ -> false) args
+  in
+  match imp_args with
+  | [] -> e
+  | _ ->
+      let args = List.map (fun (l,ty,_) ->
+          (* an implicit argument is omitted *)
+          let s = Printf.sprintf "imp%d" !imp_counter in
+          Format.eprintf "%a: inserting an omitted implicit arg: %s@." Location.print_loc loc s;
+          incr imp_counter;
+          let lid = Longident.Lident s in
+          let id = Ident.create s in
+          let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
+                    ; exp_loc= loc
+                    ; exp_extra= []
+                    ; exp_type= ty
+                    ; exp_env= env
+                    ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]] (*XXX loc *)
+                    }
+          in
+          implicit_omitted := (l,exp) :: !implicit_omitted;
+          (l, Some exp)) imp_args
+      in
+      let ty_res = List.fold_right (fun (l,ty,flag) st ->  newty (Tarrow (l, ty, st, flag))) non_imp_args ret in
+      rue {
+        exp_desc = Texp_apply(e, args);
+        exp_loc = loc; exp_extra = [];
+        exp_type = ty_res;
+        exp_attributes = sexp.pexp_attributes;
+        exp_env = env }
+*)
+
 and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   let loc = sexp.pexp_loc in
   (* Record the expression type before unifying it with the expected type *)

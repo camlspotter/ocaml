@@ -4,11 +4,12 @@ OCAMLC= $(OCAMLRUN) ../ocamlc $(OPTIONS)
 OCAMLOPT= $(OCAMLRUN) ../ocamlopt $(OPTIONS)
 OCAMLDEP= $(OCAMLRUN) ../tools/ocamldep
 
+all: leopard.cmo
+
 .PHONY: allopt
 leopardlib: opt
 
 .PHONY: all
-all: leopard.cmo
 
 .PHONY: allopt
 leopardlib: opt

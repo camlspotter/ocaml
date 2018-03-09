@@ -137,6 +137,7 @@ module XTypes : sig
    (* bug.  this surely does not prevent invariant breaks of type levels *)
  *)
 
+  val funargs : Env.t -> type_expr -> (arg_label * type_expr) list * type_expr
 end = struct
   open Types
   open Btype
@@ -205,6 +206,13 @@ end = struct
       failwith "generic variables are unified together";
     res
  *)
+
+  let funargs env ty = 
+    let rec f rev_args ty = match expand_repr_desc env ty with
+      | Tarrow (l, ty, ty',_flag) -> f ((l,ty)::rev_args) ty'
+      | _ -> (List.rev rev_args, ty)
+    in
+    f [] ty
 end
 
 module Types = struct
