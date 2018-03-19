@@ -124,15 +124,19 @@ module Imp = struct
           (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
           let loc = Location.ghost loc in
           let leopard_implicits x = { txt= Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),x)); loc } in
-          let mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
-          let spec = !from_payload_to_core_type_forward loc pld in
-          { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "get")
+          let _mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
+          let _spec = !from_payload_to_core_type_forward loc pld in
+(*
+            { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "get")
                                                       ; pexp_attributes = [] },
                                                mkty (Ptyp_arrow (Asttypes.Labelled "_d", 
                                                                  mkty (Ptyp_constr ( leopard_implicits "t",
                                                                                      [ mkty Ptyp_any; spec ] )),
                                                                  mkty Ptyp_any)))
-          }
+            }
+*)
+            { e with pexp_desc= Pexp_ident (leopard_implicits "get")
+                   ; pexp_attributes = [] }
       | _ -> super.expr self e
         in
         { super with typ; expr }

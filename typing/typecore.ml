@@ -2598,9 +2598,44 @@ let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS_CORE"
 let implicit_omitted : (Asttypes.arg_label * Typedtree.expression) list ref = ref []
 let imp_counter = ref 0
 
-let rec type_exp ?recarg env sexp =
+module IMP = struct
+  let is_imp_label = function
+      | Labelled s when s.[0] = '_' -> true
+      | _ -> false
+
+  let expand_repr_desc env ty = (repr @@ expand_head env ty).desc (* XXX defined in Leopardtyping.Types *)
+
+  let funargs env ty =  (* XXX defined in Leopardtyping.Types *)
+    let rec f rev_args ty = match expand_repr_desc env ty with
+      | Tarrow (l, ty, ty',flag) -> f ((l,ty,flag)::rev_args) ty' (* XXX flags... *)
+      | _ -> (List.rev rev_args, ty)
+    in
+    f [] ty
+
+  (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
+  let gen_vars ty =
+    List.filter
+      (fun ty -> ty.level = Btype.generic_level)
+      (Ctype.free_variables ty)
+      
+  let generalized_imp_args env ty =
+    List.filter (fun (l,ty,_) -> is_imp_label l && gen_vars ty <> []) @@ fst @@ funargs env ty
+      
+  let make_omitted_imp_arg loc l = 
+    let loc = { loc with Location.loc_ghost= true } in
+    (l, { pexp_desc= Pexp_assert { pexp_desc= Pexp_construct ({txt= Longident.Lident "false"; loc }, None)
+                                 ; pexp_loc= loc
+                                 ; pexp_attributes= [] }
+        ; pexp_loc= loc
+        ; pexp_attributes= [] })
+    
+end
+
+(* applied_labels:  argument labels applied to this sexp *)
+
+let rec type_exp ?recarg ?applied_labels env sexp =
   (* We now delegate everything to type_expect *)
-  type_expect ?recarg env sexp (newvar ())
+  type_expect ?recarg ?applied_labels env sexp (newvar ())
 
 (* Typing of an expression with an expected type.
    This provide better error messages, and allows controlled
@@ -2608,74 +2643,19 @@ let rec type_exp ?recarg env sexp =
    In the principal case, [type_expected'] may be at generic_level.
  *)
 
-and type_expect ?in_function ?recarg env sexp ty_expected =
+and type_expect ?in_function ?recarg ?applied_labels env sexp ty_expected =
   let previous_saved_types = Cmt_format.get_saved_types () in
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
       (fun () ->
-         type_expect_ ?in_function ?recarg env sexp ty_expected
+         type_expect_ ?in_function ?recarg ?applied_labels env sexp ty_expected
       )
   in
   Cmt_format.set_saved_types
     (Cmt_format.Partial_expression exp :: previous_saved_types);
   exp
 
-(*
-   This cannot live well with type_approx...
-   
-and type_expect_ ?in_function ?recarg env sexp ty_expected =
-  let e = type_expect_' ?in_function ?recarg env sexp ty_expected in
-
-  let rue exp =
-    unify_exp env (re exp) (instance env ty_expected);
-    exp
-  in
-
-  let loc = { e.exp_loc with Location.loc_ghost = true } in
-  let expand_repr_desc env ty = (repr @@ expand_head env ty).desc in (* XXX defined in Leopardtyping.Types *)
-  let funargs env ty =  (* XXX defined in Leopardtyping.Types *)
-    let rec f rev_args ty = match expand_repr_desc env ty with
-      | Tarrow (l, ty, ty',flag) -> f ((l,ty,flag)::rev_args) ty' (* XXX flags... *)
-      | _ -> (List.rev rev_args, ty)
-    in
-    f [] ty
-  in
-  let args, ret = funargs e.exp_env e.exp_type in
-  let imp_args, non_imp_args = List.partition (fun (l,_,_) -> match l with
-      | Labelled s when s.[0] = '_' -> true
-      | _ -> false) args
-  in
-  match imp_args with
-  | [] -> e
-  | _ ->
-      let args = List.map (fun (l,ty,_) ->
-          (* an implicit argument is omitted *)
-          let s = Printf.sprintf "imp%d" !imp_counter in
-          Format.eprintf "%a: inserting an omitted implicit arg: %s@." Location.print_loc loc s;
-          incr imp_counter;
-          let lid = Longident.Lident s in
-          let id = Ident.create s in
-          let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
-                    ; exp_loc= loc
-                    ; exp_extra= []
-                    ; exp_type= ty
-                    ; exp_env= env
-                    ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]] (*XXX loc *)
-                    }
-          in
-          implicit_omitted := (l,exp) :: !implicit_omitted;
-          (l, Some exp)) imp_args
-      in
-      let ty_res = List.fold_right (fun (l,ty,flag) st ->  newty (Tarrow (l, ty, st, flag))) non_imp_args ret in
-      rue {
-        exp_desc = Texp_apply(e, args);
-        exp_loc = loc; exp_extra = [];
-        exp_type = ty_res;
-        exp_attributes = sexp.pexp_attributes;
-        exp_env = env }
-*)
-
-and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
+and type_expect_ ?in_function ?(recarg=Rejected) ?(applied_labels=[]) env sexp ty_expected =
   let loc = sexp.pexp_loc in
   (* Record the expression type before unifying it with the expected type *)
   let rue exp =
@@ -2686,6 +2666,30 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   | Pexp_ident lid ->
       begin
         let (path, desc) = Typetexp.find_value env lid.loc lid.txt in
+
+(* imp *)
+        let giargs = IMP.generalized_imp_args env desc.val_type in
+        let giargs_not_applied = List.fold_left (fun giargs l ->
+            let rec f = function
+              | (l',_,_):: xs when l = l' -> xs
+              | x::xs -> x :: f xs
+              | [] -> []
+            in
+            f giargs
+          ) giargs applied_labels
+        in
+
+        if giargs_not_applied <> [] then begin (* *** *)
+          let sexp' = { pexp_desc= Pexp_apply( sexp, 
+                                               List.map (fun (l,_,_) -> IMP.make_omitted_imp_arg sexp.pexp_loc l) giargs_not_applied ) 
+                      ; pexp_loc = { loc with Location.loc_ghost = true }
+                      ; pexp_attributes = [] }
+          in
+          Format.eprintf "FIX: %a@." Pprintast.expression sexp';
+          type_expect_ ?in_function ~recarg ~applied_labels env sexp' ty_expected
+        end else begin (* *** *)
+(* imp end *)
+
         if !Clflags.annotations then begin
           let dloc = desc.Types.val_loc in
           let annot =
@@ -2741,6 +2745,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           exp_type = instance env desc.val_type;
           exp_attributes = sexp.pexp_attributes;
           exp_env = env }
+
+        end (* *** *)
       end
   | Pexp_constant(Pconst_string (str, _) as cst) -> (
     let cst = constant_or_raise env loc cst in
@@ -2886,7 +2892,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   | Pexp_apply(sfunct, sargs) ->
       assert (sargs <> []);
 
-      (* ppx_curried_constructor begin *)
+(* ppx_curried_constructor begin *)
 
       (* ((!F) 1) 2 3  == !F 1 2 3
       
@@ -2922,11 +2928,11 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
           type_expect ?in_function ~recarg env { sexp with pexp_desc = Pexp_apply (e, xs @ sargs) } ty_expected
       | None ->
 
-      (* ppx_curried_constr end *)
+(* ppx_curried_constr end *)
 
       begin_def (); (* one more level for non-returning functions *)
       if !Clflags.principal then begin_def ();
-      let funct = type_exp env sfunct in
+      let funct = type_exp env ~applied_labels:(List.map fst sargs @ applied_labels) sfunct in
       if !Clflags.principal then begin
           end_def ();
           generalize_structure funct.exp_type
@@ -4421,7 +4427,6 @@ and type_application env funct sargs =
         in
         let name = label_name l
         and optional = is_optional l in
-        let implicit = is_implicit l && !Leopardfeatures.implicits in
         let sargs, more_sargs, arg =
           if ignore_labels && not (is_optional l) then begin
             (* In classic mode, omitted = [] *)
@@ -4477,26 +4482,6 @@ and type_application env funct sargs =
                 (Warnings.Without_principality "eliminated optional argument");
               ignored := (l,ty,lv) :: !ignored;
               Some (fun () -> option_none (instance env ty) Location.none)
-            end else if implicit then begin
-              Some (fun () ->
-                  (* an implicit argument is omitted *)
-                  let s = Printf.sprintf "imp%d" !imp_counter in
-                  let loc = { funct.exp_loc with Location.loc_ghost = true } in
-                  Format.eprintf "%a: inserting an omitted implicit arg: %s@." Location.print_loc loc s;
-                  incr imp_counter;
-                  let lid = Longident.Lident s in
-                  let id = Ident.create s in
-                  let exp = { exp_desc= Texp_ident (Path.Pident id, {txt=lid; loc=Location.none}, { val_type= ty (* not really *); val_kind= Val_reg; val_loc= Location.none; val_attributes= [] })
-                            ; exp_loc= loc
-                            ; exp_extra= []
-                            ; exp_type= instance env ty
-                            ; exp_env= env
-                            ; exp_attributes= [{loc=Location.none; txt="imp_omitted"}, PStr[]] (*XXX loc *)
-                            }
-                  in
-                  implicit_omitted := (l,exp) :: !implicit_omitted;
-                  unify_exp env exp ty0;
-                  exp)
             end else begin
               may_warn funct.exp_loc
                 (Warnings.Without_principality "commuted an argument");
@@ -5198,17 +5183,10 @@ and leopard_fix_let is_recursive env scope allow (l, new_env) =
     & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
   in
 
-  (* [gen_vars] is defined in Leopardtyping, but it is after this module *)
-  let gen_vars ty =
-    List.filter
-      (fun ty -> ty.level = Btype.generic_level)
-      (Ctype.free_variables ty)
-  in
-
   (* type variables generalized this possibly mutual recursive let bindings *)
   let generalized_vars =
     List.sort_uniq (fun ty1 ty2 -> compare ty1.id ty2.id)
-    @@ List.concat_map (fun vb -> gen_vars vb.vb_pat.pat_type) l
+    @@ List.concat_map (fun vb -> IMP.gen_vars vb.vb_pat.pat_type) l
   in
 
   if debug_resolve then
@@ -5219,7 +5197,7 @@ and leopard_fix_let is_recursive env scope allow (l, new_env) =
   let partition_implicits gvars imps =
     let gvar_ids = List.map (fun v -> v.id) gvars in
     List.partition (fun (_,e) ->
-        List.exists (fun v -> List.mem v.id gvar_ids) (gen_vars e.exp_type)
+        List.exists (fun v -> List.mem v.id gvar_ids) (IMP.gen_vars e.exp_type)
       ) imps
   in
 
@@ -5230,7 +5208,7 @@ and leopard_fix_let is_recursive env scope allow (l, new_env) =
                      format_expression e
                      Printtyp.raw_type_expr e.exp_type
                      (list ",@ " Printtyp.raw_type_expr)
-                     (gen_vars e.exp_type)
+                     (IMP.gen_vars e.exp_type)
                  ))
               !implicit_omitted);
 
@@ -5263,14 +5241,14 @@ and leopard_fix_let is_recursive env scope allow (l, new_env) =
                      format_expression e
                      Printtyp.raw_type_expr e.exp_type
                      (list ",@ " Printtyp.raw_type_expr)
-                     (gen_vars e.exp_type)
+                     (IMP.gen_vars e.exp_type)
                  ))
               rest);
 
   implicit_omitted := rest;
 
   let implicits_related_with_type ty =
-    fst @@ partition_implicits (gen_vars ty) generalized_implicits
+    fst @@ partition_implicits (IMP.gen_vars ty) generalized_implicits
   in
 
   (* XXX If two implicit args have the same type, they must be unified! *)

@@ -5,8 +5,9 @@ module Add = struct
 end
 
 let () = assert ([%imp Add] 1 2 = 3)
-let () = assert ([%imp Add] 1.2 3.4 = 4.6)
+(* let () = assert ([%imp Add] 1.2 3.4 = 4.6) *)
 
+(*
 let add : _d:_ -> 'a -> 'a -> 'a = [%imp Add]
 
 let () = assert (add 1 2 = 3)
@@ -14,6 +15,7 @@ let () = assert (add 1 2 = 3)
 let double ~_d x = add ~_d x x
 
 let () = assert (double 1 = 2)
+*)
   
 (* 
    => let add ~d:(x : ('a -> 'a -> 'a, [ `Add ]) t) = (get (embed (get x)) : 'a -> 'a -> 'a) 
