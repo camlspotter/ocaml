@@ -5,10 +5,10 @@ module Add = struct
 end
 
 let () = assert ([%imp Add] 1 2 = 3)
-(* let () = assert ([%imp Add] 1.2 3.4 = 4.6) *)
+let () = assert ([%imp Add] 1.2 3.4 = 4.6)
 
 (*
-let add : _d:_ -> 'a -> 'a -> 'a = [%imp Add]
+let add : _d:('a -> 'a -> 'a, [%imp Add]) Leopard.Implicits.t -> 'a -> 'a -> 'a = fun ~_d -> [%imp Add]
 
 let () = assert (add 1 2 = 3)
   

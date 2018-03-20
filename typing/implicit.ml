@@ -1429,7 +1429,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a: add derived: %a@]@." Location.format loc Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a: add derived:@ %a@]@." Location.format loc Typedtree.format_expression e;
     e
 
   let clean_derived_candidates e =
