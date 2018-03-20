@@ -109,7 +109,9 @@ module Imp = struct
     Pre-preprocessing for syntax sugars for 
       [%imp <spec>]
   *)
-  
+
+  let any_var_cntr = ref 0
+
   let extend super =
     let typ self cty =
       match cty.ptyp_desc with
@@ -124,19 +126,24 @@ module Imp = struct
           (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
           let loc = Location.ghost loc in
           let leopard_implicits x = { txt= Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),x)); loc } in
-          let _mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
-          let _spec = !from_payload_to_core_type_forward loc pld in
-(*
-            { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "get")
-                                                      ; pexp_attributes = [] },
+          let mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
+          let any_var = incr any_var_cntr; mkty (Ptyp_var (Printf.sprintf "imp__any_var%d" !any_var_cntr)) in
+          let spec = !from_payload_to_core_type_forward loc pld in
+          (* Ptyp_any leaves the type level special and we have
+                Warning 20: this argument will not be used by the function.
+             warnings for arguments applied to the assert false:
+             
+             let () = assert ((((Leopard.Implicits.get : _d:(_, [ `Add ]) Leopard.Implicits.t -> _)  ~_d:(assert false)) 1 2) = 3)
+
+             Here, we have the warnings for 1 and 2
+          *)   
+          { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "get")
+                                                    ; pexp_attributes = [] },
                                                mkty (Ptyp_arrow (Asttypes.Labelled "_d", 
                                                                  mkty (Ptyp_constr ( leopard_implicits "t",
-                                                                                     [ mkty Ptyp_any; spec ] )),
-                                                                 mkty Ptyp_any)))
-            }
-*)
-            { e with pexp_desc= Pexp_ident (leopard_implicits "get")
-                   ; pexp_attributes = [] }
+                                                                                     [ any_var; spec ] )),
+                                                                 any_var)))
+          }
       | _ -> super.expr self e
         in
         { super with typ; expr }
