@@ -2633,11 +2633,9 @@ module IMP = struct
     
 end
 
-(* applied_labels:  argument labels applied to this sexp *)
-
-let rec type_exp ?recarg ?applied_labels env sexp =
+let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
-  type_expect ?recarg ?applied_labels env sexp (newvar ())
+  type_expect ?recarg env sexp (newvar ())
 
 (* Typing of an expression with an expected type.
    This provide better error messages, and allows controlled
@@ -2645,7 +2643,7 @@ let rec type_exp ?recarg ?applied_labels env sexp =
    In the principal case, [type_expected'] may be at generic_level.
  *)
 
-and type_expect ?in_function ?recarg ?applied_labels env sexp ty_expected =
+and type_expect ?in_function ?recarg env sexp ty_expected =
   let previous_saved_types = Cmt_format.get_saved_types () in
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
@@ -2657,35 +2655,64 @@ and type_expect ?in_function ?recarg ?applied_labels env sexp ty_expected =
     (Cmt_format.Partial_expression exp :: previous_saved_types);
   exp
 
-and type_expect' ?in_function ?recarg ?(applied_labels=[]) env sexp ty_expected =
-  match sexp.pexp_desc with
-  | Pexp_ident lid
-  | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) ->
-      let (path, desc) = Typetexp.find_value env lid.loc lid.txt in
-      let giargs = IMP.generalized_imp_args env desc.val_type in
-      let giargs_not_applied = List.fold_left (fun giargs l ->
-          let rec f = function
-            | (l',_,_):: xs when l = l' -> xs
-            | x::xs -> x :: f xs
-            | [] -> []
-          in
-          f giargs
-        ) giargs applied_labels
-      in
-      let loc = sexp.pexp_loc in
-      if giargs_not_applied <> [] then begin (* *** *)
-        let sexp' = { pexp_desc= Pexp_apply( sexp, 
-                                             List.map (fun (l,_,_) -> IMP.make_omitted_imp_arg sexp.pexp_loc l) giargs_not_applied ) 
-                    ; pexp_loc = { loc with Location.loc_ghost = true }
-                    ; pexp_attributes = [] }
+and type_expect' ?in_function ?recarg env sexp ty_expected =
+  let mark sexp = 
+    let mark' sexp = 
+      { sexp with pexp_attributes = ({ txt="imp_applied"
+                                     ; loc= sexp.pexp_loc}, PStr []) 
+                                    :: sexp.pexp_attributes }
+    in
+    match sexp.pexp_desc with
+    | Pexp_ident _ -> mark' sexp
+    | Pexp_constraint (({ pexp_desc= Pexp_ident _ } as e), ty) ->
+        mark' ({ sexp with pexp_desc= Pexp_constraint (mark' e, ty) })
+    | _ -> sexp
+  in
+  let is_marked sexp = 
+    List.exists (fun ({txt},_) -> txt = "imp_applied") sexp.pexp_attributes 
+  in
+  let apply_imp applied_labels lid sexp =
+    let sexp = mark sexp in
+    let (path, desc) = Typetexp.find_value env lid.loc lid.txt in
+    let giargs = IMP.generalized_imp_args env desc.val_type in
+    let giargs_not_applied = List.fold_left (fun giargs l ->
+        let rec f = function
+          | (l',_,_):: xs when l = l' -> xs
+          | x::xs -> x :: f xs
+          | [] -> []
         in
-        Format.eprintf "FIX: %a@." Pprintast.expression sexp';
-        type_expect_ ?in_function ?recarg ~applied_labels:(applied_labels @ List.map (fun (l,_,_) -> l) giargs_not_applied) env sexp' ty_expected
-      end else 
-        type_expect_ ?in_function ?recarg ~applied_labels env sexp ty_expected
-  | _ -> type_expect_ ?in_function ?recarg ~applied_labels env sexp ty_expected
+        f giargs
+      ) giargs applied_labels
+    in
+    let loc = sexp.pexp_loc in
+    if giargs_not_applied <> [] then begin (* *** *)
+      let sexp' = { pexp_desc= Pexp_apply( sexp, 
+                                           List.map (fun (l,_,_) -> IMP.make_omitted_imp_arg sexp.pexp_loc l) giargs_not_applied ) 
+                  ; pexp_loc = { loc with Location.loc_ghost = true }
+                  ; pexp_attributes = [] }
+      in
+      Format.eprintf "@[<2>Added implicit application:@ %a@]@." Pprintast.expression sexp';
+      sexp'
+    end else sexp
+  in
 
-and type_expect_ ?in_function ?(recarg=Rejected) ?applied_labels env sexp ty_expected =
+  let sexp = 
+    if is_marked sexp then sexp
+    else match sexp.pexp_desc with
+      | Pexp_apply(fnct, args) ->
+          begin match fnct.pexp_desc with
+          | Pexp_ident lid
+          | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> 
+              apply_imp (List.map fst args) lid 
+          | _ -> sexp
+          end
+      | Pexp_ident lid
+      | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> apply_imp [] lid sexp
+      | _ -> sexp
+  in 
+  type_expect_ ?in_function ?recarg env sexp ty_expected
+
+and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   let loc = sexp.pexp_loc in
   (* Record the expression type before unifying it with the expected type *)
   let rue exp =
@@ -2936,7 +2963,7 @@ and type_expect_ ?in_function ?(recarg=Rejected) ?applied_labels env sexp ty_exp
 
       begin_def (); (* one more level for non-returning functions *)
       if !Clflags.principal then begin_def ();
-      let funct = type_exp env ~applied_labels:(List.map fst sargs) sfunct in
+      let funct = type_exp env sfunct in
       if !Clflags.principal then begin
           end_def ();
           generalize_structure funct.exp_type
@@ -3309,9 +3336,9 @@ and type_expect_ ?in_function ?(recarg=Rejected) ?applied_labels env sexp ty_exp
         if separate then begin
           end_def ();
           generalize_structure ty;
-          (type_argument ?applied_labels env sarg ty (instance env ty), instance env ty)
+          (type_argument env sarg ty (instance env ty), instance env ty)
         end else
-          (type_argument ?applied_labels env sarg ty ty, ty)
+          (type_argument env sarg ty ty, ty)
       in
       rue {
         exp_desc = arg.exp_desc;
@@ -4229,7 +4256,7 @@ and type_label_exp create env loc ty_expected
   in
   (lid, label, {arg with exp_type = instance env arg.exp_type})
 
-and type_argument ?recarg ?applied_labels env sarg ty_expected' ty_expected =
+and type_argument ?recarg env sarg ty_expected' ty_expected =
   (* ty_expected' may be generic *)
   let no_labels ty =
     let ls, tvar = list_labels env ty in
@@ -4249,7 +4276,7 @@ and type_argument ?recarg ?applied_labels env sarg ty_expected' ty_expected =
       (* apply optional arguments when expected type is "" *)
       (* we must be very careful about not breaking the semantics *)
       if !Clflags.principal then begin_def ();
-      let texp = type_exp ?applied_labels env sarg in
+      let texp = type_exp env sarg in
       if !Clflags.principal then begin
         end_def ();
         generalize_structure texp.exp_type
@@ -4318,7 +4345,7 @@ and type_argument ?recarg ?applied_labels env sarg ty_expected' ty_expected =
                      func let_var) }
       end
   | _ ->
-      let texp = type_expect ?recarg ?applied_labels env sarg ty_expected' in
+      let texp = type_expect ?recarg env sarg ty_expected' in
       unify_exp env texp ty_expected;
       texp
 

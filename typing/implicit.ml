@@ -597,7 +597,11 @@ module Specconv : sig
 
   open Types
 
-  val from_type_expr : Location.t -> type_expr -> Spec.t
+  val from_type_expr 
+    : Location.t 
+    -> type_expr  (* (_,_) Leopard.Implicit.t *)
+    -> type_expr  (* The 2nd parameter of the above type *) 
+    -> Spec.t
 
 end = struct
 
@@ -761,7 +765,8 @@ end = struct
 
       ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
   *)
-  let from_type_expr loc ty =
+  let from_type_expr loc _ty0 ty =
+    (* XXX  error messages are not kind enough *)
     let take_one n ty = raise_errorf ~loc "type %a is used where %s must take one argument" Printtyp.type_expr ty n
     in
     let str ty = match repr_desc ty with
@@ -773,7 +778,7 @@ end = struct
           | Ok s -> s
           | Error (`Failed_unmangle s) -> raise_errorf ~loc "%s" s
           end
-      | _ -> raise_errorf ~loc "This type %a is where a type of encoded string was expected (%a)" Printtyp.type_expr ty Printtyp.raw_type_expr ty
+      | _ -> raise_errorf ~loc "This type %a is where a type of encoded string was expected@ (%a)" Printtyp.type_expr ty Printtyp.raw_type_expr ty
     in
     let get ty = match repr_desc ty with
       | Tconstr ( (Path.Pident {Ident.name} | Path.Pdot (_,name,_)) , xs, _ ) -> Some (name, xs)
@@ -930,9 +935,9 @@ let is_imp_arg env loc l ty
   let default = (* this is not an imp arg *)
     (ty, None, (fun x -> x), (fun x -> x))
   in
-  let f ty = match is_imp_arg_type env ty with
+  let f ty0 = match is_imp_arg_type env ty0 with
     | Some (ty, spec) ->
-        let spec = Specconv.from_type_expr loc spec in
+        let spec = Specconv.from_type_expr loc ty0 spec in
         (ty, Some spec, Runtime.embed, Runtime.get)
     | None -> default
   in
@@ -1413,7 +1418,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
                           )
                           :: !derived_candidates;
     (* p as __imp_arg_x__ *)
-    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})} in
+    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})
+                    ; pat_extra = []
+             } 
+    in
     let case = { case with c_lhs = p' } in
     (* fun (p as __imp_arg_x__) -> .. *)
     let e = match e.exp_desc with
