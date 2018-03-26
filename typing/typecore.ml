@@ -1558,6 +1558,7 @@ let add_delayed_check f =
   delayed_checks := (f, Warnings.backup ()) :: !delayed_checks
 
 let force_delayed_checks () =
+  prerr_endline "FORCE_DELAYED";
   (* checks may change type levels *)
   let snap = Btype.snapshot () in
   let w_old = Warnings.backup () in
@@ -2597,6 +2598,13 @@ let unify_exp env exp expected_ty =
 let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS_CORE"
 let implicit_omitted : (Asttypes.arg_label * Typedtree.expression) list ref = ref []
 let imp_counter = ref 0
+let apply_implicit_args = ref false
+
+let with_applying_implicit_args f = 
+  apply_implicit_args := true;
+  match f () with
+  | exception e -> apply_implicit_args := false; raise e
+  | v -> apply_implicit_args := false; v
 
 module IMP = struct
   let is_imp_label = function
@@ -2648,7 +2656,7 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
   let exp =
     Builtin_attributes.warning_scope sexp.pexp_attributes
       (fun () ->
-         type_expect' ?in_function ?recarg ?applied_labels env sexp ty_expected
+         type_expect' ?in_function ?recarg env sexp ty_expected
       )
   in
   Cmt_format.set_saved_types
@@ -2656,60 +2664,83 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
   exp
 
 and type_expect' ?in_function ?recarg env sexp ty_expected =
-  let mark sexp = 
-    let mark' sexp = 
-      { sexp with pexp_attributes = ({ txt="imp_applied"
-                                     ; loc= sexp.pexp_loc}, PStr []) 
-                                    :: sexp.pexp_attributes }
-    in
-    match sexp.pexp_desc with
-    | Pexp_ident _ -> mark' sexp
-    | Pexp_constraint (({ pexp_desc= Pexp_ident _ } as e), ty) ->
-        mark' ({ sexp with pexp_desc= Pexp_constraint (mark' e, ty) })
-    | _ -> sexp
-  in
-  let is_marked sexp = 
-    List.exists (fun ({txt},_) -> txt = "imp_applied") sexp.pexp_attributes 
-  in
-  let apply_imp applied_labels lid sexp =
-    let sexp = mark sexp in
-    let (path, desc) = Typetexp.find_value env lid.loc lid.txt in
-    let giargs = IMP.generalized_imp_args env desc.val_type in
-    let giargs_not_applied = List.fold_left (fun giargs l ->
-        let rec f = function
-          | (l',_,_):: xs when l = l' -> xs
-          | x::xs -> x :: f xs
-          | [] -> []
+  let sexp0 = sexp in
+  let sexp =
+    if not !apply_implicit_args then sexp
+    else
+      let rec mark sexp = 
+        let mark' sexp = 
+          { sexp with pexp_attributes = ({ txt="imp_applied"
+                                         ; loc= sexp.pexp_loc}, PStr []) 
+                                        :: sexp.pexp_attributes }
         in
-        f giargs
-      ) giargs applied_labels
-    in
-    let loc = sexp.pexp_loc in
-    if giargs_not_applied <> [] then begin (* *** *)
-      let sexp' = { pexp_desc= Pexp_apply( sexp, 
-                                           List.map (fun (l,_,_) -> IMP.make_omitted_imp_arg sexp.pexp_loc l) giargs_not_applied ) 
-                  ; pexp_loc = { loc with Location.loc_ghost = true }
-                  ; pexp_attributes = [] }
+        match sexp.pexp_desc with
+        | Pexp_ident _ -> mark' sexp
+        | Pexp_constraint (({ pexp_desc= Pexp_ident _ } as e), ty) ->
+            mark' ({ sexp with pexp_desc= Pexp_constraint (mark' e, ty) })
+        | Pexp_apply (fnct, args) -> { sexp with pexp_desc= Pexp_apply (mark fnct, args) }
+        | _ -> sexp
       in
-      Format.eprintf "@[<2>Added implicit application:@ %a@]@." Pprintast.expression sexp';
-      sexp'
-    end else sexp
-  in
+      let is_marked sexp = 
+        let b = List.exists (fun ({txt},_) -> txt = "imp_applied") sexp.pexp_attributes in
+        b, { sexp with pexp_attributes = List.filter (fun ({txt},_) -> txt <> "imp_applied") sexp.pexp_attributes }
+      in
 
-  let sexp = 
-    if is_marked sexp then sexp
-    else match sexp.pexp_desc with
-      | Pexp_apply(fnct, args) ->
-          begin match fnct.pexp_desc with
-          | Pexp_ident lid
-          | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> 
-              apply_imp (List.map fst args) lid 
-          | _ -> sexp
-          end
-      | Pexp_ident lid
-      | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> apply_imp [] lid sexp
-      | _ -> sexp
+      (* apply_imp_args sexp ls => sexp ~l1:(assert false) .. ~ln:(assert false) *)
+      let apply_imp_args sexp = function
+        | [] -> sexp
+        | labels -> 
+            let loc = { sexp.pexp_loc with Location.loc_ghost= true } in
+            let imp_args = List.map (IMP.make_omitted_imp_arg sexp.pexp_loc) labels in
+            match sexp.pexp_desc with
+            | Pexp_apply ( sexp', args ) ->
+                { sexp with pexp_desc= Pexp_apply ( sexp', args @ imp_args ) }
+            | _ -> 
+                { pexp_desc= Pexp_apply( sexp, imp_args )
+                ; pexp_loc = loc
+                ; pexp_attributes = [] }
+      in
+
+      let apply_imp applied_labels lid sexp =
+        let (path, desc) = Typetexp.find_value env lid.loc lid.txt in
+        let giargs = IMP.generalized_imp_args env desc.val_type in
+        let giargs_not_applied = List.fold_left (fun giargs l ->
+            let rec f = function
+              | (l',_,_):: xs when l = l' -> xs
+              | x::xs -> x :: f xs
+              | [] -> []
+            in
+            f giargs
+          ) giargs applied_labels
+        in
+        if giargs_not_applied <> [] then begin (* *** *)
+          (* Format.eprintf "@[<2>Adding implicit application...:@ %a@]@." Pprintast.expression sexp; *)
+          let sexp' = mark (apply_imp_args sexp (List.map (fun (l,_,_) -> l) giargs_not_applied)) in
+          (* Format.eprintf "@[<2>Added implicit application:@ %a@]@." Pprintast.expression sexp'; *)
+          sexp'
+        end else mark sexp
+      in
+
+      (* XXX This puts and removes attribute for all the variables! *)
+      let b, _sexp' = is_marked sexp in
+      if b then sexp
+      else match sexp.pexp_desc with
+        | Pexp_apply(fnct, args) ->
+            begin match fnct.pexp_desc with
+            | Pexp_ident lid
+            | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> 
+                apply_imp (List.map fst args) lid { sexp with pexp_desc= Pexp_apply (fnct, args) }
+            | _ -> sexp
+            end
+        | Pexp_ident lid
+        | Pexp_constraint ({ pexp_desc= Pexp_ident lid }, _) -> apply_imp [] lid sexp
+        | _ -> sexp
   in 
+
+  if sexp0 != sexp then
+    Format.eprintf "@[<2>EXP:@ %a@ =>@ %a@]@." 
+      Pprintast.expression sexp0
+      Pprintast.expression sexp;
   type_expect_ ?in_function ?recarg env sexp ty_expected
 
 and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
