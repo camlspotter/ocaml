@@ -1401,7 +1401,6 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
   let names = new_names () in
 
   let type_str_item env srem {pstr_loc = loc; pstr_desc = desc} =
-prerr_endline "TSTR_ITEM...";        
     match desc with
     | Pstr_eval (sexpr, attrs) ->
         let expr =

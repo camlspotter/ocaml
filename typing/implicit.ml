@@ -515,79 +515,6 @@ end = struct
     candidates t
 end
 
-(*
-module Specconv : sig
-  (** Spec conversion
-
-      Specs cannot appear in programs as they are.
-      This module provides conversions between them and types and expressions.
-  *)
-
-  open Types
-
-  val from_type_expr : Env.t -> Location.t -> type_expr -> Spec.t
-end = struct
-
-  open Parsetree
-  open Types
-
-  open Spec
-
-  let prefix = "Spec_"
-  let prefix_len = String.length prefix
-
-  let mangle x =
-    (prefix ^ Mangle.mangle (to_string x),
-     get_type_components x)
-
-  (* CR jfuruse: need tests *)
-  let unmangle_spec_string loc s =
-    if not & String.is_prefix prefix s then raise_errorf ~loc "Mangled spec string does not start with \"Spec_\": %s" s;
-    let s = String.sub s prefix_len (String.length s - prefix_len) in
-    Mangle.unmangle s
-
-  let from_string = XParser.expression_from_string
-
-  (* typed world *)
-
-  (********************* NEW ENCODING USING POLYVARIANT ***************)
-
-  (** Obtain a spec from a type expr.
-
-      ex. [ `Spec__28related_20_3a_20'a_29 of < l0 : 'a > ] => (related : 'a)
-  *)
-  let from_type_expr env loc ty = match expand_repr_desc env ty with
-    | Tvariant rd ->
-        let rd = Btype.row_repr rd in
-        begin match rd with
-        | { row_closed= true; row_fields= [l, Rpresent (Some ty)] } ->
-            let open Result.Monad in
-            (* Note that the type variables are Tunivars *)
-            let unpoly ty = match expand_repr_desc env ty with
-              | Tpoly (ty, []) -> ty
-              | _ -> ty
-            in
-            let fs, nil = Ctype.(flatten_fields & object_fields ty) in
-            let fs = map (fun (a,b,ty) -> (a,b,unpoly ty)) fs in
-            assert (expand_repr_desc env nil = Tnil);
-            assert (fs = []
-                   || for_all (function (_, Fpresent, _) -> true | _ -> false) fs);
-            assign_type_components (map (fun (_,_,ty) -> ty) fs)
-            & at_Error (error loc)
-            & unmangle_spec_string loc l
-              >>= from_string
-              >>= from_expression env
-        | _ ->
-            raise_errorf ~loc "Illegal type for implicit spec"
-        end
-    | _ ->
-        raise_errorf ~loc "Illegal type for implicit spec (not a polymorphic variant type)"
-
-  let () = Leopardppx.Imp.from_payload_to_core_type_forward := from_payload_to_core_type
-
-end
-*)
-
 module Specconv : sig
   (** Spec conversion
 
@@ -1189,27 +1116,31 @@ let shadow_check env loc e0 =
         (Format.list "@," format_shadow) !shadowed
 
 (* The function recovers all the types it modifies inside. *)
-let resolve env loc spec ty = with_snapshot & fun () ->
+let resolve env loc spec ty = 
+  let res = with_snapshot & fun () ->
 
-  if debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
+      if debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
 
-  (* Protect the generalized type variables by temporarily unified by unique types,
-     so that they can be unifiable only with themselves.
-  *)
-  close_gen_vars ty;
+      (* Protect the generalized type variables by temporarily unified by unique types,
+         so that they can be unifiable only with themselves.
+      *)
+      close_gen_vars ty;
 
-  if debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
+      if debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
 
-  (* CR jfuruse: Only one value at a time so far *)
+      (* CR jfuruse: Only one value at a time so far *)
+      resolve loc env [([],ty,spec)]
+  in
   let open Resolve_result in
-  match resolve loc env [([],ty,spec)] with
+  match res with
   | MayLoop es ->
       raise_errorf ~loc "The experssion has type @[%a@] which is too ambiguous to resolve this implicit.@ @[<2>The following instances may cause infinite loop of the resolution:@ @[<2>%a@]@]"
         Printtyp.type_expr ty
         (* CR jfuruse: should define a function for printing Typedtree.expression *)
         (List.format ",@," format_expression) es
   | Ok [] ->
-      raise_errorf ~loc "No instance found for@ @[%a@]"
+      raise_errorf ~loc "@[<2>No instance found for@ @[%s@ : %a@]@]"
+        (Spec.to_string spec)
         Printtyp.type_expr ty
   | Ok (_::_::_ as es) ->
       let es = map (function [e] -> e | _ -> assert false (* impos *)) es in
@@ -1238,7 +1169,7 @@ let resolve env loc spec ty =
   let gvar_descs = List.map (fun gv -> gv, gv.desc) gvars in
   !!% "Closing %a@." Printtyp.raw_type_expr ty;
   close_gen_vars ty;
-  !!% "Closing %a@." Printtyp.raw_type_expr ty;
+  !!% "Closed to %a@." Printtyp.raw_type_expr ty;
   if debug_resolve then
     !!% "@[<2>%a:@ Replaying %a : %a@]@."
       Location.format loc 

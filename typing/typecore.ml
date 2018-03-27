@@ -1558,7 +1558,6 @@ let add_delayed_check f =
   delayed_checks := (f, Warnings.backup ()) :: !delayed_checks
 
 let force_delayed_checks () =
-  prerr_endline "FORCE_DELAYED";
   (* checks may change type levels *)
   let snap = Btype.snapshot () in
   let w_old = Warnings.backup () in

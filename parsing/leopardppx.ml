@@ -122,8 +122,8 @@ module Imp = struct
       (* We leave `open %imp M` *)
       | Pexp_extension ({ txt = "imp" }, PStr [ { pstr_desc = Pstr_eval ({ pexp_desc= Pexp_open _ }, _)} ] ) -> super.expr self e
 
+       (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
       | Pexp_extension ({txt="imp"; loc}, pld) ->
-          (* [%imp spec]  =>  (Leopard.Implicit.get : _d:(_, <spec>) Leopard.Implicits.t -> _) [@imp_omitted] : *)
           let loc = Location.ghost loc in
           let leopard_implicits x = { txt= Longident.(Ldot(Ldot(Lident "Leopard","Implicits"),x)); loc } in
           let mkty ptyp_desc = { ptyp_desc; ptyp_loc= loc; ptyp_attributes= [] } in
@@ -144,6 +144,7 @@ module Imp = struct
                                                                                      [ any_var; spec ] )),
                                                                  any_var)))
           }
+
       | _ -> super.expr self e
         in
         { super with typ; expr }
