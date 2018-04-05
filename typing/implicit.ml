@@ -773,7 +773,12 @@ open Format
 
 (* CR jfuruse: bad state... *)
 (* CR jfuruse: confusing with deriving spec *)
-let derived_candidates = ref []
+type derived_candidate = string * Candidate.t * Ident.t * value_description
+
+let format_derived_candidate ppf (n, c, id, vdesc) =
+  Format.fprintf ppf "@[<v>name=%s;@ cand=@[%a@];@ id=%a;@ type=%a@]" n Candidate.format c Ident.format id Printtyp.type_scheme vdesc.val_type
+    
+let derived_candidates = ref ([] : derived_candidate list)
 
 (* CR jfuruse: this is very slow, since it computes everything each time. *)
 let get_candidates env loc spec =
@@ -829,11 +834,11 @@ module Runtime = struct
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
     illtyped_app f [Nolabel, e]
 
-  (** [get e] builds [Leopard.Implicits.get <e>] *)
+  (** [get e] builds [Leopard.Implicits.get ~_d:<e>] *)
   let get e =
     let f = get_ident e.exp_env e.exp_loc lident_get in
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
-    illtyped_app f [Nolabel, e]
+    illtyped_app f [Labelled "_d", e]
 
   (** [from_Some e] builds [Leopard.Implicits.from_Some <e>] *)
   let from_Some e =
@@ -1139,7 +1144,7 @@ let resolve env loc spec ty =
         (* CR jfuruse: should define a function for printing Typedtree.expression *)
         (List.format ",@," format_expression) es
   | Ok [] ->
-      raise_errorf ~loc "@[<2>No instance found for@ @[%s@ : %a@]@]"
+      raise_errorf ~loc "@[<2>No instance found for@ @[[%%imp %s]@ : %a@]@]"
         (Spec.to_string spec)
         Printtyp.type_expr ty
   | Ok (_::_::_ as es) ->
@@ -1161,7 +1166,7 @@ let resolve env loc spec ty =
   (* Now we replay the type unifications!
      The generalized variables must be protected! *)
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying0 %a : %a@]@."
+    !!% "Resolved!@.@[<2>%a:@ Replaying #0 %a : %a@]@."
       Location.format loc
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
@@ -1171,19 +1176,25 @@ let resolve env loc spec ty =
   close_gen_vars ty;
   !!% "Closed to %a@." Printtyp.raw_type_expr ty;
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying %a : %a@]@."
+    !!% "@[<2>%a:@ Replaying #1 %a : %a@]@."
       Location.format loc 
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
   let ue = Untypeast.(default_mapper.expr default_mapper) e in
   let te = Typecore.type_expression env ue in
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying1 %a : %a : %a@]@."
+    !!% "@[<2>%a:@ Replaying #2 %a : %a : %a@]@."
         Location.format loc
         Typedtree.format_expression te
         Printtyp.type_scheme te.exp_type
         Printtyp.type_scheme ty;
   Ctype.unify env te.exp_type ty;
+  if debug_resolve then
+    !!% "@[<2>%a:@ Replaying #3 %a : %a : %a@]@."
+        Location.format loc
+        Typedtree.format_expression te
+        Printtyp.type_scheme te.exp_type
+        Printtyp.type_scheme ty;
   (* recover gvars *)
   (*   gv(=Link) --> uniq  <-- tv'
 
@@ -1197,8 +1208,11 @@ let resolve env loc spec ty =
       if debug_resolve then !!% "%a@." Printtyp.type_scheme gv
     ) gvar_descs;
   if debug_resolve then begin
-    !!% "Replay result: %a@." Printtyp.type_scheme te.exp_type;
-    !!% "Closed? %a@." Printtyp.raw_type_expr te.exp_type
+    !!% "@[<2>%a:@ Replaying #4 %a : %a : %a@]@."
+        Location.format loc
+        Typedtree.format_expression te
+        Printtyp.type_scheme te.exp_type
+        Printtyp.type_scheme ty;
   end;
   te
 
@@ -1339,7 +1353,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         ; exp_attributes = []
         }
     in
-    derived_candidates := (name
+    let cand = (name
                           , { Candidate.path; (* <- not actually path. see expr field *)
                               expr;
                               type_;
@@ -1347,12 +1361,11 @@ module MapArg : TypedtreeMap.MapArgument = struct
                           , id
                           , vdesc
                           )
-                          :: !derived_candidates;
-    (* p as __imp_arg_x__ *)
-    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc})
-                    ; pat_extra = []
-             } 
+
     in
+    derived_candidates := cand :: !derived_candidates;
+    (* p as __imp_arg_x__ *)
+    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc}) } in
     let case = { case with c_lhs = p' } in
     (* fun (p as __imp_arg_x__) -> .. *)
     let e = match e.exp_desc with
@@ -1368,7 +1381,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a: add derived:@ %a@]@." Location.format loc Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a:@ added derived { %a }@ : %a@]@." Location.format loc
+      format_derived_candidate cand
+      Typedtree.format_expression e;
     e
 
   let clean_derived_candidates e =
