@@ -1161,7 +1161,7 @@ let resolve env loc spec ty =
   (* Now we replay the type unifications!
      The generalized variables must be protected! *)
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying0 %a : %a@]@."
+    !!% "@[<2>%a:@ Replaying0 %a@ with %a@]@."
       Location.format loc
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
@@ -1171,14 +1171,14 @@ let resolve env loc spec ty =
   close_gen_vars ty;
   !!% "Closed to %a@." Printtyp.raw_type_expr ty;
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying %a : %a@]@."
+    !!% "@[<2>%a:@ Replaying %a @ with %a@]@."
       Location.format loc 
       Typedtree.format_expression e
       Printtyp.type_scheme ty;
   let ue = Untypeast.(default_mapper.expr default_mapper) e in
   let te = Typecore.type_expression env ue in
   if debug_resolve then
-    !!% "@[<2>%a:@ Replaying1 %a : %a : %a@]@."
+    !!% "@[<2>%a:@ Replaying1 %a : %a@ with %a@]@."
         Location.format loc
         Typedtree.format_expression te
         Printtyp.type_scheme te.exp_type
@@ -1368,7 +1368,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a: add derived:@ %a@]@." Location.format loc Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a: add derived %s:@ %a@]@." 
+      Location.format loc 
+      name
+      Typedtree.format_expression e;
     e
 
   let clean_derived_candidates e =
