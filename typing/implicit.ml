@@ -780,7 +780,8 @@ open Format
 type derived_candidate = string * Candidate.t * Ident.t * value_description
 
 let format_derived_candidate ppf (n, c, id, vdesc) =
-  Format.fprintf ppf "@[<v>name=%s;@ cand=@[%a@];@ id=%a;@ type=%a@]" n Candidate.format c Ident.format id Printtyp.type_scheme vdesc.val_type
+  Format.fprintf ppf "@[<v>name=%s;@ cand=@[%a@];@ id=%a;@ type=%a@]" 
+    n Candidate.format c Ident.format id Printtyp.type_scheme vdesc.val_type
     
 let derived_candidates = ref ([] : derived_candidate list)
 
@@ -1119,14 +1120,24 @@ let shadow_check env loc e0 =
 let resolve env loc spec ty = 
   let res = with_snapshot & fun () ->
 
-      if debug_resolve then !!% "@.RESOLVE: %a@." Location.format loc;
+      if debug_resolve then begin
+        !!% "@.RESOLVE: %a@." Location.format loc;
+        !!% "  Type is %a@." Printtyp.type_scheme ty;
+        !!% "  Spec is %s@." (Spec.to_string spec);
+      end;
 
       (* Protect the generalized type variables by temporarily unified by unique types,
          so that they can be unifiable only with themselves.
       *)
       close_gen_vars ty;
 
-      if debug_resolve then !!% "  The type is: %a@." Printtyp.type_scheme ty;
+      (* We also have to close the gen vars of derived candidates *)
+      List.iter (fun (_,c,_,_vdesc) ->
+          close_gen_vars c.Candidate.type_;
+          (* XXX also for vdesc ? *)
+        ) !derived_candidates;
+
+      if debug_resolve then !!% "  The closed type is: %a@." Printtyp.type_scheme ty;
 
       (* CR jfuruse: Only one value at a time so far *)
       resolve loc env [([],ty,spec)]
@@ -1317,68 +1328,6 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | _ -> e
         end
     | _ -> e
-
-  let _add_derived_candidate e case p type_ unconv =
-    (* This is an imp arg *)
-
-    (* Build  fun ?d:(d as __imp_arg__) -> 
-          or  fun ~d:(d as __imp_arg__) ->
-     *)
-
-    let loc = Location.ghost p.pat_loc in
-    let name = create_imp_arg_name () in
-    (* p ->     ===>   (p as fname) -> *)
-    let lident = Longident.Lident name in
-    let id = Ident.create name in
-    let path = Path.Pident id in
-    let vdesc =
-      { val_type = p.pat_type
-      ; val_kind = Val_reg
-      ; val_loc = loc
-      ; val_attributes = []  }
-    in
-    let expr =
-      (* XXX Locations must be fixed later when it is actually used *)
-      unconv
-      & { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
-        ; exp_loc = Location.none
-        ; exp_extra = []
-        ; exp_type = p.pat_type
-        ; exp_env = p.pat_env
-        ; exp_attributes = []
-        }
-    in
-    let cand = (name
-               , { Candidate.path; (* <- not actually path. see expr field *)
-                   expr;
-                   type_;
-                   aggressive = false }
-               , id
-               , vdesc
-               )
-
-    in
-    derived_candidates := cand :: !derived_candidates;
-    (* p as __imp_arg_x__ *)
-    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc}) } in
-    let case = { case with c_lhs = p' } in
-    (* fun (p as __imp_arg_x__) -> .. *)
-    let e = match e.exp_desc with
-      | Texp_function f ->
-          { e with exp_desc = Texp_function { f with cases= [case] }}
-      | _ -> assert false
-    in
-
-    (* We need to mark the abstraction for unregistering this derived when we go out from the abstraction *)
-    (* XXX needs a helper module for this *)
-    let e =
-      Typedtree.add_attribute
-        "leopard_mark"
-        (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
-    in
-    Format.eprintf "@[<2>%a:@ added derived { %a }@]@." Location.format loc
-      format_derived_candidate cand;
-    e
 
   let add_derived_candidate_new e case p type_ _spec =
     (* This is an imp arg *)
