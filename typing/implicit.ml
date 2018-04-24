@@ -134,10 +134,11 @@ end = struct
   }
 
   let format ppf c =
-    Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
+    Format.fprintf ppf "{ @[path= %a;@ expr= %a;@ type_= %a;@ aggressive= %b@] }"
       Path.format c.path
       Typedtree.format_expression c.expr
       Printtyp.type_scheme c.type_
+      c.aggressive
 
   let uniq xs =
     let tbl = Hashtbl.create 107 in
@@ -1375,9 +1376,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a:@ added derived { %a }@ : %a@]@." Location.format loc
-      format_derived_candidate cand
-      Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a:@ added derived { %a }@]@." Location.format loc
+      format_derived_candidate cand;
     e
 
   let add_derived_candidate_new e case p type_ _spec =
@@ -1435,9 +1435,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a:@ added derived { %a }@ : %a@]@." Location.format loc
-      format_derived_candidate cand
-      Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a:@ added derived { %a }@]@." Location.format loc
+      format_derived_candidate cand;
     e
 
   let clean_derived_candidates e =
@@ -1566,8 +1565,23 @@ end
 
 module Map = TypedtreeMap.MakeMap(MapArg)
 
+module CleanImpApplied = TypedtreeMap.MakeMap(struct
+    include TypedtreeMap.DefaultMapArgument
+
+    let remove_imp_applied = List.filter (function ({txt="imp_applied"},_) -> false | _ -> true)
+
+    let remove_imp_applied_from_exp e =
+      { e with 
+          exp_attributes = remove_imp_applied e.exp_attributes
+        ; exp_extra = List.map (fun (extra,loc,atrs) -> (extra,loc,remove_imp_applied atrs)) e.exp_extra
+      }
+
+    let enter_expression = remove_imp_applied_from_exp
+  end)
+
 let resolve str =
   if !Leopardfeatures.implicits then begin
+    let str = CleanImpApplied.map_structure str in
     if debug_resolve then
       Format.eprintf "@[<2>RESOLVE structure:@ @[%a@]@]@." Typedtree.format_structure str;
     Map.map_structure str
