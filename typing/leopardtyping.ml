@@ -122,7 +122,9 @@ module XTypes : sig
 
   val create_uniq_type : unit -> type_expr
   (** Create a type which can be unified only with itself *)
-    
+
+  val is_unique : type_expr -> bool
+
   val close_gen_vars : type_expr -> unit
   (** Unify the generalized type variables appear in the argument with
       unique types created by `create_uniq_type`.
@@ -175,6 +177,12 @@ end = struct
       *)
       Ctype.newty ( Tconstr ( Path.Pident (Ident.create_persistent & "*uniq*" ^ string_of_int !cntr), [], ref Mnil ) )
 
+  (* XXX This is very bad identification by name *)
+  let is_unique ty = match repr_desc ty with
+    | Tconstr ( Path.Pident {Ident.name=n}, [], _ ) ->
+        (try String.sub n 0 6 = "*uniq*" with _ -> false)
+    | _ -> false
+      
   let close_gen_vars ty = flip iter (gen_vars ty) & fun gv ->
     let gv = Ctype.repr gv in                                                    
     match gv.desc with

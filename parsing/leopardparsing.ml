@@ -106,6 +106,9 @@ module XParsetree : sig
   val tvars_of_core_type : core_type -> string list
 
   val sig_module_of_stri : structure_item -> signature_item
+    
+  val is_marked : string -> expression -> bool * expression
+  val mark : string -> expression -> expression
 end = struct
   (* We cannot include Parsetree since it lacks implementation *)
   open Parsetree
@@ -247,6 +250,16 @@ end = struct
     | _ ->
         !!% "sig_module_of_stri: got a non modtype@.";
         assert false
+
+  let is_marked m sexp = 
+    let b = List.exists (fun ({txt}, c) -> txt = m && c = PStr []) sexp.pexp_attributes in
+    b, { sexp with pexp_attributes = List.filter (fun ({txt},_) -> txt <> m) sexp.pexp_attributes }
+    
+  let mark m sexp = 
+    { sexp with pexp_attributes = ({ txt=m
+                                   ; loc= sexp.pexp_loc}, PStr []) 
+                                  :: sexp.pexp_attributes }
 end
 
 include Location.Open
+

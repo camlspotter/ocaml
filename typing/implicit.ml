@@ -7,68 +7,6 @@ open Asttypes
 
 let debug_resolve = Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 
-(*
-module Klabel : sig
-
-  val is_klabel : Asttypes.arg_label -> [> `Normal | `Optional ] option
-
-  val extract :
-    Env.t
-    -> Types.type_expr
-    -> (Asttypes.arg_label * Types.type_expr) list * Types.type_expr
-
-  val extract_aggressively :
-    Env.t
-    ->  Types.type_expr
-    -> ((Asttypes.arg_label * Types.type_expr) list * Types.type_expr) list
-
-end = struct
-  (** Constraint labels *)
-
-  open Types
-
-  (* Constraint labels must start with '_' *)
-  let is_klabel = function
-    | Labelled s when s.[0] = '_' -> Some `Normal
-    | Optional s when s.[0] = '_' -> Some `Optional
-    | _ -> None
-
-  (* Constraint labels must precede the other arguments *)
-  let rec extract env ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) when is_klabel l <> None ->
-        let cs, ty = extract env ty2 in
-        (l,ty1)::cs, ty
-  (*
-    | Tarrow(l, ty1, ty2, x) ->
-        let cs, ty = extract env ty2 in
-        cs, { (Ctype.newty & Tarrow (l, ty1, ty, x)) with level = ty.level }
-  *)
-    | _ -> [], ty
-
-  (* In the agressive mode, any argument with gen_vars can be constraint arguments *)
-  let rec extract_aggressively env ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) when gen_vars ty1 <> [] ->
-        ([], ty)
-        :: map
-          (fun (cs, ty) -> (l,ty1)::cs, ty)
-          (extract_aggressively env ty2)
-    | _ -> [[], ty]
-
-  (*
-  let rec get_args ty =
-    let ty = Ctype.expand_head env ty in
-    match repr_desc ty with
-    | Tarrow(l, ty1, ty2, _) -> (l,ty1)::get_args ty2
-    | _ -> []
-  *)
-
-end
-*)
-
 (** Path.t list which are opened by [open [@imp]] *)
 let imp_opens = ref []
 let get_imp_opens () = flatten !imp_opens
@@ -76,8 +14,8 @@ let get_imp_opens () = flatten !imp_opens
 module Candidate : sig
 
   type t = 
-    { path : Path.t
-    (** The source path. *)
+    { name : Path.t
+    (** The name to identify the candidates. The source path. *)
 
     ; expr : Typedtree.expression
     (** The actual expression used to build the instance.
@@ -100,22 +38,26 @@ module Candidate : sig
     -> bool (*+ recursive *)
     -> Path.t (*+ module path *)
     -> t list
+  (* Traverse a given module path and get the candidates *)
     
   val mods_direct :
     Env.t
     -> Longident.t
     -> Path.t list
+  (* Get a module accessible by the longident. It returns at most one path. *)
       
   val mods_opened :
     Env.t
     -> Longident.t
     -> Path.t list
+  (* Get the modules with the name of the longident, in opend modules *)
 
   val mods_related :
     Env.t
     -> Types.type_expr
     -> Path.t list
-      
+  (* Get the modules related with the given type *)
+
 end = struct
   (*
 
@@ -127,26 +69,27 @@ end = struct
   open Types
 
   type t = {
-    path       : Path.t;
+    name       : Path.t;
     expr       : Typedtree.expression;
     type_      : Types.type_expr;
     aggressive : bool
   }
 
   let format ppf c =
-    Format.fprintf ppf "@[<2>\"%a\" : %a@ : %a@]"
-      Path.format c.path
+    Format.fprintf ppf "@[<2>{ path= %a;@ expr= %a;@ type_= %a;@ aggressive= %b@ }@]"
+      Path.format c.name
       Typedtree.format_expression c.expr
       Printtyp.type_scheme c.type_
+      c.aggressive
 
   let uniq xs =
     let tbl = Hashtbl.create 107 in
     iter (fun x ->
       try
-        let x' = Hashtbl.find tbl x.path in
-        Hashtbl.replace tbl x.path { x with aggressive = x.aggressive || x'.aggressive }
+        let x' = Hashtbl.find tbl x.name in
+        Hashtbl.replace tbl x.name { x with aggressive = x.aggressive || x'.aggressive }
       with
-      | Not_found -> Hashtbl.add tbl x.path x) xs;
+      | Not_found -> Hashtbl.add tbl x.name x) xs;
     Hashtbl.to_list tbl |> map snd
 
   (* Finds out modules named `lids` under the specified module or the current scope *)
@@ -206,7 +149,7 @@ end = struct
       let vdesc = Env.find_value path env in
       let type_ = vdesc.val_type in
       let expr = expr_of_path env path in
-      { path; expr; type_; aggressive= false }
+      { name= path; expr; type_; aggressive= false }
     with
     | Not_found -> assert false (* impos *)
 
@@ -499,7 +442,7 @@ end = struct
       | Union ss -> uniq & concat_map (cands_search_space subs) ss
     in
     let rec eval_filter f c = match f with
-      | Substr s -> String.is_substring ~needle:s & Path.to_string c.path
+      | Substr s -> String.is_substring ~needle:s & Path.to_string c.name
       | Or fs -> List.exists (fun f -> eval_filter f c) fs
       | And_ fs -> List.for_all (fun f -> eval_filter f c) fs
       | Not f -> not & eval_filter f c
@@ -776,16 +719,30 @@ open Format
 
 (* CR jfuruse: bad state... *)
 (* CR jfuruse: confusing with deriving spec *)
-type derived_candidate = string * Candidate.t * Ident.t * value_description
+module Derived = struct
+  type t = { name : string
+           ; cand : Candidate.t
+           ; id : Ident.t
+           ; vdesc : value_description
+           ; spec : Spec.t
+           }
 
-let format_derived_candidate ppf (n, c, id, vdesc) =
-  Format.fprintf ppf "@[<v>name=%s;@ cand=@[%a@];@ id=%a;@ type=%a@]" n Candidate.format c Ident.format id Printtyp.type_scheme vdesc.val_type
-    
-let derived_candidates = ref ([] : derived_candidate list)
+  let format ppf {name=n; cand=c; id; vdesc; spec} =
+    Format.fprintf ppf "@[<v>name=%S;@ cand=@[%a@];@ id=%a;@ type=%a@ spec=%s@]" 
+      n 
+      Candidate.format c 
+      Ident.format id 
+      Printtyp.type_scheme vdesc.val_type
+      (Spec.to_string spec)
+end
+
+let derived_candidates = ref ([] : Derived.t list)
 
 (* CR jfuruse: this is very slow, since it computes everything each time. *)
 let get_candidates env loc spec =
-  Candidate.uniq & Spec.candidates env loc spec @ map (fun (_,x,_,_) -> x) !derived_candidates
+  Candidate.uniq & Spec.candidates env loc spec 
+                   @ List.filter_map (fun d -> 
+                       if spec = d.Derived.spec then Some d.Derived.cand else None) !derived_candidates
 
 module Runtime = struct
   open Longident
@@ -877,10 +834,12 @@ let is_imp_arg env loc l ty
     | None -> default
   else default
 
-let is_imp_arg_new env l ty : (type_expr * type_expr) option =
+let is_imp_arg_new env loc l ty : (type_expr * Spec.t) option =
   if not & Btype.is_optional l then 
     match is_imp_arg_type env ty with
-    | Some (ty, spec) -> Some (ty, spec)
+    | Some (ty, spec) -> 
+        let spec = Specconv.from_type_expr loc ty spec in
+        Some (ty, spec)
     | None -> None
   else None
 
@@ -960,22 +919,49 @@ type trace = (Path.t * type_expr) list
 
 let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_result.t =
   let rec resolve = function
-    | [] -> Resolve_result.Ok [[]] (* one solution with the empty expression set *)
+    | [] -> 
+        (* one solution with the empty expression set *)
+        Resolve_result.Ok [[]]
     | p::ps -> resolve_a_problem p ps
 
   and resolve_a_problem (trace,ty,spec) problems =
+
     let cs = get_candidates env loc spec in
     if debug_resolve then begin
       !!% "Candidates:@.";
       iter (!!% "  %a@." Candidate.format) cs
     end;
     let cs = concat_map (fun c ->
-        map (fun x -> c.Candidate.path, c.Candidate.expr, x)
+        map (fun x -> c.Candidate.name, c.Candidate.expr, x)
         & extract_candidate spec env loc c
       ) cs
     in
-    Resolve_result.concat
-    & map (try_cand trace ty problems) cs
+    match 
+      Resolve_result.concat
+      & map (try_cand trace ty problems) cs
+    with
+    | Resolve_result.Ok [] as x (* no solution *) ->
+        (* XXX If [ty] is generalized by outer let, 
+           i.e.,  if [ty] contains "*uniq*", we make it a derived *)
+        let is_derivable ty = 
+          try
+            let res = ref false in
+            Btype.iter_type_expr (fun ty ->
+                if Leopardtyping.Types.is_unique ty then 
+                  res := true
+                else match repr_desc ty with
+                  | Tvar _ -> raise Exit
+                  | _ -> ()) ty;
+            !res
+          with
+          | Exit -> false
+        in
+        if is_derivable ty then begin
+          (* XXX *)
+          !!% "Type %a is derivable (not yet handled though)@." Printtyp.type_scheme ty;
+          x
+        end else x
+    | x -> x
 
   and try_cand trace ity problems (path, expr, (cs,vty)) =
 
@@ -995,8 +981,7 @@ let resolve loc env (problems : (trace * type_expr * Spec.t) list) : Resolve_res
             Printtyp.type_expr ity
             (Tysize.(to_string & size ity));
         end;
-
-        Resolve_result.Ok []
+        Resolve_result.Ok [] (* no solution *)
 
     | _ ->
         (* CR jfuruse: Older binding of `path` in `trace` is no longer useful.
@@ -1114,7 +1099,9 @@ let shadow_check env loc e0 =
         Typedtree.format_expression e0
         (Format.list "@," format_shadow) !shadowed
 
-(* The function recovers all the types it modifies inside. *)
+(* Build a value of [ty] using [spec].
+   The function recovers all the types it modifies inside.
+*)
 let resolve env loc spec ty = 
   let res = with_snapshot & fun () ->
 
@@ -1153,9 +1140,9 @@ let resolve env loc spec ty =
           shadow_check env loc e;
           e
 
+(* Build a value of [ty] using [spec] *)
 let resolve env loc spec ty =
-  (* Derived things must be found in the environment *)
-  let env = List.fold_left (fun env (_,_,id,vdesc) -> Env.add_value id vdesc env) env !derived_candidates in
+  let env = List.fold_left (fun env d -> Env.add_value d.Derived.id d.Derived.vdesc env) env !derived_candidates in
   let e = resolve env loc spec ty in
   (* Now we replay the type unifications!
      The generalized variables must be protected! *)
@@ -1317,74 +1304,10 @@ module MapArg : TypedtreeMap.MapArgument = struct
         end
     | _ -> e
 
-  let _add_derived_candidate e case p type_ unconv =
+  let add_derived_candidate e case p type_ spec =
     (* This is an imp arg *)
 
-    (* Build  fun ?d:(d as __imp_arg__) -> 
-          or  fun ~d:(d as __imp_arg__) ->
-     *)
-
-    let loc = Location.ghost p.pat_loc in
-    let name = create_imp_arg_name () in
-    (* p ->     ===>   (p as fname) -> *)
-    let lident = Longident.Lident name in
-    let id = Ident.create name in
-    let path = Path.Pident id in
-    let vdesc =
-      { val_type = p.pat_type
-      ; val_kind = Val_reg
-      ; val_loc = loc
-      ; val_attributes = []  }
-    in
-    let expr =
-      (* XXX Locations must be fixed later when it is actually used *)
-      unconv
-      & { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
-        ; exp_loc = Location.none
-        ; exp_extra = []
-        ; exp_type = p.pat_type
-        ; exp_env = p.pat_env
-        ; exp_attributes = []
-        }
-    in
-    let cand = (name
-               , { Candidate.path; (* <- not actually path. see expr field *)
-                   expr;
-                   type_;
-                   aggressive = false }
-               , id
-               , vdesc
-               )
-
-    in
-    derived_candidates := cand :: !derived_candidates;
-    (* p as __imp_arg_x__ *)
-    let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc}) } in
-    let case = { case with c_lhs = p' } in
-    (* fun (p as __imp_arg_x__) -> .. *)
-    let e = match e.exp_desc with
-      | Texp_function f ->
-          { e with exp_desc = Texp_function { f with cases= [case] }}
-      | _ -> assert false
-    in
-
-    (* We need to mark the abstraction for unregistering this derived when we go out from the abstraction *)
-    (* XXX needs a helper module for this *)
-    let e =
-      Typedtree.add_attribute
-        "leopard_mark"
-        (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
-    in
-    Format.eprintf "@[<2>%a:@ added derived { %a }@ : %a@]@." Location.format loc
-      format_derived_candidate cand
-      Typedtree.format_expression e;
-    e
-
-  let add_derived_candidate_new e case p type_ _spec =
-    (* This is an imp arg *)
-
-    (* Build  fun ~d:(d as __imp_arg__) ->
-     *)
+    (* Build  fun ~d:(d as __imp_arg__) -> *)
 
     let loc = Location.ghost p.pat_loc in
     let name = create_imp_arg_name () in
@@ -1397,7 +1320,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
       ; val_loc = loc
       ; val_attributes = []  }
     in
-    let expr = (* __imp_arg__ *)
+    let expr = (* Leopard.Implicits.get ~_d:__imp_arg__ *)
       { exp_desc = Texp_ident (path, {txt=lident; loc=Location.none}, vdesc)
       ; exp_loc = Location.none (* Must be fixed at the use site *)
       ; exp_extra = []
@@ -1406,17 +1329,18 @@ module MapArg : TypedtreeMap.MapArgument = struct
       ; exp_attributes = []
       }
     in
-    let cand = ( name
-               , { Candidate.path
-                 ; expr
-                 ; type_
-                 ; aggressive = false }
-               , id
-               , vdesc
-               )
-
+    let expr = Runtime.get expr in
+    let d = { Derived.name
+            ; cand= { Candidate.name = path
+                    ; expr
+                    ; type_
+                    ; aggressive = false }
+            ; id
+            ; vdesc
+            ; spec
+            }
     in
-    derived_candidates := cand :: !derived_candidates;
+    derived_candidates := d :: !derived_candidates;
 
     (* p as __imp_arg__ *)
     let p' = { p with pat_desc = Tpat_alias (p, id, {txt=name; loc}) } in
@@ -1435,9 +1359,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
         "leopard_mark"
         (Ast_helper.(Str.eval (Exp.constant (Parsetree.Pconst_string (name, None))))) e
     in
-    Format.eprintf "@[<2>%a:@ added derived { %a }@ : %a@]@." Location.format loc
-      format_derived_candidate cand
-      Typedtree.format_expression e;
+    Format.eprintf "@[<2>%a:@ added derived %a@]@." 
+      Location.format loc
+      Derived.format d;
     e
 
   let clean_derived_candidates e =
@@ -1459,7 +1383,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
            Remove the association of `"__imp_arg__0"` and the candidate of
            `__imp_arg__0` from `derived_candidates`.
         *)
-        derived_candidates := filter (fun (fid, _, _, _) -> fid <> txt) !derived_candidates;
+        derived_candidates := filter (fun {Derived.name=fid} -> fid <> txt) !derived_candidates;
         e
     | _ -> assert false (* impos *)
 
@@ -1492,26 +1416,11 @@ module MapArg : TypedtreeMap.MapArgument = struct
         opt { e with
               exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
 
-(*
-      | Texp_function { arg_label=l; cases= [case] } ->
-        let p = case.c_lhs in
-        begin match is_imp_arg p.pat_env p.pat_loc l p.pat_type with
-        | (_, None, _, _) -> e
-        | (type_, Some _spec, _conv, unconv) ->
-            (* CR jfuruse: specs are ignored *)
-            (* This is an imp arg *)
-            (* Build  fun ?d:(d as __imp_arg__) -> ..
-                      or fun ~d:(d as __imp_arg__) -> ..
-             *)
-            add_derived_candidate e case p type_ unconv
-        end
-*)
-        
     | Texp_function { arg_label=l; cases= [case] } ->
         let p = case.c_lhs in
-        begin match is_imp_arg_new p.pat_env l p.pat_type with
+        begin match is_imp_arg_new p.pat_env p.pat_loc l p.pat_type with
         | None -> e
-        | Some (type_, spec) -> add_derived_candidate_new e case p type_ spec
+        | Some (type_, spec) -> add_derived_candidate e case p type_ spec
         end
         
     | Texp_ident (p, _, _) ->
@@ -1570,5 +1479,9 @@ let resolve str =
   if !Leopardfeatures.implicits then begin
     if debug_resolve then
       Format.eprintf "@[<2>RESOLVE structure:@ @[%a@]@]@." Typedtree.format_structure str;
+
+    imp_opens := [];
+    derived_candidates := [];
+
     Map.map_structure str
   end else str
