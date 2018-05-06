@@ -543,6 +543,7 @@ module XTypedtree : sig
   open Typedtree
 
   val format_expression : expression Format.fmt
+  val format_structure : structure Format.fmt
   val is_none : expression -> Types.type_expr option
 
   val check_constructor_is_for_path : Env.t -> string -> Path.t -> unit
@@ -570,7 +571,10 @@ end = struct
   let format_expression ppf e =
     Pprintast.expression ppf
     & (* Typpx. *) Untypeast.(default_mapper.expr default_mapper) e
-  
+
+  let format_structure ppf x =
+    Pprintast.structure ppf (Untypeast.(default_mapper.structure default_mapper x))
+
   let is_none e =
     match e.exp_desc with
     | Texp_construct ({Location.txt=Lident "None"}, _, []) -> 
