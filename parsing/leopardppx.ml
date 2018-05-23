@@ -137,9 +137,18 @@ module Imp = struct
 
              Here, we have the warnings for 1 and 2
           *)   
+(*
           { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "get")
                                                       ; pexp_attributes = [] },
                                                mkty (Ptyp_arrow (Asttypes.Labelled "_d", 
+                                                                 mkty (Ptyp_constr ( leopard_implicits "t",
+                                                                                     [ any_var; spec ] )),
+                                                                 any_var)))
+          }
+*)
+          { e with pexp_desc= Pexp_constraint( { e with pexp_desc= Pexp_ident (leopard_implicits "imp")
+                                                      ; pexp_attributes = [] },
+                                               mkty (Ptyp_arrow (Asttypes.Optional "_d", 
                                                                  mkty (Ptyp_constr ( leopard_implicits "t",
                                                                                      [ any_var; spec ] )),
                                                                  any_var)))

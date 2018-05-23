@@ -160,6 +160,8 @@ val check_recursive_bindings : Env.t -> Typedtree.value_binding list -> unit
 val check_recursive_class_bindings :
   Env.t -> Ident.t list -> Typedtree.class_expr list -> unit
 
+(*
 val with_applying_implicit_args : (unit -> 'a) -> 'a
+*)
 
 

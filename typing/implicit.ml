@@ -5,9 +5,12 @@ open Leopardtyping
 open List
 open Asttypes
 
+(* ************************************************** debug switch *)
+
 let debug_resolve = Sys.env_exist "DEBUG_LEOPARD_IMPLICITS"
 
-(** Path.t list which are opened by [open [@imp]] *)
+(* ************************************************** Opened path by [open [@imp] M]  *)
+
 let imp_opens = ref []
 let get_imp_opens () = flatten !imp_opens
 
@@ -213,7 +216,7 @@ end
 module Spec : sig
   (**
 
-    Instance search space specification DSL, magling to and back from
+    Instance search space specification DSL, mangling to and back from
     OCaml type definitions.
 
   *)
@@ -763,6 +766,9 @@ module Runtime = struct
   (* Leopard.Implicits.Runtime.embed *)
   let lident_embed     = Ldot (lident_implicits, "embed")
 
+  (* Leopard.Implicits.Runtime.embed *)
+  let lident_embed_some     = Ldot (lident_implicits, "embed_some")
+
   (* Leopard.Implicits.Runtime.get *)
   let lident_get       = Ldot (lident_implicits, "get")
 
@@ -794,6 +800,11 @@ module Runtime = struct
     (* Typedtree.app e.exp_env f [Nolabel, e] *)
     illtyped_app f [Nolabel, e]
 
+  (** [embed e] builds [Leopard.Implicits.embed <e>] *)
+  let embed_some e =
+    let f = get_ident e.exp_env e.exp_loc lident_embed_some in
+    illtyped_app f [Nolabel, e]
+
   (** [get e] builds [Leopard.Implicits.get ~_d:<e>] *)
   let get e =
     let f = get_ident e.exp_env e.exp_loc lident_get in
@@ -806,7 +817,7 @@ module Runtime = struct
     illtyped_app f [Nolabel, e]
 end
 
-(** Check it is `(<ty>, <spec>) Ppx_implicits.t` and returns `Some (ty, spec)` *)
+(** Check it is `(<ty>, <spec>) Leopard.Implicits.t` and returns `Some (ty, spec)` *)
 let is_imp_arg_type env ty = match expand_repr_desc env ty with
   | Tconstr (p, [ty; spec], _) when Runtime.is_imp_t_path p ->
       Some (ty, spec)
@@ -1197,17 +1208,31 @@ let resolve env loc spec ty =
   end;
   te
 
-(* ?l:None  where (None : (ty,spec) Ppx_implicit.t option) has a special rule *)
+(* [?l:None] where [(None : (ty,spec) Ppx_implicit.t option)] has a special rule *)
 let resolve_omitted_imp_arg loc env a = match a with
   (* (l, None, Optional) means curried *)
   | ((Optional _ as l), Some e) ->
       begin match is_none e with
       | None -> a (* explicitly applied *)
       | Some _t -> (* omitted *)
-          let (ty, specopt, conv, _unconv) = is_imp_arg env loc l e.exp_type in
-          match specopt with
+          let is_imp_arg env loc l ty =
+            if Btype.is_optional l then 
+              match Types.is_option_type env ty with
+              | Some ty ->
+                  begin match is_imp_arg_type env ty with
+                  | Some (ty, spec) ->
+                      Some (ty, 
+                            Specconv.from_type_expr loc ty spec, 
+                            Runtime.embed_some, 
+                            Runtime.get)
+                  | None -> None
+                  end
+              | _ -> None
+            else None
+          in
+          match is_imp_arg env loc l e.exp_type with
           | None -> a (* It is not imp arg *)
-          | Some spec ->
+          | Some (ty, spec, conv, _) ->
               let e' = conv (resolve env loc spec ty) in
               (* for retyping, e.exp_env is not suitable, since
                  it is made by Typecore.option_none with Env.initial_safe_string
@@ -1224,6 +1249,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
      into one  AST mapper, and one part must be scattered into
      more than two places. Very hard to read. *)
 
+(*
   let create_imp_arg_name =
     let x = ref 0 in
     fun () -> incr x; "__imp__arg__" ^ string_of_int !x
@@ -1231,8 +1257,8 @@ module MapArg : TypedtreeMap.MapArgument = struct
   let is_function_id = String.is_prefix "__imp__arg__"
 
   let un_some e = match e.exp_desc with
-    | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
-    | _ -> None
+  | Texp_construct ({txt=Longident.Lident "Some"}, _, [e]) -> Some e
+  | _ -> None
 
   (* Fix 0 arg application *)
   let fix_no_args e = match e.exp_desc with
@@ -1303,7 +1329,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | _ -> e
         end
     | _ -> e
+*)
 
+(*
   let add_derived_candidate e case p type_ spec =
     (* This is an imp arg *)
 
@@ -1363,7 +1391,9 @@ module MapArg : TypedtreeMap.MapArgument = struct
       Location.format loc
       Derived.format d;
     e
+*)
 
+(*
   let clean_derived_candidates e =
     let open Parsetree in
     (* We unregister the derived *)
@@ -1386,6 +1416,7 @@ module MapArg : TypedtreeMap.MapArgument = struct
         derived_candidates := filter (fun {Derived.name=fid} -> fid <> txt) !derived_candidates;
         e
     | _ -> assert false (* impos *)
+*)
 
   let push_imp_opens = function
     | [] -> ()
@@ -1407,15 +1438,16 @@ module MapArg : TypedtreeMap.MapArgument = struct
         | _ -> (ex::st, imp_opens)) e.exp_extra ([],[]) 
 
   let enter_expression e = 
+
+    (* handle [let open [@imp] M in ..] *)
     let _extra, imp_opens = filter_imp_opens e in
     push_imp_opens imp_opens;
+
     match e.exp_desc with
     | Texp_apply (f, args) ->
-        (* Resolve omitted ?_x arguments *)
-        (* XXX cleanup *)
-        opt { e with
-              exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
+        { e with exp_desc= Texp_apply (f, map (resolve_omitted_imp_arg f.exp_loc e.exp_env) args) }
 
+(*
     | Texp_function { arg_label=l; cases= [case] } ->
         let p = case.c_lhs in
         begin match is_imp_arg_new p.pat_env p.pat_loc l p.pat_type with
@@ -1446,11 +1478,14 @@ module MapArg : TypedtreeMap.MapArgument = struct
             end
         | _ -> e
         end
+*)
         
     | _ -> e
 
   let leave_expression e =
+(*
     let e = clean_derived_candidates e in
+*)
     let extra, imp_opens = filter_imp_opens e in
     pop_imp_opens imp_opens;
     { e with exp_extra = extra }

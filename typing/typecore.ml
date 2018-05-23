@@ -2594,6 +2594,7 @@ let unify_exp env exp expected_ty =
   let loc = proper_exp_loc exp in
   unify_exp_types loc env exp.exp_type expected_ty
 
+(*
 let debug_resolve = Leopardutils.Sys.env_exist "DEBUG_LEOPARD_IMPLICITS_CORE"
 let implicit_omitted : (Asttypes.arg_label * Typedtree.expression) list ref = ref []
 let imp_counter = ref 0
@@ -2639,6 +2640,7 @@ module IMP = struct
   let is_imp_omitted sexp = List.exists (function ({txt="imp_omitted"}, _) -> true | _ -> false) sexp.pexp_attributes
     
 end
+*)
 
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
@@ -2662,6 +2664,10 @@ and type_expect ?in_function ?recarg env sexp ty_expected =
     (Cmt_format.Partial_expression exp :: previous_saved_types);
   exp
 
+and type_expect' ?in_function ?recarg env sexp ty_expected =
+  type_expect_ ?in_function ?recarg env sexp ty_expected
+
+(*
 and type_expect' ?in_function ?recarg env sexp ty_expected =
   (* If v has argument _d whose type is generalized,
      
@@ -2737,6 +2743,7 @@ and type_expect' ?in_function ?recarg env sexp ty_expected =
   in
   if sexp <> sexp0 then Format.eprintf "EXP @[%a@ => %a@]@." Pprintast.expression sexp0 Pprintast.expression sexp;
   type_expect_ ?in_function ?recarg env sexp ty_expected
+*)
 
 and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
   let loc = sexp.pexp_loc in
@@ -5231,6 +5238,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
       l;
   (l, new_env, unpacks)
 
+(*
 (* ocamleopard *)
 and leopard_fix_let is_recursive env scope allow (l, new_env) =
   let open Leopardutils in
@@ -5516,6 +5524,7 @@ and leopard_fix_let is_recursive env scope allow (l, new_env) =
     in
     (l, new_env)
   end
+*)
 
 (* Typing of toplevel bindings *)
 

@@ -1688,7 +1688,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
 let type_toplevel_phrase env s =
   Env.reset_required_globals ();
   let (str, sg, env) =
-    Typecore.with_applying_implicit_args @@ fun () -> 
+    (* Typecore.with_applying_implicit_args @@ fun () ->  *)
     type_structure ~toplevel:true false None env s Location.none in
   let str = (* XXX Unshadow.Alias.insert @@ *) Implicit.resolve @@ Overload.resolve str in
   let (str, _coerce) = ImplementationHooks.apply_hooks
@@ -1801,7 +1801,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
   if !Clflags.print_types then (* #7656 *)
     Warnings.parse_options false "-32-34-37-38-60";
   let (str, sg, finalenv) =
-    Typecore.with_applying_implicit_args @@ fun () -> 
+    (* Typecore.with_applying_implicit_args @@ fun () -> *)
     type_structure initial_env ast (Location.in_file sourcefile) in
   let str = (* XXX Unshadow.Alias.insert @@ *) Implicit.resolve @@ Overload.resolve str in
   let simple_sg = simplify_signature sg in

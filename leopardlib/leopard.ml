@@ -64,6 +64,8 @@ module Implicits = struct:
   
   external embed : 'a -> ('a, 'spec) t = "%identity"
 
+  let embed_some : 'a -> ('a, 'spec) t option = fun x -> Some (embed x)
+
   (** [[`M] module_] is the encoding of escaped module name "M" *)
   type 'a module_
 

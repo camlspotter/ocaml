@@ -61,6 +61,7 @@ module Implicits : sig:
   external get : _d:('a, 'spec) t -> 'a = "%identity"
   val imp : ?_d:('a, 'spec) t -> 'a
   external embed : 'a -> ('a, 'spec) t = "%identity"
+  val embed_some : 'a -> ('a, 'spec) t option
 
   (** [[`M] module_] is the encoding of escaped module name "M" *)
   type 'a module_
